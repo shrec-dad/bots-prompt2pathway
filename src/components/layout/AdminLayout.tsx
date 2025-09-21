@@ -11,17 +11,23 @@ export const AdminLayout: React.FC = () => {
       {/* Top navigation */}
       <Topbar />
 
-      {/* Keep header + sidebar */}
+      {/* Header + Sidebar */}
       <AdminHeader />
-      <div className="flex pt-16">
+      <div className="flex flex-col lg:flex-row pt-16">
+        {/* Sidebar (always on the left) */}
         <AdminSidebar />
 
-        {/* Main content + Right side panel */}
+        {/* Main content area */}
         <main className="flex-1 min-h-[calc(100vh-4rem)] p-6">
           <Outlet />
+
+          {/* Mobile: BotPlanPanel shows below content */}
+          <div className="mt-6 block lg:hidden">
+            <BotPlanPanel />
+          </div>
         </main>
 
-        {/* Right side panel for plan toggles */}
+        {/* Desktop: BotPlanPanel on the right */}
         <aside className="w-80 p-4 hidden lg:block">
           <BotPlanPanel />
         </aside>
@@ -29,3 +35,4 @@ export const AdminLayout: React.FC = () => {
     </div>
   );
 };
+
