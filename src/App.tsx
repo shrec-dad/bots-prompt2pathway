@@ -7,7 +7,7 @@ import { AdminLayout } from "./components/layout/AdminLayout";
 import { Dashboard } from "./pages/admin/Dashboard";
 import { Clients } from "./pages/admin/Clients";
 import { Bots } from "./pages/admin/Bots";
-import { Builder } from "./pages/admin/Builder";
+import Builder from "./pages/admin/Builder";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
