@@ -2,8 +2,8 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { AdminHeader } from './AdminHeader';
 import { AdminSidebar } from './AdminSidebar';
-import { Topbar } from './Topbar';
-import { BotPlanPanel } from './BotPlanPanel';
+import Topbar from "./Topbar";
+import BotPlanPanel from "./BotPlanPanel";
 
 export const AdminLayout: React.FC = () => {
   return (
