@@ -1,7 +1,8 @@
+// src/components/layout/BotPlanPanel.tsx
 import React from "react";
 import { useAdminStore } from "@/lib/AdminStore";
 
-export const BotPlanPanel: React.FC = () => {
+const BotPlanPanel: React.FC = () => {
   const {
     currentBot,
     botPlan,
@@ -11,57 +12,62 @@ export const BotPlanPanel: React.FC = () => {
   } = useAdminStore();
 
   return (
-    <section className="bg-white rounded-xl shadow-lg p-6 space-y-6">
-      <h2 className="text-lg font-semibold text-gray-800">
+    <section className="mt-6 rounded-xl border bg-white p-6 shadow-sm">
+      <h2 className="text-xl font-semibold mb-4">
         {currentBot} Configuration
       </h2>
 
-      {/* Basic vs Custom */}
-      <div className="space-y-2">
-        <label className="block font-medium text-gray-700">Bot Plan</label>
-        <div className="flex gap-4">
+      {/* Bot Plan */}
+      <div className="mb-6">
+        <p className="font-medium mb-2">Bot Plan</p>
+        <div className="flex gap-3">
           <button
-            className={`px-4 py-2 rounded-md border ${
-              botPlan === "basic"
-                ? "bg-indigo-500 text-white"
-                : "bg-gray-100 text-gray-700"
-            }`}
+            type="button"
             onClick={() => setBotPlan("basic")}
+            className={`rounded-lg px-4 py-2 ${
+              botPlan === "basic"
+                ? "bg-indigo-600 text-white"
+                : "bg-gray-100 text-gray-800"
+            }`}
           >
             Basic Bot
           </button>
+
           <button
-            className={`px-4 py-2 rounded-md border ${
-              botPlan === "custom"
-                ? "bg-pink-500 text-white"
-                : "bg-gray-100 text-gray-700"
-            }`}
+            type="button"
             onClick={() => setBotPlan("custom")}
+            className={`rounded-lg px-4 py-2 ${
+              botPlan === "custom"
+                ? "bg-indigo-600 text-white"
+                : "bg-gray-100 text-gray-800"
+            }`}
           >
             Custom Bot
           </button>
         </div>
       </div>
 
-      {/* Nurture Add-on */}
-      {(currentBot === "LeadQualifier" || currentBot === "Waitlist") && (
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 font-medium text-gray-700">
-            <input
-              type="checkbox"
-              checked={includeNurture}
-              onChange={(e) => setIncludeNurture(e.target.checked)}
-              className="h-4 w-4 text-pink-500 border-gray-300 rounded"
-            />
-            Add Follow-up / Nurture Bot
-          </label>
-          <p className="text-sm text-gray-500">
-            Upsell option: automatically nurture leads via email, SMS, or chat
-            after they interact with your {currentBot}.
-          </p>
-        </div>
-      )}
+      {/* Nurture add-on */}
+      <div className="mt-4">
+        <label className="inline-flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={includeNurture}
+            onChange={(e) => setIncludeNurture(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300"
+          />
+        </label>
+        <span className="ml-3 font-medium">Add Follow-up / Nurture Bot</span>
+        <p className="text-sm text-gray-500 mt-1">
+          Upsell option: automatically nurture leads via email, SMS, or chat
+          after they interact with this bot.
+        </p>
+      </div>
     </section>
   );
 };
 
+export default BotPlanPanel;
+
+       
+      
