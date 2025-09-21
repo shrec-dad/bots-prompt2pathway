@@ -10,6 +10,7 @@ import "reactflow/dist/style.css";
 
 import { useAdminStore } from "@/lib/AdminStore";
 import { templates, type TemplateKey } from "@/lib/templates";
+import { NODE_TYPES } from "@/components/builder/nodeTypes";
 
 const PLANS = ["Basic", "Custom"] as const;
 type Plan = (typeof PLANS)[number];
@@ -66,7 +67,7 @@ const Builder: React.FC = () => {
 
       <div className="flex-1 min-h-0">
         {tplKey ? (
-          <ReactFlow key={rfKey} nodes={nodes} edges={edges} fitView>
+          <ReactFlow key={rfKey} nodes={nodes} edges={edges} nodeTypes={NODE_TYPES}  fitView>
             <MiniMap />
             <Controls />
             <Background />
