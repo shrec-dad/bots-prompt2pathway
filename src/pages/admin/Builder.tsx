@@ -35,18 +35,21 @@ const Builder: React.FC = () => {
     <main className="h-[calc(100vh-4rem)] flex flex-col">
       <div className="flex-1 min-h-0">
         {tplKey ? (
-          <ReactFlow
-            key={rfKey}
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={NODE_TYPES}
-            fitView
-            defaultEdgeOptions={{ style: { stroke: "#4b5563", strokeWidth: 2 } }}
-            proOptions={{ hideAttribution: true }}
-          >
-            <MiniMap nodeColor={() => "#4b5563"} maskColor="rgba(0,0,0,.06)" />
-            <Controls />
-          </ReactFlow>
+          // Custom background wrapper
+          <div style={{ backgroundColor: "#e8f5e9", height: "100%" }}>
+            <ReactFlow
+              key={rfKey}
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={NODE_TYPES}
+              fitView
+              defaultEdgeOptions={{ style: { stroke: "#4b5563", strokeWidth: 2 } }}
+              proOptions={{ hideAttribution: true }}
+            >
+              <MiniMap nodeColor={() => "#4b5563"} maskColor="rgba(0,0,0,.06)" />
+              <Controls />
+            </ReactFlow>
+          </div>
         ) : (
           <div className="h-full grid place-items-center">
             <div className="text-center">
