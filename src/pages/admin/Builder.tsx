@@ -3,7 +3,6 @@ import React, { useMemo, useState } from "react";
 import ReactFlow, {
   MiniMap,
   Controls,
-  Background,
   type Node,
   type Edge,
 } from "reactflow";
@@ -17,17 +16,15 @@ const Builder: React.FC = () => {
   const { currentBot, botPlan } = useAdminStore();
   const [rfKey] = useState(0);
 
-  // Determine the template key we expect, or null if missing
   const tplKey = useMemo<TemplateKey | null>(() => {
     if (!currentBot) return null;
     const key = `${currentBot}_${botPlan}` as TemplateKey;
     return (templates as Record<string, unknown>)[key] ? key : null;
   }, [currentBot, botPlan]);
 
-  // Pull nodes/edges directly from the object (no function call)
   const { nodes, edges } = useMemo(() => {
     if (!tplKey) return { nodes: [] as Node[], edges: [] as Edge[] };
-    const t = templates[tplKey]; // <- t is already { nodes, edges }
+    const t = templates[tplKey];
     return {
       nodes: (t.nodes as Node[]) ?? [],
       edges: (t.edges as Edge[]) ?? [],
@@ -44,14 +41,11 @@ const Builder: React.FC = () => {
             edges={edges}
             nodeTypes={NODE_TYPES}
             fitView
-            defaultEdgeOptions={{
-              style: { stroke: "#4b5563", strokeWidth: 2 }, // darker edges
-            }}
+            defaultEdgeOptions={{ style: { stroke: "#4b5563", strokeWidth: 2 } }}
             proOptions={{ hideAttribution: true }}
           >
-            <MiniMap nodeColor={() => "#4b5563"} maskColor="rgba(0,0,0,.08)" />
+            <MiniMap nodeColor={() => "#4b5563"} maskColor="rgba(0,0,0,.06)" />
             <Controls />
-            <Background variant="lines" gap={18} color="#9ca3af" /> {/* darker grid */}
           </ReactFlow>
         ) : (
           <div className="h-full grid place-items-center">
@@ -74,3 +68,4 @@ const Builder: React.FC = () => {
 
 export default Builder;
 
+  
