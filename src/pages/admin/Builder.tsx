@@ -11,7 +11,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 
 import { useAdminStore } from "@/lib/AdminStore";
-import { templates, type TemplateKey } from "@/lib/templates";
+import templates, { type TemplateKey } from "@/lib/templates";
 import { NODE_TYPES } from "@/components/builder/nodeTypes";
 
 /* ────────────────────────────────────────────────────────────────────────── */
