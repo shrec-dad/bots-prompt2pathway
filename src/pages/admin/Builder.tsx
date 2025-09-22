@@ -14,35 +14,45 @@ import { templates, type TemplateKey } from "@/lib/templates";
 import { NODE_TYPES } from "@/components/builder/nodeTypes";
 
 const Builder: React.FC = () => {
-  // read live state from the admin store
-  const { currentBot, botPlan: plan } = useAdminStore();
+  const { currentBot, botPlan } = useAdminStore();
   const [rfKey, setRfKey] = useState(0);
 
-  // find the template key safely; only if bot + plan both exist
+  // derive the template key safely
   const tplKey = useMemo<TemplateKey | null>(() => {
-    if (!currentBot || !plan) return null;
-    const key = `${currentBot}_${plan.toLowerCase()}` as TemplateKey;
+    if (!currentBot || !botPlan) return null;
+    const key = `${currentBot}_${botPlan.toLowerCase()}` as TemplateKey;
     return key in templates ? key : null;
-  }, [currentBot, plan]);
+  }, [currentBot, botPlan]);
 
-  // get graph only when tplKey is valid
-  const graph = useMemo(() => {
-    if (!tplKey) return null;
-    return templates[tplKey];
-  }, [tplKey]);
+  // fetch nodes/edges (or empty)
+  const graph = tplKey ? templates[tplKey] : null;
+  const nodes: Node[] = graph?.nodes ?? [];
+  const edges: Edge[] = graph?.edges ?? [];
 
-  // force ReactFlow to remount when template changes
+  // remount RF when template changes (ensures clean redraw)
   useEffect(() => {
     setRfKey((k) => k + 1);
   }, [tplKey]);
 
-  const nodes: Node[] = graph?.nodes ?? [];
-  const edges: Edge[] = graph?.edges ?? [];
-
   return (
     <main className="flex-1 min-h-0 p-4">
-      {tplKey ? (
-        <div className="h-full rounded-xl bg-white p-2 shadow-sm">
+      {/* status strip so you always see current state */}
+      <div className="mb-3 flex gap-2 items-center">
+        <span className="text-xs px-2 py-1 rounded bg-gray-100">
+          <strong>Bot:</strong> {currentBot ?? "—"}
+        </span>
+        <span className="text-xs px-2 py-1 rounded bg-gray-100">
+          <strong>Plan:</strong> {botPlan ?? "—"}
+        </span>
+        <span className="text-xs px-2 py-1 rounded bg-gray-100">
+          <strong>Template:</strong> {tplKey ?? "none"}
+        </span>
+      </div>
+
+      {/* FIX: give the canvas a real height so it renders */}
+      <div className="rounded-xl bg-white shadow-sm overflow-hidden"
+           style={{ height: "calc(100vh - 220px)" }}>
+        {tplKey ? (
           <ReactFlow
             key={rfKey}
             nodes={nodes}
@@ -54,22 +64,21 @@ const Builder: React.FC = () => {
             <Controls />
             <Background />
           </ReactFlow>
-        </div>
-      ) : (
-        <div className="h-full grid place-items-center">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold mb-2">Canvas not ready</h2>
-            <p className="text-muted-foreground">
-              Choose a bot and plan (Basic/Custom). If one is already selected,
-              we may not have a template for it yet.
-            </p>
-            <br />
-            <code className="px-2 py-1 bg-gray-100 rounded mt-2 inline-block">
-              {currentBot ? `${currentBot}_${plan ?? "-"}` : "-"}
-            </code>
+        ) : (
+          <div className="h-full grid place-items-center">
+            <div className="text-center px-4">
+              <h2 className="text-xl font-semibold mb-2">Canvas not ready</h2>
+              <p className="text-muted-foreground">
+                Select a bot and plan (Basic or Custom). If one is already
+                selected, we might not have a template for that combination yet.
+              </p>
+              <code className="mt-3 inline-block px-2 py-1 bg-gray-100 rounded">
+                {currentBot ? `${currentBot}_${botPlan ?? "-"}` : "-"}
+              </code>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </main>
   );
 };
