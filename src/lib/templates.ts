@@ -127,7 +127,7 @@ const LeadQualifier_custom = (): Template => {
 // IMPORTANT: keys must be exactly the string Builder computes:
 // `${currentBot}_${plan.toLowerCase()}`
 
-const templates: Record<TemplateKey, Template> = {
+export const templates: Record<TemplateKey, Template> = {
   LeadQualifier_basic: LeadQualifier_basic(),
   LeadQualifier_custom: LeadQualifier_custom(),
 };
