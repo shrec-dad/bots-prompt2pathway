@@ -1,5 +1,5 @@
 // src/pages/admin/Builder.tsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -15,43 +15,25 @@ import { NODE_TYPES } from "@/components/builder/nodeTypes";
 
 const Builder: React.FC = () => {
   const { currentBot, botPlan } = useAdminStore();
-  const [rfKey, setRfKey] = useState(0);
+  const [rfKey] = useState(0); // bump to force re-render if you ever need it
 
-  // derive the template key safely
+  // Figure out which template to use (or null if not found)
   const tplKey = useMemo<TemplateKey | null>(() => {
-    if (!currentBot || !botPlan) return null;
-    const key = `${currentBot}_${botPlan.toLowerCase()}` as TemplateKey;
-    return key in templates ? key : null;
+    if (!currentBot) return null;
+    const key = `${currentBot}_${botPlan}` as TemplateKey;
+    return (templates as Record<string, unknown>)[key] ? key : null;
   }, [currentBot, botPlan]);
 
-  // fetch nodes/edges (or empty)
-  const graph = tplKey ? templates[tplKey] : null;
-  const nodes: Node[] = graph?.nodes ?? [];
-  const edges: Edge[] = graph?.edges ?? [];
-
-  // remount RF when template changes (ensures clean redraw)
-  useEffect(() => {
-    setRfKey((k) => k + 1);
-  }, [tplKey]);
+  // Build nodes/edges from the selected template
+  const { nodes, edges } = useMemo(() => {
+    if (!tplKey) return { nodes: [] as Node[], edges: [] as Edge[] };
+    const t = templates[tplKey](); // each template is a function returning {nodes, edges}
+    return { nodes: t.nodes as Node[], edges: t.edges as Edge[] };
+  }, [tplKey, rfKey]);
 
   return (
-    <main className="flex-1 min-h-0 p-4">
-      {/* status strip so you always see current state */}
-      <div className="mb-3 flex gap-2 items-center">
-        <span className="text-xs px-2 py-1 rounded bg-gray-100">
-          <strong>Bot:</strong> {currentBot ?? "—"}
-        </span>
-        <span className="text-xs px-2 py-1 rounded bg-gray-100">
-          <strong>Plan:</strong> {botPlan ?? "—"}
-        </span>
-        <span className="text-xs px-2 py-1 rounded bg-gray-100">
-          <strong>Template:</strong> {tplKey ?? "none"}
-        </span>
-      </div>
-
-      {/* FIX: give the canvas a real height so it renders */}
-      <div className="rounded-xl bg-white shadow-sm overflow-hidden"
-           style={{ height: "calc(100vh - 220px)" }}>
+    <main className="h-[calc(100vh-4rem)] flex flex-col">
+      <div className="flex-1 min-h-0">
         {tplKey ? (
           <ReactFlow
             key={rfKey}
@@ -59,21 +41,30 @@ const Builder: React.FC = () => {
             edges={edges}
             nodeTypes={NODE_TYPES}
             fitView
+            // darker, thicker edges so the diagram pops
+            defaultEdgeOptions={{
+              animated: false,
+              style: { stroke: "#4b5563", strokeWidth: 2 }, // gray-600
+            }}
+            // hide tiny watermark
+            proOptions={{ hideAttribution: true }}
           >
-            <MiniMap />
+            {/* Mini overview — also dark so it’s readable */}
+            <MiniMap nodeColor={() => "#4b5563"} maskColor="rgba(0,0,0,.08)" />
             <Controls />
-            <Background />
+            {/* darker grid lines */}
+            <Background variant="lines" gap={18} color="#9ca3af" />
           </ReactFlow>
         ) : (
           <div className="h-full grid place-items-center">
-            <div className="text-center px-4">
+            <div className="text-center">
               <h2 className="text-xl font-semibold mb-2">Canvas not ready</h2>
               <p className="text-muted-foreground">
-                Select a bot and plan (Basic or Custom). If one is already
-                selected, we might not have a template for that combination yet.
+                Select a different bot/plan or add a template for:
               </p>
-              <code className="mt-3 inline-block px-2 py-1 bg-gray-100 rounded">
-                {currentBot ? `${currentBot}_${botPlan ?? "-"}` : "-"}
+              <br />
+              <code className="px-2 py-1 bg-gray-100 rounded mt-2 inline-block">
+                {currentBot ? `${currentBot}_${botPlan}` : "—"}
               </code>
             </div>
           </div>
@@ -84,3 +75,7 @@ const Builder: React.FC = () => {
 };
 
 export default Builder;
+
+    
+      
+            
