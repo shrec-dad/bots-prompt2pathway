@@ -151,3 +151,11 @@
 .react-flow__attribution {
   display: none !important;
 }
+/* Force all admin pages to fill available width */
+body[data-route^="/admin"] main section {
+  max-width: 100% !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 1.5rem !important; /* keep some breathing room */
+  display: block !important;
+}
