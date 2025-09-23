@@ -159,3 +159,7 @@ body[data-route^="/admin"] main section {
   padding: 1.5rem !important; /* keep some breathing room */
   display: block !important;
 }
+/* Tone up general foreground a bit app-wide */
+:root {
+  --foreground: 240 11% 4%;
+}
