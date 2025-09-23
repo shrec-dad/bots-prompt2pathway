@@ -136,3 +136,18 @@
     -webkit-line-clamp: 3;
   }
 }
+/* React Flow visibility tweaks */
+.react-flow__node {
+  border: 2px solid #111827 !important;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.08) !important;
+  background-color: #ffffff !important;
+}
+
+.react-flow__edge-path {
+  stroke: #111827 !important;
+  stroke-width: 2px !important;
+}
+
+.react-flow__attribution {
+  display: none !important;
+}
