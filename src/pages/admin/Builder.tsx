@@ -1,6 +1,6 @@
 // src/pages/admin/Builder.tsx
 import React from "react";
-import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
+import ReactFlow, { Background } from "reactflow";
 import "reactflow/dist/style.css";
 
 import { useAdminStore } from "@/lib/AdminStore";
@@ -10,7 +10,7 @@ import { NODE_TYPES } from "@/components/builder/nodeTypes";
 export default function Builder() {
   const { currentBot, botPlan } = useAdminStore();
 
-  // Compose the template key exactly as your registry expects
+  // Compose registry key
   const tplKey = `${currentBot}_${botPlan.toLowerCase()}` as keyof typeof templates;
   const tpl = templates[tplKey];
 
@@ -31,12 +31,19 @@ export default function Builder() {
   const { nodes, edges } = tpl;
 
   return (
-    <div className="rounded-xl border bg-card">
-      {/* The canvas height: viewport minus header spacing */}
+    <div className="rounded-xl border bg-[#ECFDF5]">
       <div className="h-[calc(100vh-8rem)] w-full">
-        <ReactFlow nodes={nodes} edges={edges} nodeTypes={NODE_TYPES} fitView>
-          <MiniMap />
-          <Controls />
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_TYPES}
+          fitView
+          defaultEdgeOptions={{
+            type: "smoothstep",
+            style: { stroke: "#111827", strokeWidth: 2 }, // darker edges
+          }}
+        >
+          {/* No MiniMap */}
           <Background />
         </ReactFlow>
       </div>
