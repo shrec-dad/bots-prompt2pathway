@@ -62,7 +62,7 @@ export default function AdminLayout() {
         </nav>
       </aside>
 
-      {/* RIGHT – MAIN COLUMN (full width) */}
+      {/* RIGHT – FULL WIDTH COLUMN */}
       <main className="flex min-h-screen flex-1 flex-col overflow-hidden">
         {/* STICKY TOP BAR WITH BOT DROPDOWN */}
         <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -84,9 +84,11 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        {/* PAGE CONTENT – full width, no side panel */}
-        <section className="w-full flex-1 overflow-auto p-6">
-          <Outlet />
+        {/* PAGE CONTENT – edge to edge */}
+        <section className="flex-1 overflow-auto p-6">
+          <div className="w-full h-full">
+            <Outlet />
+          </div>
         </section>
       </main>
     </div>
