@@ -16,17 +16,17 @@ const NavItem = ({
     to={to}
     className={({ isActive }) =>
       [
-        "flex items-center gap-3 rounded-xl px-4 py-3 text-base transition",
+        "group flex items-center gap-3 rounded-2xl px-4 py-3 text-base transition font-semibold",
         isActive
-          ? "bg-gradient-to-r from-green-500/20 to-orange-500/20 text-foreground"
-          : "text-muted-foreground hover:bg-muted/50",
+          ? "bg-gradient-to-r from-green-500/15 via-amber-400/15 to-pink-500/15 text-foreground ring-1 ring-border"
+          : "text-foreground/80 hover:text-foreground hover:bg-muted/60",
       ].join(" ")
     }
   >
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-muted">
+    <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/15 to-emerald-500/15 ring-1 ring-border">
       {icon}
     </span>
-    <span>{label}</span>
+    <span className="tracking-tight">{label}</span>
   </NavLink>
 );
 
@@ -43,13 +43,14 @@ export default function AdminLayout() {
               🤖
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Lead Qualifier Pro</div>
-              <div className="text-xl font-semibold">Admin</div>
+              <div className="text-sm text-foreground/80">Lead Qualifier Pro</div>
+              <div className="text-2xl font-extrabold tracking-tight">Admin</div>
             </div>
           </div>
         </div>
 
-        <nav className="space-y-2 px-4 pb-6">
+        {/* more bottom padding so Background button never overlaps the last item */}
+        <nav className="space-y-2 px-4 pb-28">
           <NavItem to="/admin/dashboard" icon={"📊"} label="Dashboard" />
           <NavItem to="/admin/clients" icon={"👥"} label="Clients" />
           <NavItem to="/admin/bots" icon={"🧰"} label="Bots" />
@@ -68,12 +69,12 @@ export default function AdminLayout() {
         {/* STICKY TOP BAR WITH BOT DROPDOWN */}
         <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center justify-between gap-4 px-6 py-3">
-            <div className="text-sm text-muted-foreground">You are editing</div>
+            <div className="text-sm font-semibold text-foreground/80">You are editing</div>
             <div className="relative z-50 pointer-events-auto">
               <select
                 value={currentBot}
                 onChange={(e) => setCurrentBot(e.target.value as any)}
-                className="rounded-xl border bg-card px-4 py-2 text-sm shadow-sm focus:outline-none"
+                className="rounded-xl border bg-card px-4 py-2 text-sm shadow-sm focus:outline-none font-semibold"
               >
                 <option value="LeadQualifier">Lead Qualifier</option>
                 <option value="AppointmentBooking">Appointment Booking</option>
