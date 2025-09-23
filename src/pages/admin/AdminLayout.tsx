@@ -50,7 +50,7 @@ export default function AdminLayout() {
         </div>
 
         <nav className="space-y-2 px-4 pb-6">
-          <NavItem to="/admin" icon={"📊"} label="Dashboard" />
+          <NavItem to="/admin/dashboard" icon={"📊"} label="Dashboard" />
           <NavItem to="/admin/clients" icon={"👥"} label="Clients" />
           <NavItem to="/admin/bots" icon={"🧰"} label="Bots" />
           <NavItem to="/admin/builder" icon={"🧩"} label="Builder" />
@@ -59,10 +59,11 @@ export default function AdminLayout() {
           <NavItem to="/admin/branding" icon={"🎨"} label="Branding" />
           <NavItem to="/admin/integrations" icon={"🔗"} label="Integrations" />
           <NavItem to="/admin/settings" icon={"⚙️"} label="Settings" />
+          <NavItem to="/admin/analytics" icon={"📈"} label="Analytics" />
         </nav>
       </aside>
 
-      {/* RIGHT – FULL WIDTH COLUMN */}
+      {/* RIGHT – MAIN COLUMN (full width) */}
       <main className="flex min-h-screen flex-1 flex-col overflow-hidden">
         {/* STICKY TOP BAR WITH BOT DROPDOWN */}
         <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -85,10 +86,8 @@ export default function AdminLayout() {
         </header>
 
         {/* PAGE CONTENT – edge to edge */}
-        <section className="flex-1 overflow-auto p-6">
-          <div className="w-full h-full">
-            <Outlet />
-          </div>
+        <section className="w-full flex-1 overflow-auto p-6">
+          <Outlet />
         </section>
       </main>
     </div>
