@@ -1,7 +1,7 @@
 // src/pages/admin/Bots.tsx
 import React from "react";
 
-export default function Bots() {
+function Bots() {
   return (
     <div className="w-full h-full p-6">
       <div className="rounded-xl border bg-card p-8">
@@ -13,3 +13,5 @@ export default function Bots() {
     </div>
   );
 }
+
+export default Bots;
