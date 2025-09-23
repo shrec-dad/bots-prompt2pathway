@@ -14,6 +14,7 @@ import Nurture from "./pages/admin/Nurture";
 import Branding from "./pages/admin/Branding";
 import Integrations from "./pages/admin/Integrations";
 import Settings from "./pages/admin/Settings";
+import Analytics from "./pages/admin/Analytics";
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="branding" element={<Branding />} />
           <Route path="integrations" element={<Integrations />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="analytics" element={<Analytics />} />
         </Route>
 
         {/* Default route can redirect to admin */}
