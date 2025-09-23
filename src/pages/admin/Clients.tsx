@@ -214,3 +214,4 @@ export const Clients: React.FC = () => {
     </div>
   );
 };
+export default Clients;
