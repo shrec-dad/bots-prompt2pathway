@@ -1,75 +1,45 @@
 // src/pages/admin/Builder.tsx
-import React, { useMemo } from "react";
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  ReactFlowProvider,
-  type Node,
-  type Edge,
-} from "reactflow";
+import React from "react";
+import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
 import "reactflow/dist/style.css";
 
 import { useAdminStore } from "@/lib/AdminStore";
-import { templates, type TemplateKey } from "@/lib/templates";
+import { templates } from "@/lib/templates";
 import { NODE_TYPES } from "@/components/builder/nodeTypes";
 
-/**
- * Full-width Builder canvas.
- * Right-side panel is intentionally removed/hidden so the graph fills the page.
- */
-const Builder: React.FC = () => {
+export default function Builder() {
   const { currentBot, botPlan } = useAdminStore();
 
-  // Compute the registry key: `${currentBot}_${plan.toLowerCase()}`
-  const tplKey = useMemo<TemplateKey | null>(() => {
-    if (!currentBot || !botPlan) return null;
-    const key = `${currentBot}_${botPlan.toLowerCase()}` as TemplateKey;
-    return key in templates ? key : null;
-  }, [currentBot, botPlan]);
+  // Compose the template key exactly as your registry expects
+  const tplKey = `${currentBot}_${botPlan.toLowerCase()}` as keyof typeof templates;
+  const tpl = templates[tplKey];
 
-  const data = useMemo<{ nodes: Node[]; edges: Edge[] }>(() => {
-    if (!tplKey) return { nodes: [], edges: [] };
-    return templates[tplKey];
-  }, [tplKey]);
-
-  // Friendly fallback when a combo isn't defined yet in /lib/templates.ts
-  if (!tplKey) {
+  if (!tpl) {
     return (
-      <main className="p-8">
-        <div className="mx-auto max-w-3xl rounded-xl border bg-white p-6 shadow-sm">
-          <h1 className="mb-2 text-xl font-semibold text-foreground">
-            Canvas not ready
-          </h1>
-          <p className="text-muted-foreground">
-            Pick a bot and plan, or add a template entry in{" "}
-            <code className="rounded bg-muted px-1 py-0.5">/src/lib/templates.ts</code>.
-          </p>
-        </div>
-      </main>
+      <div className="rounded-xl border bg-card p-8 text-center">
+        <h2 className="text-xl font-semibold">Canvas not ready</h2>
+        <p className="mt-2 text-muted-foreground">
+          Select a different bot/plan or add a template entry for:
+        </p>
+        <code className="mt-3 inline-block rounded bg-muted px-3 py-1">
+          {tplKey}
+        </code>
+      </div>
     );
   }
 
-  return (
-    <main className="h-full w-full">
-      <ReactFlowProvider>
-        <div className="h-[calc(100vh-140px)] w-full">
-          <ReactFlow
-            nodes={data.nodes}
-            edges={data.edges}
-            nodeTypes={NODE_TYPES}
-            fitView
-          >
-            {/* Subtle dotted background (not the heavy grid) */}
-            <Background gap={16} size={1} />
-            <Controls />
-            <MiniMap pannable zoomable />
-          </ReactFlow>
-        </div>
-      </ReactFlowProvider>
-    </main>
-  );
-};
+  const { nodes, edges } = tpl;
 
-export default Builder;
+  return (
+    <div className="rounded-xl border bg-card">
+      {/* The canvas height: viewport minus header spacing */}
+      <div className="h-[calc(100vh-8rem)] w-full">
+        <ReactFlow nodes={nodes} edges={edges} nodeTypes={NODE_TYPES} fitView>
+          <MiniMap />
+          <Controls />
+          <Background />
+        </ReactFlow>
+      </div>
+    </div>
+  );
+}
