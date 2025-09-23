@@ -107,12 +107,7 @@ const Builder: React.FC = () => {
             />
             <Controls position="bottom-left" />
             {/* Subtle MiniMap; flip to `false` to hide completely */}
-            <MiniMap
-              nodeStrokeColor="#6b7280"
-              nodeColor="#e5e7eb"
-              maskColor="rgba(0,0,0,0.04)"
-              position="bottom-right"
-            />
+            
           </ReactFlow>
         )}
       </div>
