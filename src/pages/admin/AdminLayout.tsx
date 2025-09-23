@@ -40,7 +40,6 @@ export default function AdminLayout() {
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-3">
             <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-600/20">
-              {/* app logo placeholder */}
               🤖
             </div>
             <div>
@@ -63,14 +62,12 @@ export default function AdminLayout() {
         </nav>
       </aside>
 
-      {/* RIGHT – EVERYTHING ELSE */}
+      {/* RIGHT – MAIN COLUMN (full width) */}
       <main className="flex min-h-screen flex-1 flex-col overflow-hidden">
         {/* STICKY TOP BAR WITH BOT DROPDOWN */}
         <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-6 py-3">
+          <div className="flex items-center justify-between gap-4 px-6 py-3">
             <div className="text-sm text-muted-foreground">You are editing</div>
-
-            {/* Ensure the dropdown is always clickable: z-50 + pointer-events-auto */}
             <div className="relative z-50 pointer-events-auto">
               <select
                 value={currentBot}
@@ -87,12 +84,11 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        {/* PAGE CONTENT – full width, no right panel */}
-        <section className="mx-auto w-full max-w-screen-2xl flex-1 overflow-auto px-6 py-6">
+        {/* PAGE CONTENT – full width, no side panel */}
+        <section className="w-full flex-1 overflow-auto p-6">
           <Outlet />
         </section>
       </main>
     </div>
   );
 }
-
