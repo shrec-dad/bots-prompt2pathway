@@ -1,5 +1,6 @@
 // src/pages/admin/Knowledge.tsx
-// Palette: Obsidian Black (#0A0A0A) + Crimson (#8B0000) + Bronze Gold (#B8860B)
+// Theme: Royal Navy + Metallic Gold (rich & premium)
+// Navy base: #0A0E27, Navy panel: #101736, Metallic Gold: #C5A300
 
 import React from "react";
 
@@ -19,34 +20,38 @@ const mockDocs: Doc[] = [
 
 export default function Knowledge() {
   return (
-    <div className="mx-auto max-w-6xl bg-[#0A0A0A] rounded-2xl">
-      {/* Header */}
-      <div className="mb-6 rounded-2xl border border-[#B8860B]/40 ring-1 ring-[#B8860B]/45 p-6 shadow-xl bg-gradient-to-r from-[#0A0A0A] via-[#121212] to-[#0A0A0A]">
-        <h1 className="text-3xl font-extrabold text-[#B8860B]">Knowledge</h1>
-        <p className="mt-2 font-semibold text-[#F5F5F5]">
+    <div className="mx-auto max-w-6xl rounded-2xl bg-[#0A0E27]">
+      {/* Premium header */}
+      <div className="mb-6 rounded-2xl border border-[#C5A300]/35 ring-1 ring-[#C5A300]/45 p-6 shadow-xl bg-gradient-to-r from-[#0A0E27] via-[#101736] to-[#0A0E27]">
+        <h1 className="text-3xl font-extrabold tracking-tight text-[#C5A300]">Knowledge</h1>
+        <p className="mt-2 font-semibold text-white/90">
           Upload product guides, pricing, policies, FAQs — your bot will use this knowledge to answer questions.
         </p>
       </div>
 
-      {/* Upload */}
-      <div className="mb-6 rounded-xl border border-[#B8860B]/40 bg-[#121212] p-5 shadow-lg">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Upload panel */}
+      <div className="mb-6 rounded-xl border border-[#C5A300]/35 bg-[#101736] p-5 shadow-lg">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <div className="text-lg font-bold text-[#B8860B]">Upload Documents</div>
-            <div className="font-semibold text-[#CFCFCF]">PDF, Word, Excel (placeholder only — wiring later).</div>
+            <div className="text-lg font-bold text-[#C5A300]">Upload Documents</div>
+            <div className="font-semibold text-[#C9D1FF]">
+              PDF, Word, Excel (placeholder only — wiring later).
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="rounded-lg border border-[#B8860B]/40 px-4 py-2 font-bold text-[#B8860B] shadow bg-gradient-to-r from-[#0A0A0A] to-[#121212] cursor-not-allowed"
+              className="rounded-lg border border-[#C5A300]/35 px-4 py-2 font-bold text-[#C5A300] shadow bg-gradient-to-r from-[#0A0E27] to-[#101736] cursor-not-allowed"
               disabled
+              title="Coming soon"
             >
               + Upload
             </button>
             <button
               type="button"
-              className="rounded-lg border border-[#B8860B]/40 px-4 py-2 font-bold text-[#B8860B] shadow bg-gradient-to-r from-[#0A0A0A] to-[#121212] cursor-not-allowed"
+              className="rounded-lg border border-[#C5A300]/35 px-4 py-2 font-bold text-[#C5A300] shadow bg-gradient-to-r from-[#0A0E27] to-[#101736] cursor-not-allowed"
               disabled
+              title="Coming soon"
             >
               Manage Sources
             </button>
@@ -54,31 +59,42 @@ export default function Knowledge() {
         </div>
       </div>
 
-      {/* List */}
-      <div className="rounded-xl border border-[#B8860B]/40 bg-[#121212] shadow-lg">
-        <div className="border-b border-[#B8860B]/40 px-5 py-3">
-          <div className="font-bold text-[#B8860B]">Uploaded Documents</div>
-          <div className="font-semibold text-[#CFCFCF]">Static mock data for now.</div>
+      {/* Documents list */}
+      <div className="rounded-xl border border-[#C5A300]/35 bg-[#101736] shadow-lg">
+        <div className="border-b border-[#C5A300]/35 px-5 py-3">
+          <div className="font-bold text-[#C5A300]">Uploaded Documents</div>
+          <div className="font-semibold text-[#C9D1FF]">Static mock data for now.</div>
         </div>
-        <ul className="divide-y divide-[#B8860B]/25">
+
+        <ul className="divide-y divide-[#C5A300]/20">
           {mockDocs.map((d) => (
-            <li key={d.id} className="flex flex-col md:flex-row md:items-center gap-2 justify-between px-5 py-4">
+            <li
+              key={d.id}
+              className="flex flex-col justify-between gap-2 px-5 py-4 md:flex-row md:items-center"
+            >
               <div className="flex items-center gap-3">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-[#B8860B]/45 bg-gradient-to-br from-[#0A0A0A] to-[#121212] font-bold text-[#B8860B]">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-[#C5A300]/45 bg-gradient-to-br from-[#0A0E27] to-[#101736] font-bold text-[#C5A300]">
                   {d.type === "PDF" ? "📄" : d.type === "Word" ? "📝" : "📊"}
                 </span>
                 <div>
-                  <div className="font-bold text-[#F5F5F5]">{d.name}</div>
-                  <div className="font-semibold text-[#CFCFCF]">
+                  <div className="font-bold text-white">{d.name}</div>
+                  <div className="font-semibold text-[#C9D1FF]">
                     {d.type} • {d.size} • {d.uploadedAt}
                   </div>
                 </div>
               </div>
+
               <div className="flex items-center gap-2">
-                <button className="rounded-md border border-[#B8860B]/40 px-3 py-1.5 font-bold text-[#B8860B] bg-[#0A0A0A] shadow cursor-not-allowed" disabled>
+                <button
+                  className="rounded-md border border-[#C5A300]/35 bg-[#0A0E27] px-3 py-1.5 font-bold text-[#C5A300] shadow cursor-not-allowed"
+                  disabled
+                >
                   Preview
                 </button>
-                <button className="rounded-md border border-[#B8860B]/40 px-3 py-1.5 font-bold text-[#B8860B] bg-[#0A0A0A] shadow cursor-not-allowed" disabled>
+                <button
+                  className="rounded-md border border-[#C5A300]/35 bg-[#0A0E27] px-3 py-1.5 font-bold text-[#C5A300] shadow cursor-not-allowed"
+                  disabled
+                >
                   Remove
                 </button>
               </div>
@@ -87,7 +103,10 @@ export default function Knowledge() {
         </ul>
       </div>
 
-      <p className="mt-4 font-semibold text-[#CFCFCF]">⚡ Real uploads & retrieval coming later.</p>
+      {/* Footer note */}
+      <p className="mt-4 font-semibold text-[#C9D1FF]">
+        ⚡ Later we’ll wire this to real uploads, chunking, and retrieval for each bot.
+      </p>
     </div>
   );
 }
