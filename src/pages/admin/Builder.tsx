@@ -10,7 +10,6 @@ import { NODE_TYPES } from "@/components/builder/nodeTypes";
 export default function Builder() {
   const { currentBot, botPlan } = useAdminStore();
 
-  // Compose registry key
   const tplKey = `${currentBot}_${botPlan.toLowerCase()}` as keyof typeof templates;
   const tpl = templates[tplKey];
 
@@ -22,7 +21,7 @@ export default function Builder() {
           Select a different bot/plan or add a template entry for:
         </p>
         <code className="mt-3 inline-block rounded bg-muted px-3 py-1">
-          {tplKey}
+          {String(tplKey)}
         </code>
       </div>
     );
@@ -31,7 +30,7 @@ export default function Builder() {
   const { nodes, edges } = tpl;
 
   return (
-    <div className="rounded-xl border bg-[#ECFDF5]">
+    <div className="rounded-xl border" style={{ backgroundColor: "#E6F5EE" /* slightly darker mint pastel */ }}>
       <div className="h-[calc(100vh-8rem)] w-full">
         <ReactFlow
           nodes={nodes}
@@ -40,11 +39,11 @@ export default function Builder() {
           fitView
           defaultEdgeOptions={{
             type: "smoothstep",
-            style: { stroke: "#111827", strokeWidth: 2 }, // darker edges
+            style: { stroke: "#111827", strokeWidth: 2 },
           }}
         >
           {/* No MiniMap */}
-          <Background />
+          <Background variant="dots" color="#9CA3AF" gap={20} size={1} />
         </ReactFlow>
       </div>
     </div>
