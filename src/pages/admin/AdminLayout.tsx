@@ -3,27 +3,17 @@ import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAdminStore } from "@/lib/AdminStore";
 
-// Lucide icons (already in project)
-import {
-  LayoutDashboard,
-  Users2,
-  Bot,
-  Puzzle,
-  BookOpen,
-  Mail,
-  Palette,
-  Link2,
-  Settings,
-  BarChart3,
-} from "lucide-react";
+const Emoji = ({ children }: { children: React.ReactNode }) => (
+  <span className="text-xl leading-none">{children}</span>
+);
 
 const NavItem = ({
   to,
-  icon,
+  emoji,
   label,
 }: {
   to: string;
-  icon: React.ReactNode;
+  emoji: React.ReactNode;
   label: string;
 }) => (
   <NavLink
@@ -32,13 +22,13 @@ const NavItem = ({
       [
         "group flex items-center gap-3 rounded-xl px-4 py-3 text-base font-bold transition",
         isActive
-          ? "bg-gradient-to-r from-violet-500/20 via-indigo-500/20 to-emerald-500/20 text-foreground"
+          ? "bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-indigo-500/20 text-foreground"
           : "text-foreground/85 hover:text-foreground hover:bg-muted/50",
       ].join(" ")
     }
   >
-    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-border bg-gradient-to-br from-violet-500/15 via-indigo-500/15 to-emerald-500/15">
-      {icon}
+    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-border bg-gradient-to-br from-pink-500/15 via-purple-500/15 to-indigo-500/15">
+      <Emoji>{emoji}</Emoji>
     </span>
     <span>{label}</span>
   </NavLink>
@@ -53,8 +43,8 @@ export default function AdminLayout() {
       <aside className="w-72 shrink-0 border-r bg-card/50 backdrop-blur-sm">
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-3">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600/20">
-              <Bot size={24} strokeWidth={2.2} />
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-fuchsia-600/20">
+              <Emoji>🤖</Emoji>
             </div>
             <div>
               <div className="text-sm text-foreground/70">Lead Qualifier Pro</div>
@@ -64,16 +54,16 @@ export default function AdminLayout() {
         </div>
 
         <nav className="space-y-2 px-4 pb-28">
-          <NavItem to="/admin/dashboard" icon={<LayoutDashboard size={20} strokeWidth={2.2} />} label="Dashboard" />
-          <NavItem to="/admin/clients" icon={<Users2 size={20} strokeWidth={2.2} />} label="Clients" />
-          <NavItem to="/admin/bots" icon={<Bot size={20} strokeWidth={2.2} />} label="Bots" />
-          <NavItem to="/admin/builder" icon={<Puzzle size={20} strokeWidth={2.2} />} label="Builder" />
-          <NavItem to="/admin/knowledge" icon={<BookOpen size={20} strokeWidth={2.2} />} label="Knowledge" />
-          <NavItem to="/admin/nurture" icon={<Mail size={20} strokeWidth={2.2} />} label="Nurture" />
-          <NavItem to="/admin/branding" icon={<Palette size={20} strokeWidth={2.2} />} label="Branding" />
-          <NavItem to="/admin/integrations" icon={<Link2 size={20} strokeWidth={2.2} />} label="Integrations" />
-          <NavItem to="/admin/settings" icon={<Settings size={20} strokeWidth={2.2} />} label="Settings" />
-          <NavItem to="/admin/analytics" icon={<BarChart3 size={20} strokeWidth={2.2} />} label="Analytics" />
+          <NavItem to="/admin/dashboard" emoji="📊" label="Dashboard" />
+          <NavItem to="/admin/clients" emoji="👥" label="Clients" />
+          <NavItem to="/admin/bots" emoji="🧰" label="Bots" />
+          <NavItem to="/admin/builder" emoji="🧩" label="Builder" />
+          <NavItem to="/admin/knowledge" emoji="📚" label="Knowledge" />
+          <NavItem to="/admin/nurture" emoji="✉️" label="Nurture" />
+          <NavItem to="/admin/branding" emoji="🎨" label="Branding" />
+          <NavItem to="/admin/integrations" emoji="🔗" label="Integrations" />
+          <NavItem to="/admin/settings" emoji="⚙️" label="Settings" />
+          <NavItem to="/admin/analytics" emoji="📈" label="Analytics" />
         </nav>
       </aside>
 
