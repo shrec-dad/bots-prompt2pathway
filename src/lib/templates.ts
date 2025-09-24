@@ -1,183 +1,316 @@
 // src/lib/templates.ts
-import { Node, Edge } from "reactflow";
 
-// Helper factories for nodes
-const makeMessage = (id: string, label: string, x: number, y: number) => ({
+// Minimal types for our React Flow payloads
+type Position = { x: number; y: number };
+
+type RFNode = {
+  id: string;
+  type?: "message" | "input" | "choice" | "action";
+  position: Position;
+  data: Record<string, any>;
+};
+
+type RFEdge = {
+  id: string;
+  source: string;
+  target: string;
+  type?: string;
+};
+
+type Flow = {
+  nodes: RFNode[];
+  edges: RFEdge[];
+};
+
+/**
+ * Helper creators so all nodes render consistently with our custom nodeTypes:
+ * - message / input / choice / action
+ */
+const message = (id: string, position: Position, title: string, body?: string): RFNode => ({
   id,
-  type: "messageNode",
-  position: { x, y },
-  data: { label },
+  type: "message",
+  position,
+  data: { title, body },
 });
 
-const makeInput = (id: string, label: string, x: number, y: number) => ({
+const inputNode = (
+  id: string,
+  position: Position,
+  label: string,
+  placeholder = "Type..."
+): RFNode => ({
   id,
-  type: "inputNode",
-  position: { x, y },
-  data: { label },
+  type: "input",
+  position,
+  data: { title: label, placeholder },
 });
 
-const makeChoice = (id: string, label: string, options: string[], x: number, y: number) => ({
+const choice = (
+  id: string,
+  position: Position,
+  label: string,
+  options: string[]
+): RFNode => ({
   id,
-  type: "choiceNode",
-  position: { x, y },
-  data: { label, options },
+  type: "choice",
+  position,
+  data: { title: label, options },
 });
 
-const makeAction = (id: string, label: string, x: number, y: number) => ({
+const action = (
+  id: string,
+  position: Position,
+  label: string,
+  description?: string
+): RFNode => ({
   id,
-  type: "actionNode",
-  position: { x, y },
-  data: { label },
+  type: "action",
+  position,
+  data: { title: label, description },
 });
 
-const edge = (id: string, source: string, target: string) => ({
+const edge = (id: string, source: string, target: string): RFEdge => ({
   id,
   source,
   target,
   type: "smoothstep",
 });
 
-// -------------------- Templates --------------------
-
-export const templates: Record<
-  string,
-  { nodes: Node[]; edges: Edge[] }
-> = {
-  // Lead Qualifier (already working in your build)
-  LeadQualifier_basic: {
-    nodes: [
-      makeMessage("start", "👋 Welcome! Let's qualify your lead.", 0, 0),
-      makeInput("q1", "What's your name?", 0, 120),
-      makeInput("q2", "What's your email?", 0, 240),
-      makeChoice("q3", "Do you have a budget?", ["<$1k", "$1k-$5k", "$5k+"], 0, 360),
-      makeMessage("end", "✅ Thanks! We'll review your info.", 0, 480),
-    ],
-    edges: [
-      edge("e1", "start", "q1"),
-      edge("e2", "q1", "q2"),
-      edge("e3", "q2", "q3"),
-      edge("e4", "q3", "end"),
-    ],
-  },
-  LeadQualifier_custom: {
-    nodes: [
-      makeMessage("start", "👋 Welcome to the advanced lead flow.", 0, 0),
-      makeInput("q1", "What's your full name?", 0, 120),
-      makeInput("q2", "Email & Phone?", 0, 240),
-      makeChoice("q3", "Budget range?", ["<$1k", "$1k-$5k", "$5k-$20k", "$20k+"], 0, 360),
-      makeChoice("q4", "Timeline to start?", ["ASAP", "1-3 months", "Later"], 0, 480),
-      makeAction("route", "📩 Send lead to CRM", 0, 600),
-      makeMessage("end", "✅ Done! You'll get follow-up shortly.", 0, 720),
-    ],
-    edges: [
-      edge("e1", "start", "q1"),
-      edge("e2", "q1", "q2"),
-      edge("e3", "q2", "q3"),
-      edge("e4", "q3", "q4"),
-      edge("e5", "q4", "route"),
-      edge("e6", "route", "end"),
-    ],
-  },
-
-  // Appointment Booking
-  AppointmentBooking_basic: {
-    nodes: [
-      makeMessage("start", "📅 Welcome! Let's book your appointment.", 0, 0),
-      makeChoice("service", "Which service?", ["Consultation", "Demo", "Support"], 0, 140),
-      makeInput("date", "Preferred date?", 0, 280),
-      makeInput("time", "Preferred time?", 0, 400),
-      makeMessage("end", "✅ Thank you, we'll confirm via email!", 0, 520),
-    ],
-    edges: [
-      edge("e1", "start", "service"),
-      edge("e2", "service", "date"),
-      edge("e3", "date", "time"),
-      edge("e4", "time", "end"),
-    ],
-  },
-  AppointmentBooking_custom: {
-    nodes: [
-      makeMessage("start", "📅 Welcome to advanced booking.", 0, 0),
-      makeChoice("service", "Which service type?", ["Consult", "Training", "VIP"], 0, 140),
-      makeInput("staff", "Preferred staff?", 0, 280),
-      makeInput("date", "Choose your date", 0, 420),
-      makeInput("time", "Choose your time", 0, 540),
-      makeAction("payment", "💳 Collect deposit", 0, 660),
-      makeMessage("end", "✅ Booking request sent!", 0, 780),
-    ],
-    edges: [
-      edge("e1", "start", "service"),
-      edge("e2", "service", "staff"),
-      edge("e3", "staff", "date"),
-      edge("e4", "date", "time"),
-      edge("e5", "time", "payment"),
-      edge("e6", "payment", "end"),
-    ],
-  },
-
-  // Customer Support
-  CustomerSupport_basic: {
-    nodes: [
-      makeMessage("start", "🙋 Welcome to Support!", 0, 0),
-      makeChoice("cat", "Choose a category", ["Orders", "Tech", "Billing"], 0, 140),
-      makeInput("desc", "Describe your issue", 0, 280),
-      makeMessage("end", "✅ Ticket created. Our team will contact you.", 0, 420),
-    ],
-    edges: [
-      edge("e1", "start", "cat"),
-      edge("e2", "cat", "desc"),
-      edge("e3", "desc", "end"),
-    ],
-  },
-  CustomerSupport_custom: {
-    nodes: [
-      makeMessage("start", "🙋 Advanced Support Assistant.", 0, 0),
-      makeChoice("cat", "Select category", ["Orders", "Tech", "Billing", "Other"], 0, 140),
-      makeInput("desc", "Please describe your issue", 0, 280),
-      makeChoice("prio", "Priority level?", ["Low", "Medium", "High"], 0, 420),
-      makeAction("ticket", "🎫 Create support ticket", 0, 560),
-      makeMessage("end", "✅ Your ticket is logged. Expect updates soon.", 0, 700),
-    ],
-    edges: [
-      edge("e1", "start", "cat"),
-      edge("e2", "cat", "desc"),
-      edge("e3", "desc", "prio"),
-      edge("e4", "prio", "ticket"),
-      edge("e5", "ticket", "end"),
-    ],
-  },
-
-  // Waitlist
-  Waitlist_basic: {
-    nodes: [
-      makeMessage("start", "⏳ Join our waitlist!", 0, 0),
-      makeInput("name", "What's your name?", 0, 140),
-      makeInput("email", "What's your email?", 0, 280),
-      makeMessage("end", "✅ You're added to the list!", 0, 420),
-    ],
-    edges: [
-      edge("e1", "start", "name"),
-      edge("e2", "name", "email"),
-      edge("e3", "email", "end"),
-    ],
-  },
-  Waitlist_custom: {
-    nodes: [
-      makeMessage("start", "⏳ Advanced Waitlist Flow", 0, 0),
-      makeInput("name", "Your full name?", 0, 140),
-      makeInput("email", "Your email?", 0, 280),
-      makeChoice("interest", "Interest level?", ["High", "Medium", "Low"], 0, 420),
-      makeAction("priority", "⭐ Assign priority score", 0, 560),
-      makeMessage("end", "✅ You're added with priority!", 0, 700),
-    ],
-    edges: [
-      edge("e1", "start", "name"),
-      edge("e2", "name", "email"),
-      edge("e3", "email", "interest"),
-      edge("e4", "interest", "priority"),
-      edge("e5", "priority", "end"),
-    ],
-  },
+/**
+ * ========= Lead Qualifier (existing) =========
+ */
+const LeadQualifier_basic: Flow = {
+  nodes: [
+    message("lq_welcome", { x: 80, y: 20 }, "👋 Welcome! Let’s qualify your lead."),
+    inputNode("lq_name", { x: 60, y: 120 }, "What's your name?"),
+    inputNode("lq_email", { x: 60, y: 230 }, "What's your email?"),
+    choice("lq_budget", { x: 60, y: 340 }, "Do you have a budget?", ["<$1k", "$1k–$5k", "$5k–$20k", "$20k+"]),
+    message("lq_thanks", { x: 60, y: 520 }, "✅ Thanks! We’ll review and reach out."),
+  ],
+  edges: [
+    edge("e1", "lq_welcome", "lq_name"),
+    edge("e2", "lq_name", "lq_email"),
+    edge("e3", "lq_email", "lq_budget"),
+    edge("e4", "lq_budget", "lq_thanks"),
+  ],
 };
 
+const LeadQualifier_custom: Flow = {
+  nodes: [
+    message("lqc_welcome", { x: 520, y: 20 }, "👋 Welcome! Advanced lead scoring"),
+    inputNode("lqc_name", { x: 500, y: 120 }, "Full name"),
+    inputNode("lqc_email", { x: 500, y: 200 }, "Email (validated)"),
+    inputNode("lqc_company", { x: 500, y: 280 }, "Company name"),
+    choice("lqc_budget", { x: 500, y: 360 }, "Budget range", ["<$1k", "$1k–$5k", "$5k–$20k", "$20k+"]),
+    choice("lqc_timeline", { x: 500, y: 460 }, "Timeline / urgency", ["ASAP", "This month", "This quarter", "Exploring"]),
+    action("lqc_route", { x: 500, y: 560 }, "🔗 Webhook / CRM routing", "Sends payload to your universal CRM endpoint"),
+    message("lqc_done", { x: 500, y: 660 }, "✅ Scored + routed. You’ll get an email soon."),
+  ],
+  edges: [
+    edge("e1", "lqc_welcome", "lqc_name"),
+    edge("e2", "lqc_name", "lqc_email"),
+    edge("e3", "lqc_email", "lqc_company"),
+    edge("e4", "lqc_company", "lqc_budget"),
+    edge("e5", "lqc_budget", "lqc_timeline"),
+    edge("e6", "lqc_timeline", "lqc_route"),
+    edge("e7", "lqc_route", "lqc_done"),
+  ],
+};
+
+/**
+ * ========= Appointment Booking (existing) =========
+ */
+const AppointmentBooking_basic: Flow = {
+  nodes: [
+    message("ab_welcome", { x: 108, y: 20 }, "📅 Welcome! Let’s book your appointment."),
+    choice("ab_service", { x: 90, y: 120 }, "Which service?", ["Consultation", "Demo", "Support"]),
+    inputNode("ab_date", { x: 90, y: 260 }, "Preferred date?"),
+    inputNode("ab_time", { x: 90, y: 350 }, "Preferred time?"),
+    inputNode("ab_email", { x: 90, y: 440 }, "Your email?"),
+    message("ab_done", { x: 90, y: 540 }, "✅ Request captured. You’ll get a confirmation."),
+  ],
+  edges: [
+    edge("e1", "ab_welcome", "ab_service"),
+    edge("e2", "ab_service", "ab_date"),
+    edge("e3", "ab_date", "ab_time"),
+    edge("e4", "ab_time", "ab_email"),
+    edge("e5", "ab_email", "ab_done"),
+  ],
+};
+
+const AppointmentBooking_custom: Flow = {
+  nodes: [
+    message("abc_welcome", { x: 520, y: 20 }, "📅 Smart Availability & Rules"),
+    choice("abc_service", { x: 500, y: 120 }, "Select appointment type", ["Consultation", "Demo", "Training", "Onboarding"]),
+    inputNode("abc_duration", { x: 500, y: 240 }, "Duration/min"),
+    choice("abc_staff", { x: 500, y: 330 }, "Preferred staff?", ["Any", "Alex", "Jordan", "Taylor"]),
+    inputNode("abc_date", { x: 500, y: 420 }, "Preferred date"),
+    inputNode("abc_time", { x: 500, y: 500 }, "Preferred time"),
+    action("abc_webhook", { x: 500, y: 580 }, "🔗 Webhook (universal calendar)", "Sends booking request to your adapter"),
+    message("abc_done", { x: 500, y: 660 }, "✅ Booking submitted. Await confirmation."),
+  ],
+  edges: [
+    edge("e1", "abc_welcome", "abc_service"),
+    edge("e2", "abc_service", "abc_duration"),
+    edge("e3", "abc_duration", "abc_staff"),
+    edge("e4", "abc_staff", "abc_date"),
+    edge("e5", "abc_date", "abc_time"),
+    edge("e6", "abc_time", "abc_webhook"),
+    edge("e7", "abc_webhook", "abc_done"),
+  ],
+};
+
+/**
+ * ========= Customer Support (existing) =========
+ */
+const CustomerSupport_basic: Flow = {
+  nodes: [
+    message("cs_welcome", { x: 80, y: 20 }, "🙌 Welcome to Support!"),
+    choice("cs_category", { x: 60, y: 120 }, "Choose a category", ["Orders", "Tech", "Billing"]),
+    inputNode("cs_issue", { x: 60, y: 260 }, "Describe your issue"),
+    message("cs_ticket", { x: 60, y: 360 }, "✅ Ticket created. Our team will contact you."),
+  ],
+  edges: [
+    edge("e1", "cs_welcome", "cs_category"),
+    edge("e2", "cs_category", "cs_issue"),
+    edge("e3", "cs_issue", "cs_ticket"),
+  ],
+};
+
+const CustomerSupport_custom: Flow = {
+  nodes: [
+    message("csc_welcome", { x: 520, y: 20 }, "🤖 GPT-powered Support"),
+    choice("csc_lang", { x: 500, y: 120 }, "Language", ["English", "Spanish", "French"]),
+    inputNode("csc_issue", { x: 500, y: 210 }, "Describe your issue"),
+    choice("csc_priority", { x: 500, y: 300 }, "Priority", ["Low", "Normal", "High", "Urgent"]),
+    action("csc_crm", { x: 500, y: 400 }, "🔗 CRM Ticket", "Creates/updates ticket via webhook"),
+    message("csc_done", { x: 500, y: 500 }, "✅ Ticket recorded. Auto-reply sent."),
+  ],
+  edges: [
+    edge("e1", "csc_welcome", "csc_lang"),
+    edge("e2", "csc_lang", "csc_issue"),
+    edge("e3", "csc_issue", "csc_priority"),
+    edge("e4", "csc_priority", "csc_crm"),
+    edge("e5", "csc_crm", "csc_done"),
+  ],
+};
+
+/**
+ * ========= Waitlist (existing) =========
+ */
+const Waitlist_basic: Flow = {
+  nodes: [
+    message("wl_welcome", { x: 80, y: 20 }, "⏳ Join our waitlist!"),
+    inputNode("wl_name", { x: 60, y: 120 }, "What's your name?"),
+    inputNode("wl_email", { x: 60, y: 220 }, "What's your email?"),
+    message("wl_added", { x: 60, y: 320 }, "✅ You’re added to the list!"),
+  ],
+  edges: [
+    edge("e1", "wl_welcome", "wl_name"),
+    edge("e2", "wl_name", "wl_email"),
+    edge("e3", "wl_email", "wl_added"),
+  ],
+};
+
+const Waitlist_custom: Flow = {
+  nodes: [
+    message("wlc_welcome", { x: 520, y: 20 }, "⏳ VIP Waitlist Experience"),
+    inputNode("wlc_name", { x: 500, y: 120 }, "Full name"),
+    inputNode("wlc_email", { x: 500, y: 200 }, "Email"),
+    choice("wlc_interest", { x: 500, y: 280 }, "Interest level", ["Curious", "Interested", "Very Interested"]),
+    action("wlc_webhook", { x: 500, y: 380 }, "🔗 Webhook: add to list + nurture", "Sends to universal CRM + email"),
+    message("wlc_done", { x: 500, y: 480 }, "✅ Added! You’ll receive updates."),
+  ],
+  edges: [
+    edge("e1", "wlc_welcome", "wlc_name"),
+    edge("e2", "wlc_name", "wlc_email"),
+    edge("e3", "wlc_email", "wlc_interest"),
+    edge("e4", "wlc_interest", "wlc_webhook"),
+    edge("e5", "wlc_webhook", "wlc_done"),
+  ],
+};
+
+/**
+ * ========= Social Media (NEW) =========
+ * Basic = quick auto-replies + contact capture
+ * Custom = multi-platform + feature selection + tone/keywords + webhook hooks
+ */
+const SocialMedia_basic: Flow = {
+  nodes: [
+    message("sm_welcome", { x: 80, y: 20 }, "📣 Social Media Assistant", "Auto-DM replies, comment handling, quick capture."),
+    choice("sm_platform", { x: 60, y: 120 }, "Which platform?", ["Facebook", "Instagram", "Twitter/X", "TikTok"]),
+    inputNode("sm_question", { x: 60, y: 240 }, "Common question or comment?"),
+    action("sm_autoreply", { x: 60, y: 330 }, "⚙️ Auto-Reply (placeholder)", "Simulates a canned reply"),
+    choice("sm_capture", { x: 60, y: 430 }, "Capture contact from DMs?", ["Yes", "No"]),
+    inputNode("sm_email", { x: 60, y: 520 }, "Email (optional)"),
+    message("sm_done", { x: 60, y: 610 }, "✅ Saved. You’ll receive a copy via email."),
+  ],
+  edges: [
+    edge("e1", "sm_welcome", "sm_platform"),
+    edge("e2", "sm_platform", "sm_question"),
+    edge("e3", "sm_question", "sm_autoreply"),
+    edge("e4", "sm_autoreply", "sm_capture"),
+    edge("e5", "sm_capture", "sm_email"),
+    edge("e6", "sm_email", "sm_done"),
+  ],
+};
+
+const SocialMedia_custom: Flow = {
+  nodes: [
+    message("smc_welcome", { x: 520, y: 20 }, "📣 Social Media Pro", "Multi-platform + tone + webhook actions"),
+    choice("smc_platforms", { x: 500, y: 120 }, "Select platforms", ["Facebook", "Instagram", "Twitter/X", "TikTok", "LinkedIn"]),
+    choice("smc_features", { x: 500, y: 240 }, "Choose features", [
+      "Auto-DM Replies",
+      "Comment Moderation",
+      "FAQ Responses",
+      "Link Sharing",
+      "Schedule Prompt",
+    ]),
+    inputNode("smc_tone", { x: 500, y: 380 }, "Brand tone (e.g., Friendly, Bold)"),
+    inputNode("smc_keywords", { x: 500, y: 460 }, "Keywords to watch"),
+    action("smc_webhook", { x: 500, y: 540 }, "🔗 Webhook: universal CRM", "Sends captured contacts & events"),
+    action("smc_scheduler", { x: 500, y: 620 }, "🗓️ Schedule Content Prompt", "Placeholder for content planning"),
+    message("smc_done", { x: 500, y: 700 }, "✅ Setup complete. You can iterate anytime."),
+  ],
+  edges: [
+    edge("e1", "smc_welcome", "smc_platforms"),
+    edge("e2", "smc_platforms", "smc_features"),
+    edge("e3", "smc_features", "smc_tone"),
+    edge("e4", "smc_tone", "smc_keywords"),
+    edge("e5", "smc_keywords", "smc_webhook"),
+    edge("e6", "smc_webhook", "smc_scheduler"),
+    edge("e7", "smc_scheduler", "smc_done"),
+  ],
+};
+
+/**
+ * Master registry:
+ * Keys must match `${currentBot}_${plan}` (plan is lowercased).
+ * currentBot values expected in the app:
+ *  "LeadQualifier" | "AppointmentBooking" | "CustomerSupport" | "Waitlist" | "SocialMedia"
+ */
+export const templates: Record<string, Flow> = {
+  // Lead Qualifier
+  LeadQualifier_basic: LeadQualifier_basic,
+  LeadQualifier_custom: LeadQualifier_custom,
+
+  // Appointment Booking
+  AppointmentBooking_basic: AppointmentBooking_basic,
+  AppointmentBooking_custom: AppointmentBooking_custom,
+
+  // Customer Support
+  CustomerSupport_basic: CustomerSupport_basic,
+  CustomerSupport_custom: CustomerSupport_custom,
+
+  // Waitlist
+  Waitlist_basic: Waitlist_basic,
+  Waitlist_custom: Waitlist_custom,
+
+  // Social Media (NEW)
+  SocialMedia_basic: SocialMedia_basic,
+  SocialMedia_custom: SocialMedia_custom,
+};
+
+// Keep both styles working
 export default templates;
+
