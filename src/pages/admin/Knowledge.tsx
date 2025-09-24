@@ -7,10 +7,10 @@ export default function Knowledge() {
 
   const onPickFiles = (files: FileList | null) => {
     if (!files) return;
-    // Lightweight mock: capture name/size/type and fake "uploadedAt"
     Array.from(files).forEach((f) => {
       const ext = f.name.toLowerCase().split(".").pop() || "";
-      const type = ext === "pdf" ? "PDF" : ext === "xlsx" || ext === "xls" ? "Excel" : "Word";
+      const type =
+        ext === "pdf" ? "PDF" : ext === "xlsx" || ext === "xls" ? "Excel" : "Word";
       addKnowledgeDoc({
         id: `${Date.now()}_${f.name}`,
         name: f.name,
@@ -23,26 +23,27 @@ export default function Knowledge() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      {/* Header card - darker pastel */}
+      {/* Header */}
       <div className="rounded-2xl border bg-white p-6 shadow-sm ring-1 ring-black/5">
         <h1 className="text-3xl font-extrabold tracking-tight">Knowledge</h1>
         <p className="mt-2 text-muted-foreground">
-          Upload product guides, pricing, policies, FAQs — your bot will use this knowledge to answer questions.
+          Upload product guides, pricing, policies, FAQs — your bot will use this knowledge to
+          answer questions.
         </p>
       </div>
 
-      {/* Upload section */}
-      <div className="mt-6 rounded-2xl border bg-gradient-to-r from-pink-100/70 via-indigo-100/70 to-emerald-100/70 p-6 shadow-sm ring-1 ring-black/5">
+      {/* Upload Section — DARKER pastel like bot cards */}
+      <div className="mt-6 rounded-2xl border bg-gradient-to-br from-violet-200 via-rose-200 to-emerald-200 p-6 shadow-md ring-1 ring-black/10">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <div className="text-lg font-bold">Upload Documents</div>
-            <div className="text-muted-foreground">
+            <div className="text-lg font-bold text-gray-900">Upload Documents</div>
+            <div className="text-gray-800/80">
               PDF, Word, Excel (placeholder only — wiring later).
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <label className="cursor-pointer rounded-xl border bg-white/80 px-4 py-2 text-sm font-semibold text-foreground shadow-sm hover:bg-white">
+            <label className="cursor-pointer rounded-xl border border-black/10 bg-white/90 px-4 py-2 text-sm font-semibold text-foreground shadow-sm hover:bg-white">
               + Upload
               <input
                 type="file"
@@ -57,7 +58,7 @@ export default function Knowledge() {
               type="button"
               disabled
               title="Coming soon"
-              className="rounded-xl border bg-white/80 px-4 py-2 text-sm font-semibold text-foreground shadow-sm disabled:opacity-70"
+              className="rounded-xl border border-black/10 bg-white/90 px-4 py-2 text-sm font-semibold text-foreground shadow-sm disabled:opacity-80"
             >
               Manage Sources
             </button>
@@ -65,7 +66,7 @@ export default function Knowledge() {
         </div>
       </div>
 
-      {/* Uploaded docs */}
+      {/* Uploaded docs container (white card) */}
       <div className="mt-6 rounded-2xl border bg-white p-6 shadow-sm ring-1 ring-black/5">
         <div className="mb-3">
           <div className="text-lg font-bold">Uploaded Documents</div>
@@ -73,8 +74,9 @@ export default function Knowledge() {
         </div>
 
         {knowledge.length === 0 ? (
-          <div className="rounded-xl border bg-gradient-to-r from-amber-50 to-sky-50 p-6 text-muted-foreground">
-            No documents yet. Use <span className="font-semibold">+ Upload</span> to add PDF/Word/Excel.
+          <div className="rounded-xl border bg-gradient-to-r from-amber-100 via-sky-100 to-violet-100 p-6 text-gray-800">
+            No documents yet. Use <span className="font-semibold">+ Upload</span> to add
+            PDF/Word/Excel.
           </div>
         ) : (
           <ul className="divide-y">
@@ -84,7 +86,7 @@ export default function Knowledge() {
                 className="flex flex-col items-start justify-between gap-3 py-4 md:flex-row md:items-center"
               >
                 <div className="flex items-center gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-gradient-to-br from-violet-100 to-rose-100 text-lg">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-gradient-to-br from-violet-200 via-rose-200 to-emerald-200 text-lg">
                     {d.type === "PDF" ? "📄" : d.type === "Word" ? "📝" : "📊"}
                   </span>
                   <div>
