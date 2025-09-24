@@ -3,27 +3,28 @@ import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAdminStore } from "@/lib/AdminStore";
 
-// Phosphor icons
+// Professional Lucide icons
 import {
-  SquaresFour,
-  Users,
-  Robot,
-  PuzzlePiece,
-  BookOpenText,
-  EnvelopeSimple,
-  PaintBrushBroad,
-  LinkSimple,
-  GearSix,
-  ChartBar,
-} from "@phosphor-icons/react";
+  LayoutDashboard,
+  Users2,
+  Bot,
+  Puzzle,
+  BookOpen,
+  Mail,
+  Palette,
+  Link2,
+  Settings,
+  BarChart3,
+} from "lucide-react";
 
+// Sidebar link item
 const NavItem = ({
   to,
-  icon: Icon,
+  icon,
   label,
 }: {
   to: string;
-  icon: React.ElementType;
+  icon: React.ReactNode;
   label: string;
 }) => (
   <NavLink
@@ -32,13 +33,13 @@ const NavItem = ({
       [
         "group flex items-center gap-3 rounded-xl px-4 py-3 text-base font-bold transition",
         isActive
-          ? "bg-gradient-to-r from-sky-500/20 via-cyan-500/20 to-emerald-500/20 text-foreground"
+          ? "bg-gradient-to-r from-violet-500/20 via-indigo-500/20 to-emerald-500/20 text-foreground"
           : "text-foreground/80 hover:text-foreground hover:bg-muted/50",
       ].join(" ")
     }
   >
-    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400/15 via-cyan-400/15 to-emerald-400/15">
-      <Icon size={22} weight="bold" />
+    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/15 via-indigo-500/15 to-emerald-500/15">
+      {icon}
     </span>
     <span>{label}</span>
   </NavLink>
@@ -49,12 +50,12 @@ export default function AdminLayout() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Sidebar */}
+      {/* LEFT SIDEBAR */}
       <aside className="w-72 shrink-0 border-r bg-card/50 backdrop-blur-sm">
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-3">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-sky-600/20">
-              <Robot size={28} weight="fill" />
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600/20">
+              <Bot size={24} strokeWidth={2.2} />
             </div>
             <div>
               <div className="text-sm text-foreground/70">Lead Qualifier Pro</div>
@@ -64,21 +65,62 @@ export default function AdminLayout() {
         </div>
 
         <nav className="space-y-2 px-4 pb-24">
-          <NavItem to="/admin/dashboard" icon={SquaresFour} label="Dashboard" />
-          <NavItem to="/admin/clients" icon={Users} label="Clients" />
-          <NavItem to="/admin/bots" icon={Robot} label="Bots" />
-          <NavItem to="/admin/builder" icon={PuzzlePiece} label="Builder" />
-          <NavItem to="/admin/knowledge" icon={BookOpenText} label="Knowledge" />
-          <NavItem to="/admin/nurture" icon={EnvelopeSimple} label="Nurture" />
-          <NavItem to="/admin/branding" icon={PaintBrushBroad} label="Branding" />
-          <NavItem to="/admin/integrations" icon={LinkSimple} label="Integrations" />
-          <NavItem to="/admin/settings" icon={GearSix} label="Settings" />
-          <NavItem to="/admin/analytics" icon={ChartBar} label="Analytics" />
+          <NavItem
+            to="/admin/dashboard"
+            icon={<LayoutDashboard size={20} strokeWidth={2.2} />}
+            label="Dashboard"
+          />
+          <NavItem
+            to="/admin/clients"
+            icon={<Users2 size={20} strokeWidth={2.2} />}
+            label="Clients"
+          />
+          <NavItem
+            to="/admin/bots"
+            icon={<Bot size={20} strokeWidth={2.2} />}
+            label="Bots"
+          />
+          <NavItem
+            to="/admin/builder"
+            icon={<Puzzle size={20} strokeWidth={2.2} />}
+            label="Builder"
+          />
+          <NavItem
+            to="/admin/knowledge"
+            icon={<BookOpen size={20} strokeWidth={2.2} />}
+            label="Knowledge"
+          />
+          <NavItem
+            to="/admin/nurture"
+            icon={<Mail size={20} strokeWidth={2.2} />}
+            label="Nurture"
+          />
+          <NavItem
+            to="/admin/branding"
+            icon={<Palette size={20} strokeWidth={2.2} />}
+            label="Branding"
+          />
+          <NavItem
+            to="/admin/integrations"
+            icon={<Link2 size={20} strokeWidth={2.2} />}
+            label="Integrations"
+          />
+          <NavItem
+            to="/admin/settings"
+            icon={<Settings size={20} strokeWidth={2.2} />}
+            label="Settings"
+          />
+          <NavItem
+            to="/admin/analytics"
+            icon={<BarChart3 size={20} strokeWidth={2.2} />}
+            label="Analytics"
+          />
         </nav>
       </aside>
 
-      {/* Main */}
+      {/* MAIN CONTENT */}
       <main className="flex min-h-screen flex-1 flex-col overflow-hidden">
+        {/* TOP BAR */}
         <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
           <div className="flex items-center justify-between px-4 md:px-6 py-3">
             <div className="text-sm font-semibold text-foreground/80">You are editing</div>
@@ -95,6 +137,8 @@ export default function AdminLayout() {
             </select>
           </div>
         </header>
+
+        {/* PAGE BODY */}
         <section className="w-full flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </section>
