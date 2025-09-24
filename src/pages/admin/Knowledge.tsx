@@ -18,27 +18,28 @@ const mockDocs: Doc[] = [
 export default function Knowledge() {
   return (
     <div className="mx-auto max-w-6xl">
-      {/* Gradient header */}
-      <div className="mb-6 rounded-2xl border ring-1 ring-border bg-gradient-to-r from-blue-500/10 via-cyan-500/10 to-teal-500/10 p-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold">Knowledge</h1>
-        <p className="mt-2 text-foreground/80 font-semibold">
-          Upload product guides, pricing, policies, FAQs—your bot can use this to answer questions.
+      {/* Premium gradient header */}
+      <div className="mb-6 rounded-2xl border ring-1 ring-yellow-500/40 bg-gradient-to-r from-zinc-900 via-neutral-800 to-stone-900 p-6 shadow-lg">
+        <h1 className="text-3xl font-extrabold text-yellow-400">Knowledge</h1>
+        <p className="mt-2 text-gray-200 font-semibold">
+          Upload product guides, pricing, policies, FAQs — your bot will use this knowledge to answer
+          questions.
         </p>
       </div>
 
-      {/* Upload area (placeholder) */}
-      <div className="mb-6 rounded-xl border bg-card p-5">
+      {/* Upload area */}
+      <div className="mb-6 rounded-xl border border-yellow-500/30 bg-zinc-900 p-5 shadow">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <div className="text-lg font-bold">Upload Documents</div>
-            <div className="text-foreground/70 font-semibold">
-              PDF, Word, Excel (placeholder only—wiring comes later).
+            <div className="text-lg font-bold text-yellow-400">Upload Documents</div>
+            <div className="text-gray-300 font-semibold">
+              PDF, Word, Excel (placeholder only — wiring comes later).
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="rounded-lg border px-4 py-2 font-bold shadow-sm bg-gradient-to-r from-blue-500/15 via-cyan-500/15 to-teal-500/15 cursor-not-allowed"
+              className="rounded-lg border border-yellow-500/40 px-4 py-2 font-bold text-yellow-400 shadow-sm bg-gradient-to-r from-zinc-800 to-stone-900 cursor-not-allowed"
               disabled
               title="Coming soon"
             >
@@ -46,9 +47,9 @@ export default function Knowledge() {
             </button>
             <button
               type="button"
-              className="rounded-lg border px-4 py-2 font-bold shadow-sm hover:bg-muted"
-              title="Coming soon"
+              className="rounded-lg border border-yellow-500/40 px-4 py-2 font-bold text-yellow-400 shadow-sm bg-gradient-to-r from-zinc-800 to-stone-900 cursor-not-allowed"
               disabled
+              title="Coming soon"
             >
               Manage Sources
             </button>
@@ -56,31 +57,42 @@ export default function Knowledge() {
         </div>
       </div>
 
-      {/* Documents list (mock) */}
-      <div className="rounded-xl border bg-card">
-        <div className="border-b px-5 py-3">
-          <div className="font-bold">Uploaded Documents</div>
-          <div className="text-foreground/70 font-semibold">Static mock data for now.</div>
+      {/* Documents list */}
+      <div className="rounded-xl border border-yellow-500/30 bg-zinc-900 shadow">
+        <div className="border-b border-yellow-500/30 px-5 py-3">
+          <div className="font-bold text-yellow-400">Uploaded Documents</div>
+          <div className="text-gray-400 font-semibold">Static mock data for now.</div>
         </div>
-        <ul className="divide-y">
+        <ul className="divide-y divide-yellow-500/20">
           {mockDocs.map((d) => (
-            <li key={d.id} className="flex flex-col md:flex-row md:items-center gap-2 justify-between px-5 py-4">
+            <li
+              key={d.id}
+              className="flex flex-col md:flex-row md:items-center gap-2 justify-between px-5 py-4"
+            >
               <div className="flex items-center gap-3">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-border bg-gradient-to-br from-blue-500/15 via-cyan-500/15 to-teal-500/15 font-bold">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-yellow-500/40 bg-gradient-to-br from-zinc-800 to-stone-900 font-bold text-yellow-400">
                   {d.type === "PDF" ? "📄" : d.type === "Word" ? "📝" : "📊"}
                 </span>
                 <div>
-                  <div className="font-bold">{d.name}</div>
-                  <div className="text-foreground/70 font-semibold">
+                  <div className="font-bold text-gray-100">{d.name}</div>
+                  <div className="text-gray-400 font-semibold">
                     {d.type} • {d.size} • {d.uploadedAt}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button className="rounded-md border px-3 py-1.5 font-bold hover:bg-muted" disabled title="Coming soon">
+                <button
+                  className="rounded-md border border-yellow-500/40 px-3 py-1.5 font-bold text-yellow-400 bg-zinc-800 shadow cursor-not-allowed"
+                  disabled
+                  title="Coming soon"
+                >
                   Preview
                 </button>
-                <button className="rounded-md border px-3 py-1.5 font-bold hover:bg-muted" disabled title="Coming soon">
+                <button
+                  className="rounded-md border border-yellow-500/40 px-3 py-1.5 font-bold text-yellow-400 bg-zinc-800 shadow cursor-not-allowed"
+                  disabled
+                  title="Coming soon"
+                >
                   Remove
                 </button>
               </div>
@@ -90,8 +102,8 @@ export default function Knowledge() {
       </div>
 
       {/* Footer hint */}
-      <p className="mt-4 text-foreground/70 font-semibold">
-        Later we’ll wire this to real uploads, chunking, and retrieval for each bot.
+      <p className="mt-4 text-gray-400 font-semibold">
+        ⚡ Later we’ll wire this to real uploads, chunking, and retrieval for each bot.
       </p>
     </div>
   );
