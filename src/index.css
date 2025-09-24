@@ -163,3 +163,35 @@ body[data-route^="/admin"] main section {
 :root {
   --foreground: 240 11% 4%;
 }
+/* === Builder: anti-truncation + stronger contrast === */
+.node-card {
+  /* Make nodes wide enough for long labels & choices */
+  min-width: 420px;
+  max-width: 560px;
+  white-space: normal !important;
+  overflow: visible !important;
+  word-break: break-word;
+}
+
+/* Ensure any input inside nodes spans full width */
+.node-card input,
+.node-card textarea,
+.node-card select {
+  width: 100% !important;
+}
+
+/* Darker borders & text already requested */
+.react-flow__node {
+  border: 2px solid #111827 !important;
+  background-color: #ffffff !important;
+}
+
+.react-flow__edge-path {
+  stroke: #111827 !important;
+  stroke-width: 2px !important;
+}
+
+/* Optional: smaller dot grid helps legibility */
+.react-flow__background {
+  opacity: 0.8;
+}
