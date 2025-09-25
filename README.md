@@ -208,3 +208,4 @@ This project is built with modern web technologies and follows industry best pra
 ---
 
 **Built with ❤️ using React, TypeScript, and Tailwind CSS**
+chore: trigger Lovable sync
