@@ -258,3 +258,28 @@ input::placeholder, textarea::placeholder{
   box-shadow: var(--shadow);
   border-radius: 16px;
 }
+/* ===== Builder canvas: restore bold outline + shadow ===== */
+.react-flow{
+  border: 2px solid #0b0b0c !important;     /* bold black outline */
+  border-radius: 16px !important;
+  box-shadow: 0 2px 0 #0b0b0c !important;    /* crisp black shadow */
+  background: transparent !important;
+}
+
+/* ===== Align nodes in a clean vertical stack (same width, centered) ===== */
+/* If your flows are single-column (like your screenshots), this locks them tidy */
+.react-flow .react-flow__node > *{
+  width: 520px !important;                   /* consistent card width */
+}
+
+.react-flow .react-flow__node{
+  left: 50% !important;                      /* center column */
+  transform: translateX(-50%) !important;    /* keep perfectly centered */
+}
+
+/* Keep all connectors/arrows visible and crisp (unchanged behavior) */
+.react-flow__edge-path{
+  stroke: #0b0b0c !important;
+  stroke-width: 2px !important;
+}
+.react-flow__edge-marker{ fill: #0b0b0c !important; }
