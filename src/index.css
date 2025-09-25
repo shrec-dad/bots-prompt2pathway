@@ -271,15 +271,42 @@ input::placeholder, textarea::placeholder{
 .react-flow .react-flow__node > *{
   width: 520px !important;                   /* consistent card width */
 }
+/* ========= SAFE BUILDER STYLING ========= */
 
-.react-flow .react-flow__node{
-  left: 50% !important;                      /* center column */
-  transform: translateX(-50%) !important;    /* keep perfectly centered */
+/* Bold black outline for the canvas */
+.react-flow{
+  border: 2px solid #0b0b0c !important;
+  border-radius: 16px !important;
+  box-shadow: 0 2px 0 #0b0b0c !important;
+  background: transparent !important;
 }
 
-/* Keep all connectors/arrows visible and crisp (unchanged behavior) */
+/* Make the builder area comfortably tall so you aren’t forced to scroll the nodes off-screen */
+.react-flow__renderer,
+.react-flow__viewport,
+.react-flow{
+  height: calc(100vh - 200px) !important; /* tweak the 200px if your header is taller/shorter */
+  min-height: 600px !important;
+}
+
+/* Keep edges/arrows dark and crisp (no change to behavior) */
 .react-flow__edge-path{
   stroke: #0b0b0c !important;
   stroke-width: 2px !important;
 }
-.react-flow__edge-marker{ fill: #0b0b0c !important; }
+.react-flow__edge-marker{
+  fill: #0b0b0c !important;
+}
+
+/* Let React-Flow keep full control of node positioning (undo any previous overrides) */
+.react-flow .react-flow__node{
+  left: initial !important;
+  transform: initial !important;
+}
+.react-flow .react-flow__node > *{
+  width: auto !important;
+  max-width: 720px;           /* optional: keeps cards from growing too wide */
+  box-sizing: border-box;
+  overflow: hidden;           /* prevents inner content from pushing the node */
+}
+
