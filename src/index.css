@@ -238,3 +238,87 @@ body[data-route^="/admin"] main section {
 .builder-canvas .react-flow__attribution {
   display: none !important;
 }
+/* === Flow Builder – Canvas + Node Alignment Fix Pack === */
+
+/* 1) Let the builder canvas fill the viewport */
+:root {
+  --flow-node-width: clamp(520px, 62vw, 780px);
+  --flow-node-gap: 18px;
+}
+.main, .min-h-screen, .h-screen { height: 100vh; } /* safety */
+#root, body, html { height: 100%; }
+
+.react-flow,
+.react-flow__renderer,
+.react-flow__pane {
+  height: calc(100vh - 100px) !important; /* room for header */
+  min-height: 620px;
+}
+
+/* 2) Normalize node wrappers so the inner cards are centered & full width */
+.react-flow__node {
+  /* kill stray offsets coming from nested transforms/margins */
+  transform: none !important;
+  translate: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  /* ensure stack spacing between nodes */
+  --node-gap: var(--flow-node-gap);
+}
+
+/* most UI kits wrap card->content in one direct child; widen & center it */
+.react-flow__node > * {
+  /* the inner card wrapper */
+  width: var(--flow-node-width) !important;
+  max-width: 92vw;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  position: relative;
+  left: 0 !important;   /* prevent subtle shifts */
+  right: 0 !important;
+}
+
+/* 3) Prevent “tab” headers from sticking out – remove negative margins */
+.react-flow__node > * [class*="rounded"],
+.react-flow__node > * [class*="card"] {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* add consistent vertical rhythm between every node */
+.react-flow__node + .react-flow__node { margin-top: var(--flow-node-gap) !important; }
+
+/* inputs & choice rows: give them a little extra breathing room */
+.react-flow__node input,
+.react-flow__node textarea,
+.react-flow__node select,
+.react-flow__node button {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+/* Make the grid/background a touch darker so nodes pop */
+.react-flow__pane {
+  background-color: #eef6f2 !important; /* darker mint */
+}
+
+/* Optional: stronger node borders so it matches your dark-outline spec */
+.react-flow__node > * {
+  border: 2px solid rgba(0,0,0,.85) !important;
+  box-shadow: 0 2px 0 rgba(0,0,0,.12) !important;
+}
+
+/* Optional: ensure any “status” footer nodes don’t shrink */
+.react-flow__node [class*="success"],
+.react-flow__node [class*="alert"],
+.react-flow__node [class*="notice"] {
+  min-height: 56px;
+}
+
+/* If the builder stores a scale transform on the canvas, don't blur the UI */
+.react-flow__renderer {
+  transform-origin: center !important;
+  will-change: auto !important;
+}
+
