@@ -195,3 +195,46 @@ body[data-route^="/admin"] main section {
 .react-flow__background {
   opacity: 0.8;
 }
+/* ===== React Flow — SAFE, SCOPED TO BUILDER ONLY ===== */
+.builder-canvas {
+  /* slightly stronger pastel background for the whole canvas wrapper */
+  background: #eaf7f1; /* deeper mint than #ECFDF5 */
+}
+
+/* Keep ReactFlow layout stable and prevent weird shifts */
+.builder-canvas .react-flow {
+  overflow: hidden;
+}
+.builder-canvas .react-flow__renderer {
+  will-change: transform;
+}
+
+/* Nodes: box sizing + visible overflow so labels/controls never get cut off */
+.builder-canvas .react-flow__node {
+  box-sizing: border-box !important;
+  background: #ffffff !important;
+  border: 2px solid #0f172a !important; /* dark outline */
+  border-radius: 12px !important;
+  overflow: visible !important;
+
+  /* Text styles inside nodes */
+  font-size: 16px !important;
+  line-height: 1.35 !important;
+  color: #0f172a !important; /* strong dark text */
+}
+
+/* Ensure inner wrappers/labels/inputs inside custom nodes aren't clipped */
+.builder-canvas .react-flow__node > * {
+  overflow: visible !important;
+}
+
+/* Edge styling for better visibility */
+.builder-canvas .react-flow__edge-path {
+  stroke: #0f172a !important;
+  stroke-width: 2px !important;
+}
+
+/* Hide the tiny RF watermark */
+.builder-canvas .react-flow__attribution {
+  display: none !important;
+}
