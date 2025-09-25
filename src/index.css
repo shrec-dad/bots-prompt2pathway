@@ -1,312 +1,165 @@
-/* =========================================================
-   Tailwind (keep these if your project uses Tailwind)
-   =========================================================*/
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* =========================================================
-   Design Tokens (lux pastel theme + strong black accents)
-   =========================================================*/
-:root{
-  /* layout */
-  --header-h: 96px;
+/* Multi-Bot Platform Design System - Colorful, Modern, Professional */
 
-  /* ink */
-  --ink: #0b0b0c;           /* deep black */
-  --ink-muted: #262626;
+@layer base {
+  :root {
+    /* Core Brand Colors - Purple to Blue Gradient Theme */
+    --primary: 250 84% 64%;        /* #6D5EF1 */
+    --primary-dark: 251 91% 59%;   /* #5B4CE8 */
+    --primary-light: 250 100% 78%; /* #A195FF */
+    --primary-foreground: 0 0% 100%;
 
-  /* white & surfaces */
-  --white: #ffffff;
-  --card: #ffffff;
+    --secondary: 264 83% 70%;      /* #8B5CF6 */
+    --secondary-dark: 263 69% 62%; /* #8B5CF6 */
+    --secondary-light: 266 100% 85%; /* #C7A8FF */
+    --secondary-foreground: 0 0% 100%;
 
-  /* OUTLINES (hard black, 2px) */
-  --outline: 2px solid var(--ink);
-  --shadow: 0 2px 0 var(--ink);
+    /* Accent Colors */
+    --accent-purple: 250 84% 64%;
+    --accent-blue: 217 91% 60%;
+    --accent-teal: 189 85% 52%;
+    --accent-green: 142 76% 36%;
+    --accent-orange: 25 95% 53%;
+    --accent-pink: 330 81% 60%;
 
-  /* Pastel ramp (a touch darker than default) */
-  --p-lilac:   #cfc3ff;
-  --p-pink:    #f6b9c6;
-  --p-peach:   #ffd1a6;
-  --p-mint:    #bfead2;
-  --p-aqua:    #c8e9ff;
-  --p-sage:    #cfe9c2;
+    /* Neutral Colors */
+    --background: 0 0% 100%;
+    --background-soft: 240 13% 98%;
+    --foreground: 240 11% 4%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 240 11% 4%;
+    --card-soft: 240 13% 98%;
 
-  /* Gradients used across cards/panels */
-  --g-lilac-mint: linear-gradient(90deg, var(--p-lilac), var(--p-mint));
-  --g-pink-aqua:  linear-gradient(90deg, var(--p-pink),  var(--p-aqua));
-  --g-peach-sage: linear-gradient(90deg, var(--p-peach), var(--p-sage));
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    
+    --border: 240 6% 90%;
+    --input: 240 6% 94%;
+    --ring: 250 84% 64%;
 
-  /* Canvas */
-  --canvas: #eef7f1; /* soft mint canvas */
+    /* Status Colors */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    /* Popover */
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 11% 4%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent-blue)));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(240 13% 98%));
+    --gradient-border: linear-gradient(90deg, hsl(var(--primary)/0.2), hsl(var(--secondary)/0.2));
+
+    /* Shadows */
+    --shadow-soft: 0 1px 3px 0 hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow-medium: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.1);
+    --shadow-large: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.1);
+    --shadow-glow: 0 0 20px hsl(var(--primary) / 0.3);
+    --shadow-colored: 0 8px 30px hsl(var(--primary) / 0.15);
+
+    /* Animations */
+    --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+    --radius: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+  }
+
+  .dark {
+    --primary: 250 84% 64%;
+    --primary-dark: 251 91% 59%;
+    --primary-light: 250 100% 78%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 264 83% 70%;
+    --secondary-dark: 263 69% 62%;
+    --secondary-light: 266 100% 85%;
+    --secondary-foreground: 0 0% 100%;
+
+    --background: 240 11% 4%;
+    --background-soft: 240 7% 8%;
+    --foreground: 0 0% 98%;
+    
+    --card: 240 7% 8%;
+    --card-foreground: 0 0% 98%;
+    --card-soft: 240 5% 12%;
+
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 250 84% 64%;
+
+    --popover: 240 7% 8%;
+    --popover-foreground: 0 0% 98%;
+
+    --gradient-card: linear-gradient(145deg, hsl(240 7% 8%), hsl(240 5% 12%));
+    --shadow-glow: 0 0 20px hsl(var(--primary) / 0.4);
+    --shadow-colored: 0 8px 30px hsl(var(--primary) / 0.25);
+  }
 }
 
-/* =========================================================
-   Base
-   =========================================================*/
-html,body,#root{
-  height:100%;
-}
-body{
-  background: var(--canvas);
-  color: var(--ink);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+@layer base {
+  * {
+    @apply border-border;
+  }
 
-/* Strong headings / crisp text */
-h1,h2,h3,h4,h5,h6,
-strong,b, .font-bold{
-  color: var(--ink);
-  font-weight: 700 !important;
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  
+  .line-clamp-3 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
 }
-
-/* Links */
-a{
-  color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-a:hover{
-  opacity:.9;
-}
-
-/* Inputs (global) */
-input,select,textarea,button{
-  color: var(--ink);
-}
-input::placeholder, textarea::placeholder{
-  color: var(--ink-muted);
+/* React Flow visibility tweaks */
+.react-flow__node {
+  border: 2px solid #111827 !important;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.08) !important;
+  background-color: #ffffff !important;
 }
 
-/* =========================================================
-   Generic Cards & Panels (used outside React Flow too)
-   =========================================================*/
-.card,
-.panel,
-.box{
-  background: var(--card);
-  border: var(--outline);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-}
-
-/* Pastel gradient helpers (slightly stronger) */
-.pastel-gradient-1{ background: var(--g-lilac-mint); }
-.pastel-gradient-2{ background: var(--g-pink-aqua);  }
-.pastel-gradient-3{ background: var(--g-peach-sage); }
-
-.pastel-surface{
-  background: var(--card);
-  background-image: var(--g-lilac-mint);
-  background-size: 100% 100%;
-}
-
-/* Buttons */
-.btn{
-  background: var(--card);
-  border: var(--outline);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  color: var(--ink);
-  padding: 10px 16px;
-  font-weight: 700;
-  line-height: 1;
-}
-.btn:hover{ transform: translateY(1px); }
-
-/* Pills (for statuses, small accents) */
-.pill{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  background: var(--card);
-  border: var(--outline);
-  border-radius: 999px;
-  padding: 6px 10px;
-  box-shadow: var(--shadow);
-  color: var(--ink);
-  font-weight: 700;
-}
-
-/* =========================================================
-   Knowledge page: darker pastel sections + black outlines
-   (applies when you wrap sections with .knowledge-shell)
-   =========================================================*/
-.knowledge-shell .section{
-  border: var(--outline);
-  border-radius: 16px;
-  box-shadow: var(--shadow);
-  background: var(--card);
-  overflow: hidden;
-}
-.knowledge-shell .section--gradient-1{ background-image: var(--g-lilac-mint); }
-.knowledge-shell .section--gradient-2{ background-image: var(--g-pink-aqua);  }
-.knowledge-shell .section--gradient-3{ background-image: var(--g-peach-sage); }
-
-.knowledge-shell .section .section-title{
-  color: var(--ink);
-  font-weight: 800;
-}
-
-/* Upload “empty” panel look */
-.knowledge-shell .empty{
-  background: linear-gradient(90deg, #fffad2, #dfeaff);
-  border: var(--outline);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  color: var(--ink);
-}
-
-/* =========================================================
-   REACT FLOW — STABILITY + LOOK
-   (prevents stacking, keeps arrows, fills height)
-   =========================================================*/
-
-/* 1) Make the canvas fill the screen under the header */
-.react-flow,
-.react-flow__viewport,
-.react-flow__renderer{
-  min-height: calc(100vh - var(--header-h)) !important;
-}
-
-/* 2) Node containers must remain absolute with no outer spacing */
-.react-flow__node{
-  position: absolute !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  transform-origin: 0 0 !important;
-  z-index: 1;
-}
-
-/* 3) Style the *inner content* only (first child of the node) */
-.react-flow__node > *{
-  background: var(--card) !important;
-  border: var(--outline) !important;
-  border-radius: 14px !important;
-  box-shadow: var(--shadow) !important;
-  padding: 16px !important;
-  color: var(--ink) !important;
-}
-
-/* Keep nested form elements clean */
-.react-flow__node > * input,
-.react-flow__node > * textarea,
-.react-flow__node > * select,
-.react-flow__node > * button{
-  margin: 0 !important;
-}
-
-/* 4) Edges & arrows (solid black) */
-.react-flow__edge-path{
-  stroke: var(--ink) !important;
-  stroke-width: 2px !important;
-  fill: none !important;
-}
-.react-flow__edge-marker{
-  fill: var(--ink) !important;
-}
-
-/* Keep edges above nodes but below menus */
-.react-flow__edge{ z-index: 2; }
-
-/* Pan/zoom pane just transparent */
-.react-flow__pane{
-  background: transparent !important;
-}
-
-/* Optional: mild grid polka backdrop (keeps your current look) */
-.react-flow__bg{
-  opacity: .2;
-}
-
-/* 5) Gradients on specific node types (optional if you’ve named them) */
-/* Add className on your nodes (e.g., data: { className: 'node-hero' }) */
-.node-hero    { background-image: var(--g-lilac-mint) !important; }
-.node-emphasize{ background-image: var(--g-pink-aqua)  !important; }
-.node-alt     { background-image: var(--g-peach-sage) !important; }
-
-/* 6) Ensure drag handles/resize handles remain visible */
-.react-flow__resize-control,
-.react-flow__handle{
-  border-color: var(--ink) !important;
-  background: var(--ink) !important;
-}
-
-/* 7) Prevent any global “card” styles from touching RF containers */
-[class*="card"],
-[class^="card"]{
-  /* Leave app card styling here, but DO NOT target .react-flow__node */
-}
-
-/* =========================================================
-   Utilities you can use in JSX without Tailwind
-   =========================================================*/
-.text-ink{ color: var(--ink) !important; }
-.border-ink{ border: var(--outline) !important; }
-.shadow-ink{ box-shadow: var(--shadow) !important; }
-.round-14{ border-radius: 14px !important; }
-.pad-16{ padding: 16px !important; }
-
-/* Stronger pastel panel helper */
-.panel-gradient-strong{
-  background-image: var(--g-lilac-mint);
-  border: var(--outline);
-  box-shadow: var(--shadow);
-  border-radius: 16px;
-}
-/* ===== Builder canvas: restore bold outline + shadow ===== */
-.react-flow{
-  border: 2px solid #0b0b0c !important;     /* bold black outline */
-  border-radius: 16px !important;
-  box-shadow: 0 2px 0 #0b0b0c !important;    /* crisp black shadow */
-  background: transparent !important;
-}
-
-/* ===== Align nodes in a clean vertical stack (same width, centered) ===== */
-/* If your flows are single-column (like your screenshots), this locks them tidy */
-.react-flow .react-flow__node > *{
-  width: 520px !important;                   /* consistent card width */
-}
-/* ========= SAFE BUILDER STYLING ========= */
-
-/* Bold black outline for the canvas */
-.react-flow{
-  border: 2px solid #0b0b0c !important;
-  border-radius: 16px !important;
-  box-shadow: 0 2px 0 #0b0b0c !important;
-  background: transparent !important;
-}
-
-/* Make the builder area comfortably tall so you aren’t forced to scroll the nodes off-screen */
-.react-flow__renderer,
-.react-flow__viewport,
-.react-flow{
-  height: calc(100vh - 200px) !important; /* tweak the 200px if your header is taller/shorter */
-  min-height: 600px !important;
-}
-
-/* Keep edges/arrows dark and crisp (no change to behavior) */
-.react-flow__edge-path{
-  stroke: #0b0b0c !important;
+.react-flow__edge-path {
+  stroke: #111827 !important;
   stroke-width: 2px !important;
 }
-.react-flow__edge-marker{
-  fill: #0b0b0c !important;
-}
 
-/* Let React-Flow keep full control of node positioning (undo any previous overrides) */
-.react-flow .react-flow__node{
-  left: initial !important;
-  transform: initial !important;
+.react-flow__attribution {
+  display: none !important;
 }
-.react-flow .react-flow__node > *{
-  width: auto !important;
-  max-width: 720px;           /* optional: keeps cards from growing too wide */
-  box-sizing: border-box;
-  overflow: hidden;           /* prevents inner content from pushing the node */
+/* Force all admin pages to fill available width */
+body[data-route^="/admin"] main section {
+  max-width: 100% !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 1.5rem !important; /* keep some breathing room */
+  display: block !important;
 }
-
+/* Tone up general foreground a bit app-wide */
+:root {
+  --foreground: 240 11% 4%;
+}
