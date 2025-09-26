@@ -1,6 +1,6 @@
 // src/lib/templates.ts
-// Unified 4-node flow for EVERY bot (Basic + Custom) to match your screenshot:
-// Message → Input(email) → Choice(budget/options) → Action(notify)
+// Consistent 4-node layout (Message → Input → Choice → Action)
+// but with PER-BOT labels/fields/actions so each bot is meaningful.
 
 type NodeData = Record<string, any>;
 
@@ -23,36 +23,49 @@ type Template = {
   edges: TplEdge[];
 };
 
-// Reusable layout & data so every bot looks identical to your working flow
-function makeStandardFlow(title: string, notifyLabel = "Notify team"): Template {
+type FlowConfig = {
+  title: string;
+  messageText: string;
+
+  inputLabel: string;
+  inputField: string;
+  inputPlaceholder: string;
+
+  choiceLabel: string;
+  choiceOptions: string[];
+
+  actionLabel: string;
+  actionType: string; // e.g., "sendEmail", "bookOrICS", "createTicket", etc.
+  actionTo: string;
+};
+
+// Reusable shape (your preferred layout & arrows)
+function makeFlow(cfg: FlowConfig): Template {
   return {
     nodes: [
       {
         id: "m1",
         type: "message",
         position: { x: -220, y: 0 },
-        data: { title, text: "Welcome! How can I help?" },
+        data: { title: cfg.title, text: cfg.messageText },
       },
       {
         id: "i1",
         type: "input",
         position: { x: 110, y: -40 },
-        data: { label: "What's your email?", field: "email", placeholder: "name@company.com" },
+        data: { label: cfg.inputLabel, field: cfg.inputField, placeholder: cfg.inputPlaceholder },
       },
       {
         id: "c1",
         type: "choice",
         position: { x: 40, y: 140 },
-        data: {
-          label: "Budget range?",
-          options: ["< $1k", "$1k–$3k", "$3k+"],
-        },
+        data: { label: cfg.choiceLabel, options: cfg.choiceOptions },
       },
       {
         id: "a1",
         type: "action",
         position: { x: 400, y: 10 },
-        data: { label: notifyLabel, action: "sendEmail", to: "admin@example.com" },
+        data: { label: cfg.actionLabel, action: cfg.actionType, to: cfg.actionTo },
       },
     ],
     edges: [
@@ -64,25 +77,97 @@ function makeStandardFlow(title: string, notifyLabel = "Notify team"): Template 
   };
 }
 
-// Exported registry — Builder.tsx imports { templates }
+// ---- Per-bot configs (Basic + Custom use the same base for now; you can extend later) ----
+
+// Lead Qualifier
+const LeadQualifierBase: FlowConfig = {
+  title: "Lead Qualifier",
+  messageText: "Welcome! Quick questions to route you fast.",
+  inputLabel: "What's your email?",
+  inputField: "email",
+  inputPlaceholder: "name@company.com",
+  choiceLabel: "Budget range?",
+  choiceOptions: ["< $1k", "$1k–$3k", "$3k+"],
+  actionLabel: "Score & notify",
+  actionType: "scoreAndEmail",
+  actionTo: "admin@example.com",
+};
+
+// Appointment Booking
+const AppointmentBase: FlowConfig = {
+  title: "Appointment Booking",
+  messageText: "Pick a service and we’ll book you.",
+  inputLabel: "Your email",
+  inputField: "email",
+  inputPlaceholder: "you@domain.com",
+  choiceLabel: "Service",
+  choiceOptions: ["Consultation", "Coaching", "Follow-up"],
+  actionLabel: "Create calendar hold",
+  actionType: "bookOrICS",
+  actionTo: "admin@example.com",
+};
+
+// Customer Support
+const SupportBase: FlowConfig = {
+  title: "Customer Support",
+  messageText: "Tell us what you need help with.",
+  inputLabel: "Order # or email",
+  inputField: "ticketKey",
+  inputPlaceholder: "ORD123 or you@domain.com",
+  choiceLabel: "Category",
+  choiceOptions: ["Order issue", "Returns", "Billing", "Technical"],
+  actionLabel: "Create ticket",
+  actionType: "createTicket",
+  actionTo: "support@example.com",
+};
+
+// Waitlist
+const WaitlistBase: FlowConfig = {
+  title: "Waitlist",
+  messageText: "Join and we’ll keep you updated.",
+  inputLabel: "Your email",
+  inputField: "email",
+  inputPlaceholder: "you@domain.com",
+  choiceLabel: "Interest level",
+  choiceOptions: ["Curious", "Very interested", "VIP"],
+  actionLabel: "Add to waitlist",
+  actionType: "addToWaitlist",
+  actionTo: "admin@example.com",
+};
+
+// Social Media
+const SocialBase: FlowConfig = {
+  title: "Social Assistant",
+  messageText: "Choose where you need help.",
+  inputLabel: "Your handle",
+  inputField: "handle",
+  inputPlaceholder: "@yourname",
+  choiceLabel: "Platform",
+  choiceOptions: ["Instagram", "Facebook", "TikTok", "LinkedIn"],
+  actionLabel: "Send auto-reply",
+  actionType: "sendAutoResponse",
+  actionTo: "social@example.com",
+};
+
+// ---- Exported registry used by Builder.tsx ----
 export const templates: Record<string, Template> = {
-  // Lead Qualifier (you liked this flow — used verbatim)
-  LeadQualifier_basic:  makeStandardFlow("Lead Qualifier", "Notify team"),
-  LeadQualifier_custom: makeStandardFlow("Lead Qualifier", "Notify team"),
+  // Lead Qualifier
+  LeadQualifier_basic:  makeFlow(LeadQualifierBase),
+  LeadQualifier_custom: makeFlow(LeadQualifierBase),
 
   // Appointment Booking
-  AppointmentBooking_basic:  makeStandardFlow("Appointment Booking", "Send booking email"),
-  AppointmentBooking_custom: makeStandardFlow("Appointment Booking", "Send booking email"),
+  AppointmentBooking_basic:  makeFlow(AppointmentBase),
+  AppointmentBooking_custom: makeFlow(AppointmentBase),
 
   // Customer Support
-  CustomerSupport_basic:  makeStandardFlow("Customer Support", "Create ticket email"),
-  CustomerSupport_custom: makeStandardFlow("Customer Support", "Create ticket email"),
+  CustomerSupport_basic:  makeFlow(SupportBase),
+  CustomerSupport_custom: makeFlow(SupportBase),
 
   // Waitlist
-  Waitlist_basic:  makeStandardFlow("Waitlist", "Notify waitlist admin"),
-  Waitlist_custom: makeStandardFlow("Waitlist", "Notify waitlist admin"),
+  Waitlist_basic:  makeFlow(WaitlistBase),
+  Waitlist_custom: makeFlow(WaitlistBase),
 
   // Social Media
-  SocialMedia_basic:  makeStandardFlow("Social Media", "Notify social team"),
-  SocialMedia_custom: makeStandardFlow("Social Media", "Notify social team"),
+  SocialMedia_basic:  makeFlow(SocialBase),
+  SocialMedia_custom: makeFlow(SocialBase),
 };
