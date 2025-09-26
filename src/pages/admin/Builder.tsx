@@ -15,11 +15,9 @@ import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
-// ----- Types -----
 type NodeKind = "message" | "input" | "choice" | "action";
 type NodeLike = Node & { type: NodeKind; data: any };
 
-// ----- Helpers -----
 function mergeDeep<T>(base: T, patch: Partial<T>): T {
   if (!patch) return base;
   const out: any = Array.isArray(base) ? [...(base as any)] : { ...(base as any) };
@@ -44,7 +42,7 @@ function setOverrides(bot: string, mode: "basic" | "custom", next: Record<string
 }
 
 export default function Builder() {
-  const { currentBot } = useAdminStore(); // e.g. "LeadQualifier"
+  const { currentBot } = useAdminStore();
   const mode = getBotSettings(currentBot as any).mode as "basic" | "custom";
   const tplKey = `${currentBot}_${mode}`;
 
@@ -53,7 +51,7 @@ export default function Builder() {
     getOverrides(currentBot, mode)
   );
 
-  // Combine template with overrides
+  // Merge template + overrides
   const merged = useMemo(() => {
     if (!base) return { nodes: [] as Node[], edges: [] as Edge[] };
     const nodes = (base.nodes as Node[]).map((n) => {
@@ -66,27 +64,40 @@ export default function Builder() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState(merged.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(merged.edges);
-  const [selected, setSelected] = useState<NodeLike | null>(null);
 
-  // Re-hydrate when merged changes
+  // 👉 Keep only the selected node ID; always read the LIVE node from `nodes`
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Hydrate when merged changes
   useEffect(() => {
     setNodes(merged.nodes as Node[]);
     setEdges(merged.edges as Edge[]);
-  }, [merged.nodes, merged.edges, setNodes, setEdges]);
+    // If our previously selected node still exists, keep it selected
+    if (selectedId && !merged.nodes.find((n) => n.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [merged.nodes, merged.edges]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Track current selection
+  // Watch ReactFlow selection changes to set selectedId
   useEffect(() => {
-    const sel = nodes.find((n) => n.selected) as NodeLike | undefined;
-    setSelected(sel || null);
+    const sel = nodes.find((n) => n.selected);
+    setSelectedId(sel ? sel.id : null);
   }, [nodes]);
 
-  // Save a patch into overrides and live nodes
+  // Live selected node (never stale)
+  const selected: NodeLike | null = useMemo(
+    () => (selectedId ? (nodes.find((n) => n.id === selectedId) as NodeLike) || null : null),
+    [nodes, selectedId]
+  );
+
+  // Persist a patch to overrides + live nodes
   const saveField = (patch: Partial<NodeLike["data"]>) => {
-    if (!selected) return;
+    if (!selectedId) return;
+
     const next = {
       ...overrides,
-      [selected.id]: {
-        data: { ...((overrides[selected.id] || {}).data || {}), ...patch },
+      [selectedId]: {
+        data: { ...((overrides[selectedId] || {}).data || {}), ...patch },
       },
     };
     setOv(next);
@@ -94,12 +105,12 @@ export default function Builder() {
 
     setNodes((prev) =>
       prev.map((n: any) =>
-        n.id === selected.id ? { ...n, data: mergeDeep(n.data || {}, patch) } : n
+        n.id === selectedId ? { ...n, data: mergeDeep(n.data || {}, patch) } : n
       )
     );
   };
 
-  // Separate editor to keep JSX clean
+  // Editor panel (reads from live `selected`)
   const Editor = () => {
     if (!selected) {
       return (
@@ -120,7 +131,7 @@ export default function Builder() {
             <div className={label}>Title</div>
             <input
               className={common}
-              value={selected.data?.title || ""}
+              value={selected.data?.title ?? ""}
               onChange={(e) => saveField({ title: e.target.value })}
             />
           </div>
@@ -129,7 +140,7 @@ export default function Builder() {
             <textarea
               className={common}
               rows={4}
-              value={selected.data?.text || ""}
+              value={selected.data?.text ?? ""}
               onChange={(e) => saveField({ text: e.target.value })}
             />
           </div>
@@ -144,7 +155,7 @@ export default function Builder() {
             <div className={label}>Label</div>
             <input
               className={common}
-              value={selected.data?.label || ""}
+              value={selected.data?.label ?? ""}
               onChange={(e) => saveField({ label: e.target.value })}
             />
           </div>
@@ -152,7 +163,7 @@ export default function Builder() {
             <div className={label}>Placeholder</div>
             <input
               className={common}
-              value={selected.data?.placeholder || ""}
+              value={selected.data?.placeholder ?? ""}
               onChange={(e) => saveField({ placeholder: e.target.value })}
             />
           </div>
@@ -168,7 +179,7 @@ export default function Builder() {
             <div className={label}>Label</div>
             <input
               className={common}
-              value={selected.data?.label || ""}
+              value={selected.data?.label ?? ""}
               onChange={(e) => saveField({ label: e.target.value })}
             />
           </div>
@@ -199,7 +210,7 @@ export default function Builder() {
             <div className={label}>Label</div>
             <input
               className={common}
-              value={selected.data?.label || ""}
+              value={selected.data?.label ?? ""}
               onChange={(e) => saveField({ label: e.target.value })}
             />
           </div>
@@ -207,7 +218,7 @@ export default function Builder() {
             <div className={label}>Email / Target</div>
             <input
               className={common}
-              value={selected.data?.to || ""}
+              value={selected.data?.to ?? ""}
               onChange={(e) => saveField({ to: e.target.value })}
             />
           </div>
@@ -218,19 +229,17 @@ export default function Builder() {
     return null;
   };
 
-  // Connect handler (typed outside JSX to avoid 'as' in JSX)
   const handleConnect: OnConnect = () => {};
 
   return (
     <div className="w-full space-y-4">
-      {/* Header / Breadcrumb */}
       <div className="text-xs font-extrabold tracking-wide text-foreground/70">
         <span className="opacity-70">Builder •</span>{" "}
         <span>Bot: {currentBot}</span>{" "}
         <span className="opacity-70">| Mode:</span> <span>{mode}</span>
       </div>
 
-      {/* BIG canvas, colorful and professional; no minimap */}
+      {/* Large, colorful canvas */}
       <div className="rounded-2xl border bg-gradient-to-br from-indigo-50 via-emerald-50 to-pink-50 ring-1 ring-border overflow-hidden h-[76vh]">
         <ReactFlow
           nodes={nodes}
@@ -240,26 +249,17 @@ export default function Builder() {
           onConnect={handleConnect}
           fitView
         >
-          {/* Soft dotted background with a subtle tint */}
-          <Background
-            id="dots"
-            variant="dots"
-            gap={16}
-            size={1}
-            color="#c4b5fd" // Tailwind violet-300
-          />
+          <Background id="dots" variant="dots" gap={16} size={1} color="#c4b5fd" />
           <Controls position="bottom-right" />
-          {/* Intentionally no MiniMap */}
         </ReactFlow>
       </div>
 
-      {/* Compact editor BELOW (shorter, so canvas gets more height) */}
       <div className="rounded-2xl border bg-card p-4 ring-1 ring-border">
         <div className="text-sm font-extrabold mb-2">
           Edit Text <span className="opacity-60">(per node)</span>
         </div>
         <Editor />
-        {selected && (
+        {selectedId && (
           <div className="mt-3 text-[11px] text-foreground/60">
             Changes save automatically for this bot &amp; mode.
           </div>
