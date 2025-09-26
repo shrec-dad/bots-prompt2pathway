@@ -1,16 +1,15 @@
 // src/pages/admin/Builder.tsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
-  MiniMap,
   Node,
   Edge,
   useNodesState,
   useEdgesState,
-  addEdge,
-  Connection,
-  Panel,
+  OnNodesChange,
+  OnEdgesChange,
+  OnConnect,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -18,7 +17,6 @@ import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
-/** local helpers */
 type NodeLike = Node & {
   type: "message" | "input" | "choice" | "action";
   data: any;
@@ -29,15 +27,13 @@ function mergeDeep<T>(base: T, patch: Partial<T>): T {
   const out: any = Array.isArray(base) ? [...(base as any)] : { ...(base as any) };
   for (const k in patch) {
     const v: any = (patch as any)[k];
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      out[k] = mergeDeep((out as any)[k], v);
-    } else {
-      out[k] = v;
-    }
+    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = mergeDeep((out as any)[k], v);
+    else out[k] = v;
   }
   return out;
 }
 
+// per-bot-mode overrides
 const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
 function getOverrides(bot: string, mode: "basic" | "custom") {
   try {
@@ -51,15 +47,16 @@ function setOverrides(bot: string, mode: "basic" | "custom", next: Record<string
 }
 
 export default function Builder() {
-  const { currentBot } = useAdminStore();
+  const { currentBot } = useAdminStore(); // "LeadQualifier" | ...
   const mode = getBotSettings(currentBot as any).mode; // "basic" | "custom"
-  const tplKey = `${currentBot}_${mode}`;
+  const tplKey = `${currentBot}_${mode}`; // matches templates registry keys
 
   const base = templates[tplKey];
   const [overrides, setOv] = useState<Record<string, any>>(() =>
     getOverrides(currentBot, mode)
   );
 
+  // apply overrides to base template
   const merged = useMemo(() => {
     if (!base) return { nodes: [], edges: [] };
     const nodes = base.nodes.map((n: any) => {
@@ -79,50 +76,49 @@ export default function Builder() {
     setEdges(merged.edges as Edge[]);
   }, [merged.nodes, merged.edges, setNodes, setEdges]);
 
-  // track selection
+  // track selection -> editor
   useEffect(() => {
     const sel = nodes.find((n) => n.selected) as NodeLike | undefined;
     setSelected(sel || null);
   }, [nodes]);
 
-  // safe, typed onConnect handler (no "as" in JSX)
-  const onConnect = useCallback(
-    (conn: Connection) => {
-      setEdges((eds) => addEdge(conn, eds));
-    },
-    [setEdges]
-  );
-
-  // persist a partial patch for the selected node
   const saveField = (patch: Partial<NodeLike["data"]>) => {
     if (!selected) return;
     const next = {
       ...overrides,
-      [selected.id]: { data: { ...((overrides[selected.id] || {}).data || {}), ...patch } },
+      [selected.id]: {
+        data: { ...((overrides[selected.id] || {}).data || {}), ...patch },
+      },
     };
     setOv(next);
     setOverrides(currentBot, mode, next);
+    // update local nodes view immediately
     setNodes((prev) =>
-      prev.map((n: any) => (n.id === selected.id ? { ...n, data: mergeDeep(n.data || {}, patch) } : n))
+      prev.map((n: any) =>
+        n.id === selected.id ? { ...n, data: mergeDeep(n.data || {}, patch) } : n
+      )
     );
   };
 
-  const common = "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold";
-  const labelCls = "text-xs font-bold uppercase text-foreground/80";
-
+  // simple editors per node type
   const Editor = () => {
-    if (!selected)
+    const common =
+      "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold";
+    const label = "text-xs font-bold uppercase text-foreground/80";
+
+    if (!selected) {
       return (
-        <div className="text-sm text-foreground/70 p-4">
-          Select a node on the canvas to edit its text/labels.
+        <div className="text-sm text-foreground/70">
+          Select a node to edit its text/labels.
         </div>
       );
+    }
 
     if (selected.type === "message") {
       return (
         <div className="space-y-3">
           <div>
-            <div className={labelCls}>Title</div>
+            <div className={label}>Title</div>
             <input
               className={common}
               value={selected.data?.title || ""}
@@ -130,7 +126,7 @@ export default function Builder() {
             />
           </div>
           <div>
-            <div className={labelCls}>Text</div>
+            <div className={label}>Text</div>
             <textarea
               className={common}
               rows={4}
@@ -146,7 +142,7 @@ export default function Builder() {
       return (
         <div className="space-y-3">
           <div>
-            <div className={labelCls}>Label</div>
+            <div className={label}>Label</div>
             <input
               className={common}
               value={selected.data?.label || ""}
@@ -154,7 +150,7 @@ export default function Builder() {
             />
           </div>
           <div>
-            <div className={labelCls}>Placeholder</div>
+            <div className={label}>Placeholder</div>
             <input
               className={common}
               value={selected.data?.placeholder || ""}
@@ -170,7 +166,7 @@ export default function Builder() {
       return (
         <div className="space-y-3">
           <div>
-            <div className={labelCls}>Label</div>
+            <div className={label}>Label</div>
             <input
               className={common}
               value={selected.data?.label || ""}
@@ -178,14 +174,17 @@ export default function Builder() {
             />
           </div>
           <div>
-            <div className={labelCls}>Options (one per line)</div>
+            <div className={label}>Options (one per line)</div>
             <textarea
               className={common}
               rows={5}
               value={options.join("\n")}
               onChange={(e) =>
                 saveField({
-                  options: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
+                  options: e.target.value
+                    .split("\n")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
                 })
               }
             />
@@ -198,7 +197,7 @@ export default function Builder() {
       return (
         <div className="space-y-3">
           <div>
-            <div className={labelCls}>Label</div>
+            <div className={label}>Label</div>
             <input
               className={common}
               value={selected.data?.label || ""}
@@ -206,7 +205,7 @@ export default function Builder() {
             />
           </div>
           <div>
-            <div className={labelCls}>Email / Target</div>
+            <div className={label}>Email / Target</div>
             <input
               className={common}
               value={selected.data?.to || ""}
@@ -216,46 +215,55 @@ export default function Builder() {
         </div>
       );
     }
-
     return null;
   };
 
   return (
-    <div className="w-full h-full grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
-      {/* Canvas area */}
-      <div className="rounded-2xl border overflow-hidden bg-muted/30 relative">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          fitView
-        >
-          <Background variant="dots" gap={16} size={1} />
-          <MiniMap pannable zoomable className="!bg-transparent" />
-          <Controls position="bottom-right" />
-          <Panel position="top-left" className="m-2">
-            <div className="rounded-xl border bg-card/90 px-3 py-2 text-xs font-bold shadow-sm">
-              Builder • <span className="opacity-70">Bot:</span> {currentBot}{" "}
-              <span className="opacity-70">| Mode:</span> {mode}
-            </div>
-          </Panel>
-        </ReactFlow>
+    <div className="space-y-4">
+      {/* pill breadcrumb/status */}
+      <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold bg-gradient-to-r from-indigo-50 via-purple-50 to-emerald-50">
+        <span>Builder</span>
+        <span className="opacity-40">•</span>
+        <span>Bot: {String(currentBot)}</span>
+        <span className="opacity-40">|</span>
+        <span>Mode: {mode}</span>
       </div>
 
-      {/* Side editor */}
-      <aside className="rounded-2xl border bg-card p-4 ring-1 ring-border">
-        <div className="text-sm font-extrabold mb-2">
-          Edit Text <span className="opacity-60">(Bot: {currentBot}, Mode: {mode})</span>
+      {/* Canvas (taller) */}
+      <div className="rounded-2xl border overflow-hidden ring-1 ring-border bg-gradient-to-br from-indigo-50 via-purple-50 to-emerald-50">
+        <div className="min-h-[75vh]">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange as OnNodesChange}
+            onEdgesChange={onEdgesChange as OnEdgesChange}
+            onConnect={() => {} as OnConnect}
+            fitView
+          >
+            {/* Soft dotted background; subtle color */}
+            <Background variant="dots" gap={18} size={1} color="#8b8fa3" />
+            <Controls position="bottom-right" />
+            {/* No MiniMap on purpose (cleaner) */}
+          </ReactFlow>
         </div>
-        <Editor />
+      </div>
+
+      {/* Compact Editor below (shorter height) */}
+      <div className="rounded-2xl border bg-card p-4 ring-1 ring-border">
+        <div className="text-sm font-extrabold mb-3">
+          Edit Text (Bot: {String(currentBot)}, Mode: {mode})
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 max-w-3xl">
+          <Editor />
+        </div>
+
         {selected && (
-          <div className="mt-4 text-xs text-foreground/70">
+          <div className="mt-3 text-xs text-foreground/70">
             Changes are saved automatically for this bot & mode.
           </div>
         )}
-      </aside>
+      </div>
     </div>
   );
 }
