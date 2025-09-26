@@ -1,5 +1,5 @@
 // src/pages/admin/Builder.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -7,9 +7,11 @@ import ReactFlow, {
   Edge,
   useNodesState,
   useEdgesState,
-  OnNodesChange,
-  OnEdgesChange,
-  OnConnect,
+  addEdge,
+  type OnNodesChange,
+  type OnEdgesChange,
+  type OnConnect,
+  type Connection,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -17,8 +19,12 @@ import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
-type NodeLike = Node & { type: "message" | "input" | "choice" | "action"; data: any };
+type NodeLike = Node & {
+  type: "message" | "input" | "choice" | "action";
+  data: any;
+};
 
+// shallow/deep merge for node.data patches
 function mergeDeep<T>(base: T, patch: Partial<T>): T {
   if (!patch) return base;
   const out: any = Array.isArray(base) ? [...(base as any)] : { ...(base as any) };
@@ -30,7 +36,7 @@ function mergeDeep<T>(base: T, patch: Partial<T>): T {
   return out;
 }
 
-// per-bot-mode overrides
+// per-bot-mode overrides (persisted)
 const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
 function getOverrides(bot: string, mode: "basic" | "custom") {
   try {
@@ -46,10 +52,12 @@ function setOverrides(bot: string, mode: "basic" | "custom", next: Record<string
 export default function Builder() {
   const { currentBot } = useAdminStore(); // "LeadQualifier" | ...
   const mode = getBotSettings(currentBot as any).mode; // "basic" | "custom"
-  const tplKey = `${currentBot}_${mode}`; // matches templates registry keys we already created
+  const tplKey = `${currentBot}_${mode}`; // matches templates registry keys
 
   const base = templates[tplKey];
-  const [overrides, setOv] = useState<Record<string, any>>(() => getOverrides(currentBot, mode));
+  const [overrides, setOv] = useState<Record<string, any>>(() =>
+    getOverrides(currentBot, mode)
+  );
 
   // apply overrides to base template
   const merged = useMemo(() => {
@@ -66,12 +74,13 @@ export default function Builder() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(merged.edges);
   const [selected, setSelected] = useState<NodeLike | null>(null);
 
+  // refresh canvas when template/overrides change
   useEffect(() => {
     setNodes(merged.nodes as Node[]);
     setEdges(merged.edges as Edge[]);
   }, [merged.nodes, merged.edges, setNodes, setEdges]);
 
-  // track selection
+  // track selected node
   useEffect(() => {
     const sel = nodes.find((n) => n.selected) as NodeLike | undefined;
     setSelected(sel || null);
@@ -79,9 +88,15 @@ export default function Builder() {
 
   const saveField = (patch: Partial<NodeLike["data"]>) => {
     if (!selected) return;
-    const next = { ...overrides, [selected.id]: { data: { ...((overrides[selected.id] || {}).data || {}), ...patch } } };
+    const next = {
+      ...overrides,
+      [selected.id]: {
+        data: { ...((overrides[selected.id] || {}).data || {}), ...patch },
+      },
+    };
     setOv(next);
     setOverrides(currentBot, mode, next);
+
     // update local nodes view immediately
     setNodes((prev) =>
       prev.map((n: any) =>
@@ -90,11 +105,24 @@ export default function Builder() {
     );
   };
 
+  // ---- React Flow handlers (typed outside JSX; no casts in JSX) ----
+  const handleConnect: OnConnect = useCallback(
+    (connection: Connection) => {
+      setEdges((eds) =>
+        addEdge({ ...connection, type: "smoothstep" }, eds)
+      );
+    },
+    [setEdges]
+  );
+
   // simple editors per node type
   const Editor = () => {
-    if (!selected) return (
-      <div className="text-sm text-foreground/70 p-4">Select a node to edit its text/labels.</div>
-    );
+    if (!selected)
+      return (
+        <div className="text-sm text-foreground/70 p-4">
+          Select a node to edit its text/labels.
+        </div>
+      );
 
     const common = "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold";
     const label = "text-xs font-bold uppercase text-foreground/80";
@@ -164,7 +192,14 @@ export default function Builder() {
               className={common}
               rows={5}
               value={options.join("\n")}
-              onChange={(e) => saveField({ options: e.target.value.split("\n").map(s => s.trim()).filter(Boolean) })}
+              onChange={(e) =>
+                saveField({
+                  options: e.target.value
+                    .split("\n")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
             />
           </div>
         </div>
@@ -203,9 +238,9 @@ export default function Builder() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange as OnNodesChange}
+          onNodesChange={onNodesChange as OnNodesChange} // returned by hook; OK to pass directly
           onEdgesChange={onEdgesChange as OnEdgesChange}
-          onConnect={() => {} as OnConnect}
+          onConnect={handleConnect}
           fitView
         >
           <Background />
