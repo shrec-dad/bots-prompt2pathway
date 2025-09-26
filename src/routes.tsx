@@ -1,25 +1,20 @@
 // src/routes.tsx
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
-/**
- * IMPORTANT: These imports assume the files live at the paths below.
- * - If any file is in a different folder, adjust the import path for that one file.
- */
-
-// Admin core pages you built
+// Pages in /src/pages
 import BrandingPage from "./pages/BrandingPage";
 import NurturePage from "./pages/NurturePage";
-import IntegrationsPage from "./pages/IntegrationsPage";
-import SettingsPage from "./pages/admin/Settings";     // ✅ lives in src/pages/admin/Settings.tsx
-import AnalyticsPage from "./pages/AnalyticsPage";
 import EmbedPage from "./pages/EmbedPage";
 
-// Admin: Knowledge & Builder (Lovable originals / your restores)
-import KnowledgePage from "./pages/admin/Knowledge";    // ✅ expected at src/pages/admin/Knowledge.tsx
-import BuilderPage from "./pages/admin/Builder";        // ✅ expected at src/pages/admin/Builder.tsx
+// Pages in /src/pages/admin
+import SettingsPage from "./pages/admin/Settings";
+import IntegrationsPage from "./pages/admin/Integrations";
+import AnalyticsPage from "./pages/admin/Analytics";
+import KnowledgePage from "./pages/admin/Knowledge";
+import BuilderPage from "./pages/admin/Builder";
 
-// Tiny inline NotFound so this file is standalone
+// Tiny 404
 function NotFound() {
   return (
     <div style={{ padding: 24 }}>
@@ -31,27 +26,25 @@ function NotFound() {
 
 export default function AppRoutes() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Default route → go to Branding */}
-        <Route path="/" element={<Navigate to="/branding" replace />} />
+    <Routes>
+      {/* Default redirect */}
+      <Route path="/" element={<Navigate to="/branding" replace />} />
 
-        {/* Public/Admin main tabs you requested */}
-        <Route path="/branding" element={<BrandingPage />} />
-        <Route path="/nurture" element={<NurturePage />} />
-        <Route path="/integrations" element={<IntegrationsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/embed" element={<EmbedPage />} />
+      {/* Main admin tabs you asked for */}
+      <Route path="/branding" element={<BrandingPage />} />
+      <Route path="/nurture" element={<NurturePage />} />
+      <Route path="/integrations" element={<IntegrationsPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/analytics" element={<AnalyticsPage />} />
+      <Route path="/embed" element={<EmbedPage />} />
 
-        {/* Admin area (Lovable originals + your restore) */}
-        <Route path="/admin" element={<Navigate to="/admin/knowledge" replace />} />
-        <Route path="/admin/knowledge" element={<KnowledgePage />} />
-        <Route path="/admin/builder" element={<BuilderPage />} />
+      {/* Lovable admin area */}
+      <Route path="/admin" element={<Navigate to="/admin/knowledge" replace />} />
+      <Route path="/admin/knowledge" element={<KnowledgePage />} />
+      <Route path="/admin/builder" element={<BuilderPage />} />
 
-        {/* Catch-all */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+      {/* Catch-all */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 }
