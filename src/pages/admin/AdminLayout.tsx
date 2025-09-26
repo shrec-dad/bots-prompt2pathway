@@ -72,6 +72,7 @@ export default function AdminLayout() {
           <NavItem to="/admin/nurture" icon={<Mail size={20} strokeWidth={2.2} />} label="Nurture" />
           <NavItem to="/admin/branding" icon={<Palette size={20} strokeWidth={2.2} />} label="Branding" />
           <NavItem to="/admin/integrations" icon={<Link2 size={20} strokeWidth={2.2} />} label="Integrations" />
+          <NavItem to="/admin/embed" icon={<Link2 size={20} strokeWidth={2.2} />} label="Embed" />
           <NavItem to="/admin/settings" icon={<Settings size={20} strokeWidth={2.2} />} label="Settings" />
           <NavItem to="/admin/analytics" icon={<BarChart3 size={20} strokeWidth={2.2} />} label="Analytics" />
         </nav>
