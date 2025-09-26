@@ -1,17 +1,16 @@
 // src/pages/admin/Builder.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import ReactFlow, {
   Background,
   Controls,
+  MiniMap,
   Node,
   Edge,
   useNodesState,
   useEdgesState,
   addEdge,
-  type OnNodesChange,
-  type OnEdgesChange,
-  type OnConnect,
-  type Connection,
+  Connection,
+  Panel,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -19,24 +18,26 @@ import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
+/** local helpers */
 type NodeLike = Node & {
   type: "message" | "input" | "choice" | "action";
   data: any;
 };
 
-// shallow/deep merge for node.data patches
 function mergeDeep<T>(base: T, patch: Partial<T>): T {
   if (!patch) return base;
   const out: any = Array.isArray(base) ? [...(base as any)] : { ...(base as any) };
   for (const k in patch) {
     const v: any = (patch as any)[k];
-    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = mergeDeep((out as any)[k], v);
-    else out[k] = v;
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      out[k] = mergeDeep((out as any)[k], v);
+    } else {
+      out[k] = v;
+    }
   }
   return out;
 }
 
-// per-bot-mode overrides (persisted)
 const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
 function getOverrides(bot: string, mode: "basic" | "custom") {
   try {
@@ -50,16 +51,15 @@ function setOverrides(bot: string, mode: "basic" | "custom", next: Record<string
 }
 
 export default function Builder() {
-  const { currentBot } = useAdminStore(); // "LeadQualifier" | ...
+  const { currentBot } = useAdminStore();
   const mode = getBotSettings(currentBot as any).mode; // "basic" | "custom"
-  const tplKey = `${currentBot}_${mode}`; // matches templates registry keys
+  const tplKey = `${currentBot}_${mode}`;
 
   const base = templates[tplKey];
   const [overrides, setOv] = useState<Record<string, any>>(() =>
     getOverrides(currentBot, mode)
   );
 
-  // apply overrides to base template
   const merged = useMemo(() => {
     if (!base) return { nodes: [], edges: [] };
     const nodes = base.nodes.map((n: any) => {
@@ -74,64 +74,55 @@ export default function Builder() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(merged.edges);
   const [selected, setSelected] = useState<NodeLike | null>(null);
 
-  // refresh canvas when template/overrides change
   useEffect(() => {
     setNodes(merged.nodes as Node[]);
     setEdges(merged.edges as Edge[]);
   }, [merged.nodes, merged.edges, setNodes, setEdges]);
 
-  // track selected node
+  // track selection
   useEffect(() => {
     const sel = nodes.find((n) => n.selected) as NodeLike | undefined;
     setSelected(sel || null);
   }, [nodes]);
 
-  const saveField = (patch: Partial<NodeLike["data"]>) => {
-    if (!selected) return;
-    const next = {
-      ...overrides,
-      [selected.id]: {
-        data: { ...((overrides[selected.id] || {}).data || {}), ...patch },
-      },
-    };
-    setOv(next);
-    setOverrides(currentBot, mode, next);
-
-    // update local nodes view immediately
-    setNodes((prev) =>
-      prev.map((n: any) =>
-        n.id === selected.id ? { ...n, data: mergeDeep(n.data || {}, patch) } : n
-      )
-    );
-  };
-
-  // ---- React Flow handlers (typed outside JSX; no casts in JSX) ----
-  const handleConnect: OnConnect = useCallback(
-    (connection: Connection) => {
-      setEdges((eds) =>
-        addEdge({ ...connection, type: "smoothstep" }, eds)
-      );
+  // safe, typed onConnect handler (no "as" in JSX)
+  const onConnect = useCallback(
+    (conn: Connection) => {
+      setEdges((eds) => addEdge(conn, eds));
     },
     [setEdges]
   );
 
-  // simple editors per node type
+  // persist a partial patch for the selected node
+  const saveField = (patch: Partial<NodeLike["data"]>) => {
+    if (!selected) return;
+    const next = {
+      ...overrides,
+      [selected.id]: { data: { ...((overrides[selected.id] || {}).data || {}), ...patch } },
+    };
+    setOv(next);
+    setOverrides(currentBot, mode, next);
+    setNodes((prev) =>
+      prev.map((n: any) => (n.id === selected.id ? { ...n, data: mergeDeep(n.data || {}, patch) } : n))
+    );
+  };
+
+  const common = "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold";
+  const labelCls = "text-xs font-bold uppercase text-foreground/80";
+
   const Editor = () => {
     if (!selected)
       return (
         <div className="text-sm text-foreground/70 p-4">
-          Select a node to edit its text/labels.
+          Select a node on the canvas to edit its text/labels.
         </div>
       );
-
-    const common = "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold";
-    const label = "text-xs font-bold uppercase text-foreground/80";
 
     if (selected.type === "message") {
       return (
         <div className="space-y-3">
           <div>
-            <div className={label}>Title</div>
+            <div className={labelCls}>Title</div>
             <input
               className={common}
               value={selected.data?.title || ""}
@@ -139,7 +130,7 @@ export default function Builder() {
             />
           </div>
           <div>
-            <div className={label}>Text</div>
+            <div className={labelCls}>Text</div>
             <textarea
               className={common}
               rows={4}
@@ -155,7 +146,7 @@ export default function Builder() {
       return (
         <div className="space-y-3">
           <div>
-            <div className={label}>Label</div>
+            <div className={labelCls}>Label</div>
             <input
               className={common}
               value={selected.data?.label || ""}
@@ -163,7 +154,7 @@ export default function Builder() {
             />
           </div>
           <div>
-            <div className={label}>Placeholder</div>
+            <div className={labelCls}>Placeholder</div>
             <input
               className={common}
               value={selected.data?.placeholder || ""}
@@ -179,7 +170,7 @@ export default function Builder() {
       return (
         <div className="space-y-3">
           <div>
-            <div className={label}>Label</div>
+            <div className={labelCls}>Label</div>
             <input
               className={common}
               value={selected.data?.label || ""}
@@ -187,17 +178,14 @@ export default function Builder() {
             />
           </div>
           <div>
-            <div className={label}>Options (one per line)</div>
+            <div className={labelCls}>Options (one per line)</div>
             <textarea
               className={common}
               rows={5}
               value={options.join("\n")}
               onChange={(e) =>
                 saveField({
-                  options: e.target.value
-                    .split("\n")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
+                  options: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
                 })
               }
             />
@@ -210,7 +198,7 @@ export default function Builder() {
       return (
         <div className="space-y-3">
           <div>
-            <div className={label}>Label</div>
+            <div className={labelCls}>Label</div>
             <input
               className={common}
               value={selected.data?.label || ""}
@@ -218,7 +206,7 @@ export default function Builder() {
             />
           </div>
           <div>
-            <div className={label}>Email / Target</div>
+            <div className={labelCls}>Email / Target</div>
             <input
               className={common}
               value={selected.data?.to || ""}
@@ -228,30 +216,38 @@ export default function Builder() {
         </div>
       );
     }
+
     return null;
   };
 
   return (
-    <div className="w-full h-full grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
-      {/* Canvas */}
-      <div className="rounded-2xl border overflow-hidden bg-muted/30">
+    <div className="w-full h-full grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
+      {/* Canvas area */}
+      <div className="rounded-2xl border overflow-hidden bg-muted/30 relative">
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange as OnNodesChange} // returned by hook; OK to pass directly
-          onEdgesChange={onEdgesChange as OnEdgesChange}
-          onConnect={handleConnect}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
           fitView
         >
-          <Background />
-          <Controls />
+          <Background variant="dots" gap={16} size={1} />
+          <MiniMap pannable zoomable className="!bg-transparent" />
+          <Controls position="bottom-right" />
+          <Panel position="top-left" className="m-2">
+            <div className="rounded-xl border bg-card/90 px-3 py-2 text-xs font-bold shadow-sm">
+              Builder • <span className="opacity-70">Bot:</span> {currentBot}{" "}
+              <span className="opacity-70">| Mode:</span> {mode}
+            </div>
+          </Panel>
         </ReactFlow>
       </div>
 
       {/* Side editor */}
       <aside className="rounded-2xl border bg-card p-4 ring-1 ring-border">
         <div className="text-sm font-extrabold mb-2">
-          Edit Text (Bot: {currentBot}, Mode: {mode})
+          Edit Text <span className="opacity-60">(Bot: {currentBot}, Mode: {mode})</span>
         </div>
         <Editor />
         {selected && (
