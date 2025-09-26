@@ -1,52 +1,230 @@
 // src/pages/admin/Builder.tsx
-import React from "react";
-import ReactFlow, { Background } from "reactflow";
+import React, { useEffect, useMemo, useState } from "react";
+import ReactFlow, {
+  Background,
+  Controls,
+  Node,
+  Edge,
+  useNodesState,
+  useEdgesState,
+  OnNodesChange,
+  OnEdgesChange,
+  OnConnect,
+} from "reactflow";
 import "reactflow/dist/style.css";
 
 import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
-import { NODE_TYPES } from "@/components/builder/nodeTypes";
+import { getBotSettings } from "@/lib/botSettings";
+
+type NodeLike = Node & { type: "message" | "input" | "choice" | "action"; data: any };
+
+function mergeDeep<T>(base: T, patch: Partial<T>): T {
+  if (!patch) return base;
+  const out: any = Array.isArray(base) ? [...(base as any)] : { ...(base as any) };
+  for (const k in patch) {
+    const v: any = (patch as any)[k];
+    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = mergeDeep((out as any)[k], v);
+    else out[k] = v;
+  }
+  return out;
+}
+
+// per-bot-mode overrides
+const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
+function getOverrides(bot: string, mode: "basic" | "custom") {
+  try {
+    const raw = localStorage.getItem(OV_KEY(bot, mode));
+    if (raw) return JSON.parse(raw) as Record<string, any>;
+  } catch {}
+  return {};
+}
+function setOverrides(bot: string, mode: "basic" | "custom", next: Record<string, any>) {
+  localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(next));
+}
 
 export default function Builder() {
-  const { currentBot, botPlan } = useAdminStore();
+  const { currentBot } = useAdminStore(); // "LeadQualifier" | ...
+  const mode = getBotSettings(currentBot as any).mode; // "basic" | "custom"
+  const tplKey = `${currentBot}_${mode}`; // matches templates registry keys we already created
 
-  // Compose registry key
-  const tplKey = `${currentBot}_${botPlan.toLowerCase()}` as keyof typeof templates;
-  const tpl = templates[tplKey];
+  const base = templates[tplKey];
+  const [overrides, setOv] = useState<Record<string, any>>(() => getOverrides(currentBot, mode));
 
-  if (!tpl) {
-    return (
-      <div className="rounded-xl border bg-card p-8 text-center">
-        <h2 className="text-xl font-semibold">Canvas not ready</h2>
-        <p className="mt-2 text-muted-foreground">
-          Select a different bot/plan or add a template entry for:
-        </p>
-        <code className="mt-3 inline-block rounded bg-muted px-3 py-1">
-          {tplKey}
-        </code>
-      </div>
+  // apply overrides to base template
+  const merged = useMemo(() => {
+    if (!base) return { nodes: [], edges: [] };
+    const nodes = base.nodes.map((n: any) => {
+      const o = overrides[n.id];
+      return o ? { ...n, data: mergeDeep(n.data || {}, o.data || {}) } : n;
+    });
+    const edges = base.edges;
+    return { nodes, edges };
+  }, [base, overrides]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(merged.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(merged.edges);
+  const [selected, setSelected] = useState<NodeLike | null>(null);
+
+  useEffect(() => {
+    setNodes(merged.nodes as Node[]);
+    setEdges(merged.edges as Edge[]);
+  }, [merged.nodes, merged.edges, setNodes, setEdges]);
+
+  // track selection
+  useEffect(() => {
+    const sel = nodes.find((n) => n.selected) as NodeLike | undefined;
+    setSelected(sel || null);
+  }, [nodes]);
+
+  const saveField = (patch: Partial<NodeLike["data"]>) => {
+    if (!selected) return;
+    const next = { ...overrides, [selected.id]: { data: { ...((overrides[selected.id] || {}).data || {}), ...patch } } };
+    setOv(next);
+    setOverrides(currentBot, mode, next);
+    // update local nodes view immediately
+    setNodes((prev) =>
+      prev.map((n: any) =>
+        n.id === selected.id ? { ...n, data: mergeDeep(n.data || {}, patch) } : n
+      )
     );
-  }
+  };
 
-  const { nodes, edges } = tpl;
+  // simple editors per node type
+  const Editor = () => {
+    if (!selected) return (
+      <div className="text-sm text-foreground/70 p-4">Select a node to edit its text/labels.</div>
+    );
+
+    const common = "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold";
+    const label = "text-xs font-bold uppercase text-foreground/80";
+
+    if (selected.type === "message") {
+      return (
+        <div className="space-y-3">
+          <div>
+            <div className={label}>Title</div>
+            <input
+              className={common}
+              value={selected.data?.title || ""}
+              onChange={(e) => saveField({ title: e.target.value })}
+            />
+          </div>
+          <div>
+            <div className={label}>Text</div>
+            <textarea
+              className={common}
+              rows={4}
+              value={selected.data?.text || ""}
+              onChange={(e) => saveField({ text: e.target.value })}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (selected.type === "input") {
+      return (
+        <div className="space-y-3">
+          <div>
+            <div className={label}>Label</div>
+            <input
+              className={common}
+              value={selected.data?.label || ""}
+              onChange={(e) => saveField({ label: e.target.value })}
+            />
+          </div>
+          <div>
+            <div className={label}>Placeholder</div>
+            <input
+              className={common}
+              value={selected.data?.placeholder || ""}
+              onChange={(e) => saveField({ placeholder: e.target.value })}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (selected.type === "choice") {
+      const options: string[] = selected.data?.options || [];
+      return (
+        <div className="space-y-3">
+          <div>
+            <div className={label}>Label</div>
+            <input
+              className={common}
+              value={selected.data?.label || ""}
+              onChange={(e) => saveField({ label: e.target.value })}
+            />
+          </div>
+          <div>
+            <div className={label}>Options (one per line)</div>
+            <textarea
+              className={common}
+              rows={5}
+              value={options.join("\n")}
+              onChange={(e) => saveField({ options: e.target.value.split("\n").map(s => s.trim()).filter(Boolean) })}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (selected.type === "action") {
+      return (
+        <div className="space-y-3">
+          <div>
+            <div className={label}>Label</div>
+            <input
+              className={common}
+              value={selected.data?.label || ""}
+              onChange={(e) => saveField({ label: e.target.value })}
+            />
+          </div>
+          <div>
+            <div className={label}>Email / Target</div>
+            <input
+              className={common}
+              value={selected.data?.to || ""}
+              onChange={(e) => saveField({ to: e.target.value })}
+            />
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
-    <div className="rounded-xl border bg-[#ECFDF5]">
-      <div className="h-[calc(100vh-8rem)] w-full">
+    <div className="w-full h-full grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
+      {/* Canvas */}
+      <div className="rounded-2xl border overflow-hidden bg-muted/30">
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          nodeTypes={NODE_TYPES}
+          onNodesChange={onNodesChange as OnNodesChange}
+          onEdgesChange={onEdgesChange as OnEdgesChange}
+          onConnect={() => {} as OnConnect}
           fitView
-          defaultEdgeOptions={{
-            type: "smoothstep",
-            style: { stroke: "#111827", strokeWidth: 2 }, // darker edges
-          }}
         >
-          {/* No MiniMap */}
           <Background />
+          <Controls />
         </ReactFlow>
       </div>
+
+      {/* Side editor */}
+      <aside className="rounded-2xl border bg-card p-4 ring-1 ring-border">
+        <div className="text-sm font-extrabold mb-2">
+          Edit Text (Bot: {currentBot}, Mode: {mode})
+        </div>
+        <Editor />
+        {selected && (
+          <div className="mt-4 text-xs text-foreground/70">
+            Changes are saved automatically for this bot & mode.
+          </div>
+        )}
+      </aside>
     </div>
   );
 }
