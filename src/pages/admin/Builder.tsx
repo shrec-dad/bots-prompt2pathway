@@ -7,8 +7,6 @@ import ReactFlow, {
   Edge,
   useNodesState,
   useEdgesState,
-  OnNodesChange,
-  OnEdgesChange,
   OnConnect,
 } from "reactflow";
 import "reactflow/dist/style.css";
@@ -17,15 +15,15 @@ import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
-type NodeLike = Node & {
-  type: "message" | "input" | "choice" | "action";
-  data: any;
-};
+// ----- Types -----
+type NodeKind = "message" | "input" | "choice" | "action";
+type NodeLike = Node & { type: NodeKind; data: any };
 
+// ----- Helpers -----
 function mergeDeep<T>(base: T, patch: Partial<T>): T {
   if (!patch) return base;
   const out: any = Array.isArray(base) ? [...(base as any)] : { ...(base as any) };
-  for (const k in patch) {
+  for (const k in patch as any) {
     const v: any = (patch as any)[k];
     if (v && typeof v === "object" && !Array.isArray(v)) out[k] = mergeDeep((out as any)[k], v);
     else out[k] = v;
@@ -33,7 +31,6 @@ function mergeDeep<T>(base: T, patch: Partial<T>): T {
   return out;
 }
 
-// per-bot-mode overrides
 const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
 function getOverrides(bot: string, mode: "basic" | "custom") {
   try {
@@ -47,23 +44,23 @@ function setOverrides(bot: string, mode: "basic" | "custom", next: Record<string
 }
 
 export default function Builder() {
-  const { currentBot } = useAdminStore(); // "LeadQualifier" | ...
-  const mode = getBotSettings(currentBot as any).mode; // "basic" | "custom"
-  const tplKey = `${currentBot}_${mode}`; // matches templates registry keys
+  const { currentBot } = useAdminStore(); // e.g. "LeadQualifier"
+  const mode = getBotSettings(currentBot as any).mode as "basic" | "custom";
+  const tplKey = `${currentBot}_${mode}`;
 
   const base = templates[tplKey];
   const [overrides, setOv] = useState<Record<string, any>>(() =>
     getOverrides(currentBot, mode)
   );
 
-  // apply overrides to base template
+  // Combine template with overrides
   const merged = useMemo(() => {
-    if (!base) return { nodes: [], edges: [] };
-    const nodes = base.nodes.map((n: any) => {
+    if (!base) return { nodes: [] as Node[], edges: [] as Edge[] };
+    const nodes = (base.nodes as Node[]).map((n) => {
       const o = overrides[n.id];
       return o ? { ...n, data: mergeDeep(n.data || {}, o.data || {}) } : n;
     });
-    const edges = base.edges;
+    const edges = base.edges as Edge[];
     return { nodes, edges };
   }, [base, overrides]);
 
@@ -71,17 +68,19 @@ export default function Builder() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(merged.edges);
   const [selected, setSelected] = useState<NodeLike | null>(null);
 
+  // Re-hydrate when merged changes
   useEffect(() => {
     setNodes(merged.nodes as Node[]);
     setEdges(merged.edges as Edge[]);
   }, [merged.nodes, merged.edges, setNodes, setEdges]);
 
-  // track selection -> editor
+  // Track current selection
   useEffect(() => {
     const sel = nodes.find((n) => n.selected) as NodeLike | undefined;
     setSelected(sel || null);
   }, [nodes]);
 
+  // Save a patch into overrides and live nodes
   const saveField = (patch: Partial<NodeLike["data"]>) => {
     if (!selected) return;
     const next = {
@@ -92,7 +91,7 @@ export default function Builder() {
     };
     setOv(next);
     setOverrides(currentBot, mode, next);
-    // update local nodes view immediately
+
     setNodes((prev) =>
       prev.map((n: any) =>
         n.id === selected.id ? { ...n, data: mergeDeep(n.data || {}, patch) } : n
@@ -100,19 +99,19 @@ export default function Builder() {
     );
   };
 
-  // simple editors per node type
+  // Separate editor to keep JSX clean
   const Editor = () => {
-    const common =
-      "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold";
-    const label = "text-xs font-bold uppercase text-foreground/80";
-
     if (!selected) {
       return (
         <div className="text-sm text-foreground/70">
-          Select a node to edit its text/labels.
+          Select a node above to edit its text and labels.
         </div>
       );
     }
+
+    const common =
+      "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold focus:outline-none";
+    const label = "text-[10px] font-extrabold uppercase text-foreground/70";
 
     if (selected.type === "message") {
       return (
@@ -215,52 +214,54 @@ export default function Builder() {
         </div>
       );
     }
+
     return null;
   };
 
+  // Connect handler (typed outside JSX to avoid 'as' in JSX)
+  const handleConnect: OnConnect = () => {};
+
   return (
-    <div className="space-y-4">
-      {/* pill breadcrumb/status */}
-      <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold bg-gradient-to-r from-indigo-50 via-purple-50 to-emerald-50">
-        <span>Builder</span>
-        <span className="opacity-40">•</span>
-        <span>Bot: {String(currentBot)}</span>
-        <span className="opacity-40">|</span>
-        <span>Mode: {mode}</span>
+    <div className="w-full space-y-4">
+      {/* Header / Breadcrumb */}
+      <div className="text-xs font-extrabold tracking-wide text-foreground/70">
+        <span className="opacity-70">Builder •</span>{" "}
+        <span>Bot: {currentBot}</span>{" "}
+        <span className="opacity-70">| Mode:</span> <span>{mode}</span>
       </div>
 
-      {/* Canvas (taller) */}
-      <div className="rounded-2xl border overflow-hidden ring-1 ring-border bg-gradient-to-br from-indigo-50 via-purple-50 to-emerald-50">
-        <div className="min-h-[75vh]">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange as OnNodesChange}
-            onEdgesChange={onEdgesChange as OnEdgesChange}
-            onConnect={() => {} as OnConnect}
-            fitView
-          >
-            {/* Soft dotted background; subtle color */}
-            <Background variant="dots" gap={18} size={1} color="#8b8fa3" />
-            <Controls position="bottom-right" />
-            {/* No MiniMap on purpose (cleaner) */}
-          </ReactFlow>
-        </div>
+      {/* BIG canvas, colorful and professional; no minimap */}
+      <div className="rounded-2xl border bg-gradient-to-br from-indigo-50 via-emerald-50 to-pink-50 ring-1 ring-border overflow-hidden h-[76vh]">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={handleConnect}
+          fitView
+        >
+          {/* Soft dotted background with a subtle tint */}
+          <Background
+            id="dots"
+            variant="dots"
+            gap={16}
+            size={1}
+            color="#c4b5fd" // Tailwind violet-300
+          />
+          <Controls position="bottom-right" />
+          {/* Intentionally no MiniMap */}
+        </ReactFlow>
       </div>
 
-      {/* Compact Editor below (shorter height) */}
+      {/* Compact editor BELOW (shorter, so canvas gets more height) */}
       <div className="rounded-2xl border bg-card p-4 ring-1 ring-border">
-        <div className="text-sm font-extrabold mb-3">
-          Edit Text (Bot: {String(currentBot)}, Mode: {mode})
+        <div className="text-sm font-extrabold mb-2">
+          Edit Text <span className="opacity-60">(per node)</span>
         </div>
-
-        <div className="grid grid-cols-1 gap-4 max-w-3xl">
-          <Editor />
-        </div>
-
+        <Editor />
         {selected && (
-          <div className="mt-3 text-xs text-foreground/70">
-            Changes are saved automatically for this bot & mode.
+          <div className="mt-3 text-[11px] text-foreground/60">
+            Changes save automatically for this bot &amp; mode.
           </div>
         )}
       </div>
