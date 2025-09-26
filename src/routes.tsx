@@ -1,21 +1,9 @@
 // src/routes.tsx
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
-// Pages in /src/pages
-import BrandingPage from "./pages/BrandingPage";
-import NurturePage from "./pages/NurturePage";
-import EmbedPage from "./pages/EmbedPage";
-
-// Pages in /src/pages/admin
-import SettingsPage from "./pages/admin/Settings";
-import IntegrationsPage from "./pages/admin/Integrations";
-import AnalyticsPage from "./pages/admin/Analytics";
+// ✅ Keep ONLY this import first to confirm the router works
 import KnowledgePage from "./pages/admin/Knowledge";
-import BuilderPage from "./pages/admin/Builder";
-
-// Optional: if you have a Bots page file, we’ll route it. If not, this can be added later.
-// import BotsPage from "./pages/admin/Bots";
 
 function NotFound() {
   return (
@@ -28,15 +16,10 @@ function NotFound() {
 
 export default function AppRoutes() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Default to your admin shell */}
-        <Route path="/" element={<Navigate to="/admin/knowledge" replace />} />
-
-        {/* Admin shell pages (match your sidebar) */}
-        <Route path="/admin/knowledge" element={<KnowledgePage />} />
-        <Route path="/admin/builder" element={<BuilderPage />} />
-        {/* <Route path="/admin/bots" element={<BotsPage />} /> */}
-
-        {/* Your admin tabs under /admin/* so the sidebar can link to them */}
-        <Route path="/admin/branding"
+    <Routes>
+      <Route path="/" element={<Navigate to="/admin/knowledge" replace />} />
+      <Route path="/admin/knowledge" element={<KnowledgePage />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+}
