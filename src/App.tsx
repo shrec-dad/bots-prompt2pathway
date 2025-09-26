@@ -1,46 +1,41 @@
 // src/App.tsx
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
-import BackgroundManager from "@/components/BackgroundManager";
-import AdminLayout from "./pages/admin/AdminLayout";
-
-import Dashboard from "./pages/admin/Dashboard";
-import Clients from "./pages/admin/Clients";
-import Bots from "./pages/admin/Bots";
-import Builder from "./pages/admin/Builder";
-import Knowledge from "./pages/admin/Knowledge"; // ✅ NEW
-
-// Optional: simple placeholders if these exist later
-const NotFound = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-extrabold">Not Found</h1>
-    <p className="text-foreground/70 font-semibold">The page you’re looking for doesn’t exist.</p>
-  </div>
-);
+import { BrowserRouter } from "react-router-dom";
+import AppRoutes from "./routes";
 
 export default function App() {
   return (
     <BrowserRouter>
-      <BackgroundManager />
-      <Routes>
-        {/* Redirect root to /admin */}
-        <Route path="/" element={<Navigate to="/admin" replace />} />
-
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="clients" element={<Clients />} />
-          <Route path="bots" element={<Bots />} />
-          <Route path="builder" element={<Builder />} />
-
-          {/* ✅ NEW ROUTE */}
-          <Route path="knowledge" element={<Knowledge />} />
-
-          {/* Fallback */}
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
+      <div style={{ borderBottom: "2px solid black", background: "white" }}>
+        <nav style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: 12 }}>
+          {[
+            ["/branding", "Branding"],
+            ["/nurture", "Nurture"],
+            ["/integrations", "Integrations"],
+            ["/settings", "Settings"],
+            ["/analytics", "Analytics"],
+            ["/embed", "Embed"],
+            ["/admin/knowledge", "Knowledge"],
+            ["/admin/builder", "Builder"],
+          ].map(([to, label]) => (
+            <a
+              key={to as string}
+              href={to as string}
+              style={{
+                padding: "6px 12px",
+                border: "2px solid black",
+                borderRadius: 10,
+                textDecoration: "none",
+                color: "black",
+                fontWeight: 700,
+              }}
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+      </div>
+      <AppRoutes />
     </BrowserRouter>
   );
 }
