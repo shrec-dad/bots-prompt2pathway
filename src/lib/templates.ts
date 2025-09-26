@@ -1,6 +1,5 @@
 // src/lib/templates.ts
-// Export a templates object so Builder.tsx stops crashing.
-// We’ll fill in real flows later.
+// Named export: Builder.tsx expects { templates }
 
 export const templates = {
   AppointmentBooking_basic: {
@@ -14,6 +13,7 @@ export const templates = {
       { id: "e2", source: "q1", target: "end" },
     ],
   },
+
   AppointmentBooking_custom: {
     nodes: [
       { id: "welcome", type: "input", data: { label: "Welcome" }, position: { x: 0, y: 0 } },
@@ -28,3 +28,4 @@ export const templates = {
     ],
   },
 };
+
