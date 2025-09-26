@@ -1,136 +1,114 @@
 // src/lib/templates.ts
-// Registry of prebuilt flows used by the Builder.
-// Keys MUST match the pattern `${currentBot}_${plan.toLowerCase()}`
-// Example: "LeadQualifier_basic", "LeadQualifier_custom"
+export type NodeType = "welcome" | "input" | "choice" | "action" | "thank-you";
+export type NodeDef = { id: string; type: NodeType; label: string };
+export type EdgeDef = { id: string; source: string; target: string; label?: string };
 
-import type { Node, Edge } from "reactflow";
+export type Template = {
+  id: string;
+  name: string;
+  nodes: NodeDef[];
+  edges: EdgeDef[];
+};
 
-export type Template = { nodes: Node[]; edges: Edge[] };
-export type TemplateKey = "LeadQualifier_basic" | "LeadQualifier_custom";
-
-/** simple id factory so every node/edge has a unique, stable-ish id */
-const makeId = (() => {
-  let n = 1;
-  return () => String(n++);
-})();
-
-// ----- small helpers to build nodes quickly -----
-
-const message = (label: string, text: string, x: number, y: number): Node => ({
-  id: makeId(),
-  type: "message",
-  position: { x, y },
-  data: { title: label, text },
-});
-
-const inputNode = (
-  label: string,
-  placeholder: string,
-  x: number,
-  y: number
-): Node => ({
-  id: makeId(),
-  type: "inputNode",
-  position: { x, y },
-  data: { label, placeholder },
-});
-
-const choice = (
-  label: string,
-  options: string[],
-  x: number,
-  y: number
-): Node => ({
-  id: makeId(),
-  type: "choiceNode",
-  position: { x, y },
-  data: { label, options },
-});
-
-const action = (
-  label: string,
-  actionName: string,
-  destination: string,
-  x: number,
-  y: number
-): Node => ({
-  id: makeId(),
-  type: "actionNode",
-  position: { x, y },
-  data: { label, action: actionName, destination },
-});
-
-const edge = (from: Node, to: Node, lbl?: string): Edge => ({
-  id: makeId(),
-  source: from.id,
-  target: to.id,
-  label: lbl,
-  type: "smoothstep",
-});
-
-// ----- TEMPLATES -----
-
-/** Basic Lead Qualifier:
- *  Message -> Input(email) -> Choice(budget) -> Action(notify)
- */
-const LeadQualifier_basic = (): Template => {
-  const a = message("Lead Qualifier", "Welcome! How can I help?", 100, 220);
-  const b = inputNode(
-    "What's your email?",
-    "name@company.com",
-    430,
-    200
-  );
-  const c = choice("Budget range?", ["< $1k", "$1k–$3k", "$3k+"], 430, 360);
-  const d = action("Notify team", "sendEmail", "admin@example.com", 820, 260);
-
+/** Helper builders */
+function basicFlow(name: string): Template {
   return {
-    nodes: [a, b, c, d],
-    edges: [edge(a, b), edge(b, c), edge(c, d, "submit")],
+    id: name,
+    name,
+    nodes: [
+      { id: "n1", type: "welcome",  label: "Welcome" },
+      { id: "n2", type: "input",    label: "Capture Contact" },
+      { id: "n3", type: "action",   label: "Process/Notify" },
+      { id: "n4", type: "thank-you",label: "Thank You" }
+    ],
+    edges: [
+      { id: "e1", source: "n1", target: "n2" },
+      { id: "e2", source: "n2", target: "n3" },
+      { id: "e3", source: "n3", target: "n4" },
+    ]
   };
-};
+}
 
-/** Custom Lead Qualifier:
- *  Message -> Input(name) -> Input(email optional) -> Choice(timeline) -> Action(score+route)
- *  (Slightly richer, more steps and different copy)
- */
-const LeadQualifier_custom = (): Template => {
-  const a = message(
-    "Lead Qualifier (Custom)",
-    "Quick few questions to route you best.",
-    80,
-    200
-  );
-  const b = inputNode("Your name", "Jane Doe", 420, 170);
-  const c = inputNode("Email (optional)", "jane@company.com", 420, 270);
-  const d = choice(
-    "Timeline",
-    ["ASAP", "2–4 weeks", "Later"],
-    420,
-    380
-  );
-  const e = action(
-    "Score + route",
-    "scoreAndRoute",
-    "crm@internal",
-    820,
-    280
-  );
-
+function customFlow(name: string): Template {
   return {
-    nodes: [a, b, c, d, e],
-    edges: [edge(a, b), edge(b, c), edge(c, d), edge(d, e, "submit")],
+    id: name,
+    name,
+    nodes: [
+      { id: "n1", type: "welcome",  label: "Welcome" },
+      { id: "n2", type: "choice",   label: "Choose Path" },
+      { id: "n3", type: "input",    label: "Capture Contact" },
+      { id: "n4", type: "action",   label: "Score / Route" },
+      { id: "n5", type: "action",   label: "Webhook / CRM" },
+      { id: "n6", type: "thank-you",label: "Thank You" }
+    ],
+    edges: [
+      { id: "e1", source: "n1", target: "n2" },
+      { id: "e2", source: "n2", target: "n3", label: "Path A" },
+      { id: "e3", source: "n2", target: "n4", label: "Path B" },
+      { id: "e4", source: "n3", target: "n4" },
+      { id: "e5", source: "n4", target: "n5" },
+      { id: "e6", source: "n5", target: "n6" },
+    ]
   };
+}
+
+/** Lead qualifier specifics */
+const LeadQualifier_basic: Template = {
+  id: "LeadQualifier_basic",
+  name: "Lead Qualifier (Basic)",
+  nodes: [
+    { id: "n1", type: "welcome",  label: "Welcome" },
+    { id: "n2", type: "input",    label: "10 Questions (Editable)" },
+    { id: "n3", type: "action",   label: "Score 0–100 + Notify" },
+    { id: "n4", type: "thank-you",label: "Thank You" }
+  ],
+  edges: [
+    { id: "e1", source: "n1", target: "n2" },
+    { id: "e2", source: "n2", target: "n3" },
+    { id: "e3", source: "n3", target: "n4" },
+  ]
 };
 
-// ----- PUBLIC REGISTRY -----
-// IMPORTANT: keys must be exactly the string Builder computes:
-// `${currentBot}_${plan.toLowerCase()}`
-
-export const templates: Record<TemplateKey, Template> = {
-  LeadQualifier_basic: LeadQualifier_basic(),
-  LeadQualifier_custom: LeadQualifier_custom(),
+const LeadQualifier_custom: Template = {
+  id: "LeadQualifier_custom",
+  name: "Lead Qualifier (Custom)",
+  nodes: [
+    { id: "n1", type: "welcome",  label: "Welcome" },
+    { id: "n2", type: "choice",   label: "Conditional Branching" },
+    { id: "n3", type: "input",    label: "Custom Fields (Unlimited)" },
+    { id: "n4", type: "action",   label: "Advanced Scoring" },
+    { id: "n5", type: "action",   label: "Webhook → CRM" },
+    { id: "n6", type: "thank-you",label: "Thank You" }
+  ],
+  edges: [
+    { id: "e1", source: "n1", target: "n2" },
+    { id: "e2", source: "n2", target: "n3", label: "Path A" },
+    { id: "e3", source: "n2", target: "n4", label: "Path B" },
+    { id: "e4", source: "n3", target: "n4" },
+    { id: "e5", source: "n4", target: "n5" },
+    { id: "e6", source: "n5", target: "n6" },
+  ]
 };
 
-export default templates;
+/** Other bots */
+const AppointmentBooking_basic      = basicFlow("AppointmentBooking_basic");
+const AppointmentBooking_custom     = customFlow("AppointmentBooking_custom");
+const CustomerSupport_basic         = basicFlow("CustomerSupport_basic");
+const CustomerSupport_custom        = customFlow("CustomerSupport_custom");
+const Waitlist_basic                = basicFlow("Waitlist_basic");
+const Waitlist_custom               = customFlow("Waitlist_custom");
+const SocialMedia_basic             = basicFlow("SocialMedia_basic");
+const SocialMedia_custom            = customFlow("SocialMedia_custom");
 
+export const Templates: Template[] = [
+  LeadQualifier_basic,
+  LeadQualifier_custom,
+  AppointmentBooking_basic,
+  AppointmentBooking_custom,
+  CustomerSupport_basic,
+  CustomerSupport_custom,
+  Waitlist_basic,
+  Waitlist_custom,
+  SocialMedia_basic,
+  SocialMedia_custom
+];

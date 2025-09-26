@@ -1,0 +1,68 @@
+/* src/styles/admin-shared.css */
+/* Gradients & strong-border look shared across admin pages */
+
+:root {
+  /* If not already present in tokens.css, these will still work as fallbacks */
+  --text-strong: #000000;
+  --border-strong: #000000;
+
+  /* Deepened pastels (safe defaults) */
+  --pastel-green-deep: #76c19a;
+  --pastel-blue-deep:  #7aa8ff;
+  --pastel-pink-deep:  #ff92b5;
+  --pastel-yellow-deep:#ffd46a;
+  --pastel-purple-deep:#b388ff;
+  --surface: #ffffff;
+}
+
+/* Page frame */
+.admin-page {
+  min-height: calc(100vh - 120px);
+  padding: 16px;
+  color: var(--text-strong);
+}
+
+/* Pastel gradients (like bot cards) */
+.bg-grad-green  { background: linear-gradient(180deg, var(--pastel-green-deep) 0%, color-mix(in srgb, var(--pastel-green-deep) 65%, white 35%) 100%); }
+.bg-grad-blue   { background: linear-gradient(180deg, var(--pastel-blue-deep)  0%, color-mix(in srgb, var(--pastel-blue-deep)  65%, white 35%) 100%); }
+.bg-grad-pink   { background: linear-gradient(180deg, var(--pastel-pink-deep)  0%, color-mix(in srgb, var(--pastel-pink-deep)  65%, white 35%) 100%); }
+.bg-grad-yellow { background: linear-gradient(180deg, var(--pastel-yellow-deep)0%, color-mix(in srgb, var(--pastel-yellow-deep)65%, white 35%) 100%); }
+.bg-grad-purple { background: linear-gradient(180deg, var(--pastel-purple-deep)0%, color-mix(in srgb, var(--pastel-purple-deep)65%, white 35%) 100%); }
+
+/* Strong black outlines for every container */
+.admin-section, .card, .panel, .tile, .admin-box {
+  border: 2px solid var(--border-strong);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.92);
+  padding: 16px;
+}
+
+/* Simple grid tools */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.stack { display: grid; gap: 12px; }
+
+/* Form controls */
+.label { font-weight: 700; margin-bottom: 6px; }
+.input, .select, .textarea {
+  width: 100%; padding: 10px 12px; border: 2px solid var(--border-strong);
+  border-radius: 10px; background: #fff; color: var(--text-strong);
+}
+.textarea { min-height: 110px; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 14px; border: 2px solid var(--border-strong); border-radius: 10px;
+  background: #fff; color: var(--text-strong); font-weight: 700; cursor: pointer;
+}
+.btn.primary { background: var(--pastel-green-deep); }
+.btn.warn    { background: var(--pastel-yellow-deep); }
+
+/* Little headers */
+.h-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.h-title { font-size: 18px; font-weight: 900; }
+
+/* Table placeholder */
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { border: 2px solid var(--border-strong); padding: 8px 10px; }
+.table th { background: #fff8; text-align: left; }
