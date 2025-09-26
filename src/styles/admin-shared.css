@@ -66,3 +66,16 @@
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { border: 2px solid var(--border-strong); padding: 8px 10px; }
 .table th { background: #fff8; text-align: left; }
+/* --- Embed code wrapping --- */
+.code-scroller {
+  overflow: auto;              /* keep scroll if needed */
+  max-width: 100%;
+}
+.code-scroller .code-pre {
+  white-space: pre-wrap;       /* wrap long lines */
+  word-break: break-all;       /* allow long tokens to wrap */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0;
+}
