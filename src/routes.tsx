@@ -2,47 +2,51 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
-// LAYOUT
+// Layout
 import AdminLayout from "./pages/admin/AdminLayout";
 
-// ADMIN PAGES (all under src/pages/admin)
+// Admin pages
 import Dashboard from "./pages/admin/Dashboard";
 import Clients from "./pages/admin/Clients";
 import Bots from "./pages/admin/Bots";
 import Builder from "./pages/admin/Builder";
 import Knowledge from "./pages/admin/Knowledge";
-import Branding from "./pages/admin/Branding";
 import Nurture from "./pages/admin/Nurture";
+import Branding from "./pages/admin/Branding";
 import Integrations from "./pages/admin/Integrations";
 import Settings from "./pages/admin/Settings";
 import Analytics from "./pages/admin/Analytics";
-import Embed from "./pages/admin/Embed";
+
+// ── Pick ONE of these depending on where your file lives ───────────────────────
+// If you moved it under /admin:
+import EmbedPage from "./pages/admin/Embed";
+// If it’s still at src/pages/EmbedPage.tsx, use this instead:
+// import EmbedPage from "./pages/EmbedPage";
+// ──────────────────────────────────────────────────────────────────────────────
 
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* send root to admin dashboard */}
+      {/* Default redirect to admin dashboard */}
       <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
 
-      {/* LAYOUT ROUTE: everything under /admin uses AdminLayout */}
+      {/* All admin pages share the sidebar/header via AdminLayout */}
       <Route path="/admin" element={<AdminLayout />}>
-        {/* index of /admin -> /admin/dashboard */}
         <Route index element={<Navigate to="dashboard" replace />} />
-
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="clients" element={<Clients />} />
         <Route path="bots" element={<Bots />} />
         <Route path="builder" element={<Builder />} />
         <Route path="knowledge" element={<Knowledge />} />
         <Route path="nurture" element={<Nurture />} />
-        <Route path="branding" element={<Branding />} />
+        <Route path="branding" element={<Branding />} /> {/* << ONLY branding route */}
         <Route path="integrations" element={<Integrations />} />
         <Route path="settings" element={<Settings />} />
         <Route path="analytics" element={<Analytics />} />
-        <Route path="embed" element={<Embed />} />
+        <Route path="embed" element={<EmbedPage />} />
       </Route>
 
-      {/* catch-all: go back to dashboard */}
+      {/* Catch-all → admin dashboard */}
       <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
     </Routes>
   );
