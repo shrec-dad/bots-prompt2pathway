@@ -1,97 +1,62 @@
 // src/components/EmbedGenerator.tsx
 import React, { useMemo } from "react";
-
-/**
- * Reads your saved settings:
- *  - Branding: localStorage["brandingSettings"] (from your Branding page)
- *  - App Settings: localStorage["appSettings"] (from your Settings page)
- * Then builds a copy-paste <script> embed.
- */
-
-function safeParse<T>(raw: string | null, fallback: T): T {
-  try {
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
+import "../styles/admin-shared.css";
+import { getJSON } from "../lib/storage";
 
 type Branding = {
   logoDataUrl?: string;
-  primaryColor: string;
-  secondaryColor: string;
-  fontFamily: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  fontFamily?: string;
   chatBubbleImage?: string;
-  chatBubbleColor: string;
-  chatBubbleSize: number; // px
-  chatBubblePosition: "bottom-right" | "bottom-left";
+  chatBubbleColor?: string;
+  chatBubbleSize?: number;
+  chatBubblePosition?: "bottom-right" | "bottom-left";
 };
 
-type AppSettings = {
-  basicOrCustom?: "basic" | "custom";
-  domainWhitelist?: string; // comma separated
-  darkMode?: boolean;
-  language?: string;
+type Settings = {
+  mode?: "basic" | "custom";
+  language?: "en" | "es";
+  domainWhitelist?: string; // comma-separated
 };
 
-const DEFAULT_BRANDING: Branding = {
-  primaryColor: "#7aa8ff",
-  secondaryColor: "#76c19a",
-  fontFamily: "Inter, system-ui, Arial, sans-serif",
-  chatBubbleColor: "#7aa8ff",
-  chatBubbleSize: 64,
-  chatBubblePosition: "bottom-right",
-};
-
-const DEFAULT_SETTINGS: AppSettings = {
-  basicOrCustom: "basic",
-  domainWhitelist: "example.com",
-  darkMode: false,
-  language: "en",
-};
+const BRANDING_KEY = "brandingSettings";
+const SETTINGS_KEY = "globalSettings";
 
 export default function EmbedGenerator() {
-  const { snippet, prettyJson } = useMemo(() => {
-    const branding = safeParse<Branding>(
-      localStorage.getItem("brandingSettings"),
-      DEFAULT_BRANDING
-    );
-    const settings = safeParse<AppSettings>(
-      localStorage.getItem("appSettings"),
-      DEFAULT_SETTINGS
-    );
+  const branding = useMemo<Branding>(() => getJSON(BRANDING_KEY, {}), []);
+  const settings = useMemo<Settings>(() => getJSON(SETTINGS_KEY, {}), []);
 
-    // Options passed to your widget on mount
-    const options = {
-      mode: settings.basicOrCustom ?? "basic",
-      language: settings.language ?? "en",
-      whitelist: (settings.domainWhitelist || "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      branding: {
-        primaryColor: branding.primaryColor,
-        secondaryColor: branding.secondaryColor,
-        fontFamily: branding.fontFamily,
-        logoDataUrl: branding.logoDataUrl || null,
-        bubble: {
-          image: branding.chatBubbleImage || null,
-          color: branding.chatBubbleColor,
-          size: branding.chatBubbleSize,
-          position: branding.chatBubblePosition,
-        },
+  const options = {
+    mode: settings.mode ?? "basic",
+    language: settings.language ?? "en",
+    whitelist: (settings.domainWhitelist ?? "").split(",").map(s => s.trim()).filter(Boolean),
+    ui: {
+      font: branding.fontFamily ?? "Inter, system-ui, Arial, sans-serif",
+      logoDataUrl: branding.logoDataUrl ?? null,
+      bubble: {
+        image: branding.chatBubbleImage ?? null,
+        color: branding.chatBubbleColor ?? "#7aa8ff",
+        size: branding.chatBubbleSize ?? 64,
+        position: branding.chatBubblePosition ?? "bottom-right",
       },
-    };
+      colors: {
+        primary: branding.primaryColor ?? "#7aa8ff",
+        secondary: branding.secondaryColor ?? "#76c19a",
+      },
+    },
+  };
 
-    const jsonEncoded = encodeURIComponent(JSON.stringify(options));
+  const json = encodeURIComponent(JSON.stringify(options, null, 2));
 
-    // NOTE: Replace the src with your real CDN when ready
-    const snippet = `<script src="https://cdn.example.com/mybot-widget.js" async></script>
+  const snippet = `<script src="https://cdn.example.com/mybot-widget.js" async></script>
 <script>
   (function () {
     var mount = function () {
       if (window.MyBotWidget && window.MyBotWidget.mount) {
-        window.MyBotWidget.mount({ options: JSON.parse(decodeURIComponent("${jsonEncoded}")) });
+        window.MyBotWidget.mount({
+          options: JSON.parse(decodeURI("${json}"))
+        });
       } else {
         console.warn("MyBotWidget not available yet.");
       }
@@ -101,27 +66,14 @@ export default function EmbedGenerator() {
   })();
 </script>`;
 
-    return { snippet, prettyJson: JSON.stringify(options, null, 2) };
-  }, []);
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(snippet);
-    alert("Embed code copied!");
-  };
-
   return (
     <div className="admin-section">
-      <div className="card stack">
-        <div className="h-title">Embed Code (copy & paste)</div>
-        <pre style={{ whiteSpace: "pre-wrap", color: "black" }}>{snippet}</pre>
-        <button className="btn outline" onClick={copy}>Copy to Clipboard</button>
-      </div>
+      <div className="h-title">Embed</div>
 
-      <div className="card stack">
-        <div className="h-title">Options Preview</div>
-        <pre style={{ whiteSpace: "pre-wrap", color: "black" }}>{prettyJson}</pre>
+      <div className="card code-scroller">
+        {/* NOTE: pre-wrap + break-all ensures long lines wrap instead of running off-screen */}
+        <pre className="code-pre">{snippet}</pre>
       </div>
     </div>
   );
 }
-
