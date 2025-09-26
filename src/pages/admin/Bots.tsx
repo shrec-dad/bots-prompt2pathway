@@ -1,8 +1,9 @@
 // src/pages/admin/Bots.tsx
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { getBotSettings, setBotSettings, BotKey } from "@/lib/botSettings";
 
 type BotDef = {
-  key: string;
+  key: BotKey;
   name: string;
   gradient: string; // tailwind gradient classes
   emoji: string;
@@ -37,6 +38,25 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export default function Bots() {
+  // local view state for all card selects
+  const [modes, setModes] = useState<Record<BotKey, "basic" | "custom">>(() =>
+    Object.fromEntries(BOTS.map(b => [b.key, getBotSettings(b.key).mode])) as Record<
+      BotKey,
+      "basic" | "custom"
+    >
+  );
+
+  useEffect(() => {
+    // keep in sync if storage changes in another tab
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key?.startsWith("botSettings:")) return;
+      const key = e.key.split(":")[1] as BotKey;
+      setModes(prev => ({ ...prev, [key]: getBotSettings(key).mode }));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   return (
     <div className="w-full h-full">
       {/* Header + Create button */}
@@ -73,10 +93,21 @@ export default function Bots() {
               </div>
             </div>
 
-            <div className="mt-4 flex items-center justify-between">
-              <div className="text-sm font-semibold text-foreground/80">
-                Plan: <span className="font-extrabold">Basic / Custom</span>
-              </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-foreground/80">Plan:</div>
+              <select
+                className="ml-auto rounded-lg border bg-card px-3 py-2 text-sm font-bold shadow-sm"
+                value={modes[b.key]}
+                onChange={(e) => {
+                  const mode = e.target.value as "basic" | "custom";
+                  setModes((prev) => ({ ...prev, [b.key]: mode }));
+                  setBotSettings(b.key, { mode });
+                }}
+              >
+                <option value="basic">Basic</option>
+                <option value="custom">Custom</option>
+              </select>
+
               <button
                 className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
                 onClick={() => (window.location.href = "/admin/builder")}
