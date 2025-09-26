@@ -1,152 +1,110 @@
 // src/pages/admin/Dashboard.tsx
-import React from "react";
+import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 
-/** ---- mock data for the widgets (safe to swap later) ---- */
-const kpis = [
-  { label: "Conversations (7d)", value: "1,284", trend: [6, 7, 5, 9, 8, 10, 12] },
-  { label: "Leads / Tickets (7d)", value: "312", trend: [2, 3, 4, 4, 5, 6, 7] },
-  { label: "Avg. Response (sec)", value: "2.1s", trend: [3, 2, 2, 2, 3, 2, 2] },
-  { label: "CSAT (7d)", value: "94%", trend: [90, 92, 93, 92, 95, 94, 94] },
-];
-
-type BotRow = { bot: string; conversations: number; leads: number; plan: "Basic" | "Custom" };
-const topBots: BotRow[] = [
-  { bot: "Lead Qualifier", conversations: 486, leads: 210, plan: "Custom" },
-  { bot: "Appointment Booking", conversations: 392, leads: 74, plan: "Basic" },
-  { bot: "Customer Support", conversations: 248, leads: 18, plan: "Custom" },
-  { bot: "Waitlist", conversations: 101, leads: 10, plan: "Basic" },
-  { bot: "Social Media", conversations: 57, leads: 0, plan: "Basic" },
-];
-
-const recentActivity = [
-  { time: "2m ago", text: "New conversation started on /pricing" },
-  { time: "9m ago", text: "Lead captured (Customer Support)" },
-  { time: "27m ago", text: "Appointment request submitted" },
-  { time: "1h ago", text: "Knowledge base updated: “Refund policy”" },
-  { time: "3h ago", text: "Waitlist sign-up received" },
-];
-
-/** tiny inline sparkline (no deps) */
-function Sparkline({ points, stroke = "currentColor" }: { points: number[]; stroke?: string }) {
-  const max = Math.max(...points);
-  const min = Math.min(...points);
-  const w = 60;
-  const h = 24;
-  const dx = w / Math.max(1, points.length - 1);
-  const norm = (v: number) => {
-    if (max === min) return h / 2;
-    return h - ((v - min) / (max - min)) * h;
-  };
-  const d = points.map((p, i) => `${i === 0 ? "M" : "L"} ${i * dx} ${norm(p)}`).join(" ");
-
+// Tiny sparkline stub (keeps the look you already have)
+function MiniLine() {
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="opacity-90">
-      <path d={d} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" />
-    </svg>
+    <div className="h-10 w-16 rounded-xl ring-1 ring-border bg-card grid place-items-center">
+      <div className="h-[2px] w-10 bg-foreground/80 rounded" />
+    </div>
   );
 }
 
-/** CSV export for the Top Bots table */
-function exportBotsCsv(rows: BotRow[]) {
-  const header = ["Bot", "Conversations (7d)", "Leads/Tickets (7d)", "Plan"];
-  const body = rows.map((r) => [r.bot, String(r.conversations), String(r.leads), r.plan]);
-  const lines = [header, ...body].map((arr) => arr.map((v) => `"${v.replace(/"/g, '""')}"`).join(","));
-  const csv = lines.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "top-bots.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+function Delta({ value }: { value: number }) {
+  const up = value >= 0;
+  return (
+    <div
+      className={[
+        "text-xs font-bold px-2 py-0.5 rounded-full ring-1",
+        up ? "text-emerald-700 ring-emerald-400/60 bg-emerald-200/30" : "text-rose-700 ring-rose-400/60 bg-rose-200/30",
+      ].join(" ")}
+    >
+      {up ? "▲" : "▼"} {Math.abs(value).toFixed(1)}%
+      <span className="ml-1 text-foreground/70 font-semibold">vs last week</span>
+    </div>
+  );
+}
+
+type KPI = {
+  title: string;
+  value: string;
+  thisWeek: number;   // numeric for delta calc
+  lastWeek: number;   // numeric for delta calc
+  to: string;
+};
+
+function KPICard({ kpi }: { kpi: KPI }) {
+  const nav = useNavigate();
+  const delta = useMemo(() => {
+    const { thisWeek, lastWeek } = kpi;
+    if (lastWeek === 0) return 0;
+    return ((thisWeek - lastWeek) / Math.max(1, lastWeek)) * 100;
+  }, [kpi]);
+
+  return (
+    <button
+      onClick={() => nav(kpi.to)}
+      className="text-left rounded-2xl border bg-gradient-to-br from-indigo-200/40 via-blue-200/40 to-emerald-200/40 p-5 ring-1 ring-border hover:shadow-md transition cursor-pointer w-full"
+      aria-label={`Open details for ${kpi.title}`}
+    >
+      <div className="text-sm font-extrabold tracking-wide">{kpi.title}</div>
+      <div className="mt-2 text-3xl font-black leading-tight">{kpi.value}</div>
+      <div className="mt-3 flex items-center gap-3">
+        <MiniLine />
+        <Delta value={delta} />
+      </div>
+    </button>
+  );
 }
 
 export default function Dashboard() {
+  // Use whatever numbers you prefer here (wired later to real analytics)
+  const kpis: KPI[] = [
+    {
+      title: "Conversations (7d)",
+      value: "1,284",
+      thisWeek: 1284,
+      lastWeek: 1190,
+      to: "/admin/analytics",
+    },
+    {
+      title: "Leads / Tickets (7d)",
+      value: "312",
+      thisWeek: 312,
+      lastWeek: 330,
+      to: "/admin/clients",
+    },
+    {
+      title: "Avg. Response (sec)",
+      value: "2.1s",
+      thisWeek: 2.1,
+      lastWeek: 2.4,
+      to: "/admin/analytics",
+    },
+    {
+      // Spelled out so it’s clear:
+      title: "CSAT (Customer Satisfaction, 7d)",
+      value: "94%",
+      thisWeek: 94,
+      lastWeek: 92,
+      to: "/admin/analytics",
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Title bar – keeps your current feel */}
-      <div className="border-2 border-black rounded-xl p-6 bg-white">
-        <h1 className="text-2xl font-extrabold text-black">Dashboard</h1>
-        <p className="mt-2 text-black">
-          A quick snapshot of conversations, conversions, and activity.
+    <div className="w-full h-full">
+      <div className="rounded-2xl border bg-card p-5 mb-6">
+        <div className="text-2xl font-extrabold">Dashboard</div>
+        <p className="text-foreground/80 mt-1">
+          Welcome to your admin dashboard. Tap any card to dive deeper.
         </p>
       </div>
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         {kpis.map((k) => (
-          <div
-            key={k.label}
-            className="border-2 border-black rounded-xl p-4 bg-gradient-to-br from-violet-200 via-indigo-200 to-emerald-200"
-          >
-            <div className="text-xs font-bold uppercase text-black/80">{k.label}</div>
-            <div className="mt-1 text-2xl font-extrabold text-black">{k.value}</div>
-            <div className="mt-2 ring-1 ring-black/20 rounded-md bg-white/60 inline-flex px-2 py-1">
-              <Sparkline points={k.trend} />
-            </div>
-          </div>
+          <KPICard key={k.title} kpi={k} />
         ))}
-      </div>
-
-      {/* 2-column: Recent activity + Top bots */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Recent Activity */}
-        <div className="xl:col-span-1 border-2 border-black rounded-xl bg-white">
-          <div className="border-b-2 border-black px-4 py-3 bg-gradient-to-r from-purple-200 via-blue-200 to-emerald-200 rounded-t-[11px]">
-            <div className="font-extrabold text-black">Recent Activity</div>
-          </div>
-          <ul className="divide-y-2 divide-black/10">
-            {recentActivity.map((a, i) => (
-              <li key={i} className="px-4 py-3 flex items-start gap-3">
-                <span className="mt-1 text-sm font-bold text-black/70">•</span>
-                <div>
-                  <div className="text-sm font-semibold text-black">{a.text}</div>
-                  <div className="text-xs text-black/70">{a.time}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Top Bots table */}
-        <div className="xl:col-span-2 border-2 border-black rounded-xl overflow-hidden bg-white">
-          <div className="flex items-center justify-between px-4 py-3 border-b-2 border-black bg-gradient-to-r from-indigo-200 via-sky-200 to-emerald-200">
-            <div className="font-extrabold text-black">Top Bots This Week</div>
-            <button
-              onClick={() => exportBotsCsv(topBots)}
-              className="rounded-lg px-3 py-1.5 font-bold border-2 border-black bg-white hover:bg-black hover:text-white transition"
-            >
-              Export CSV
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="bg-black text-white">
-                <tr>
-                  <th className="text-left px-4 py-2 text-sm font-extrabold">Bot</th>
-                  <th className="text-left px-4 py-2 text-sm font-extrabold">Conversations (7d)</th>
-                  <th className="text-left px-4 py-2 text-sm font-extrabold">Leads/Tickets (7d)</th>
-                  <th className="text-left px-4 py-2 text-sm font-extrabold">Plan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topBots.map((r, i) => (
-                  <tr key={r.bot} className={i % 2 ? "bg-black/[0.03]" : "bg-white"}>
-                    <td className="px-4 py-2 font-extrabold text-black">{r.bot}</td>
-                    <td className="px-4 py-2 text-black">{r.conversations}</td>
-                    <td className="px-4 py-2 text-black">{r.leads}</td>
-                    <td className="px-4 py-2">
-                      <span className="rounded-md border-2 border-black px-2 py-0.5 text-xs font-extrabold bg-gradient-to-r from-indigo-200 to-emerald-200">
-                        {r.plan}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   );
