@@ -1,142 +1,113 @@
-// src/pages/admin/adminlayout.tsx
+// src/pages/admin/AdminLayout.tsx
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
-// Lucide icons — swap if you were using another set
-import {
-  LayoutDashboard,
-  Users,
-  Bot,
-  Puzzle,
-  BookOpen,
-  Inbox,
-  BarChart3,
-  Plug,
-  Palette,
-  Settings as SettingsIcon,
-  Eye,
-} from "lucide-react";
 
-/**
- * Classic Admin Layout:
- * - Sidebar with icons on the left.
- * - Scrollable main content on the right.
- * - Prevents pages from rendering at the bottom.
- */
-
-type NavItem = {
-  to: string;
-  label: string;
-  exact?: boolean;
-  Icon: React.ComponentType<{ size?: number; color?: string }>;
-};
-
-const navItems: NavItem[] = [
-  { to: "/admin", label: "Dashboard", exact: true, Icon: LayoutDashboard },
-  { to: "/admin/clients", label: "Clients", Icon: Users },
-  { to: "/admin/bots", label: "Bots", Icon: Bot },
-  { to: "/admin/builder", label: "Builder", Icon: Puzzle },
-  { to: "/admin/knowledge", label: "Knowledge", Icon: BookOpen },
-  { to: "/admin/nurture", label: "Nurture", Icon: Inbox },
-  { to: "/admin/analytics", label: "Analytics", Icon: BarChart3 },
-  { to: "/admin/integrations", label: "Integrations", Icon: Plug },
-  { to: "/admin/branding", label: "Branding", Icon: Palette },
-  { to: "/admin/settings", label: "Settings", Icon: SettingsIcon },
-  { to: "/admin/preview", label: "Preview", Icon: Eye },
-];
+const linkBase =
+  "block w-full rounded-lg px-3 py-2 font-semibold border-2 border-black bg-white hover:bg-neutral-50 transition";
+const linkActive =
+  "bg-gradient-to-r from-purple-200 via-blue-200 to-teal-200";
 
 export default function AdminLayout() {
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        background: "#fafafa",
-      }}
-    >
-      {/* Sidebar */}
-      <aside
-        style={{
-          width: 260,
-          flex: "0 0 260px",
-          borderRight: "2px solid #000",
-          background:
-            "linear-gradient(135deg, rgba(201,180,255,0.35), rgba(180,235,220,0.35))",
-          padding: 16,
-          position: "sticky",
-          top: 0,
-          alignSelf: "flex-start",
-          height: "100vh",
-          overflowY: "auto",
-        }}
-      >
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: "#333" }}>Lead Qualifier Pro</div>
-          <div style={{ fontSize: 26, fontWeight: 900, color: "#111" }}>
-            Admin
+    <div className="min-h-screen grid grid-cols-[260px,1fr]">
+      {/* Left sidebar */}
+      <aside className="border-r-2 border-black bg-white">
+        <div className="p-4">
+          <div className="mb-4 rounded-xl border-2 border-black bg-gradient-to-r from-purple-200 via-blue-200 to-teal-200 p-4">
+            <div className="text-xl font-extrabold text-black">Admin</div>
+            <div className="text-sm text-black/80">Multi-Bot Platform</div>
           </div>
-        </div>
 
-        <nav>
-          <ul
-            style={{
-              listStyle: "none",
-              margin: 0,
-              padding: 0,
-              display: "grid",
-              gap: 10,
-            }}
-          >
-            {navItems.map(({ to, label, exact, Icon }) => (
-              <li key={to}>
-                <NavLink
-                  to={to}
-                  end={exact as any}
-                  style={({ isActive }) => ({
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "12px 14px",
-                    border: "2px solid #000",
-                    borderRadius: 14,
-                    textDecoration: "none",
-                    color: "#000",
-                    background: isActive
-                      ? "linear-gradient(135deg, #dcd1ff, #c7f0e7)"
-                      : "#fff",
-                    fontWeight: 700,
-                  })}
-                >
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: 28,
-                      height: 28,
-                      border: "2px solid #000",
-                      borderRadius: 10,
-                      background: "#fff",
-                    }}
-                    aria-hidden="true"
-                  >
-                    <Icon size={16} color="#000" />
-                  </span>
-                  <span>{label}</span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
+          <nav className="space-y-2">
+            <NavLink
+              to="/admin"
+              end
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Dashboard
+            </NavLink>
+            <NavLink
+              to="/admin/bots"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Bots
+            </NavLink>
+            <NavLink
+              to="/admin/builder"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Builder
+            </NavLink>
+            <NavLink
+              to="/admin/branding"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Branding
+            </NavLink>
+            <NavLink
+              to="/admin/analytics"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Analytics
+            </NavLink>
+            <NavLink
+              to="/admin/integrations"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Integrations
+            </NavLink>
+            <NavLink
+              to="/admin/clients"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Clients
+            </NavLink>
+            <NavLink
+              to="/admin/nurture"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Nurture
+            </NavLink>
+            <NavLink
+              to="/admin/settings"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Settings
+            </NavLink>
+
+            {/* NEW: Preview in nav */}
+            <NavLink
+              to="/admin/preview"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Preview Widget
+            </NavLink>
+          </nav>
+        </div>
       </aside>
 
-      {/* Main content */}
-      <main
-        style={{
-          flex: 1,
-          minWidth: 0,
-          padding: 20,
-        }}
-      >
+      {/* Right content */}
+      <main className="p-6 bg-neutral-50">
         <Outlet />
       </main>
     </div>

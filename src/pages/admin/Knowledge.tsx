@@ -2,27 +2,22 @@
 import React from "react";
 import { useAdminStore } from "@/lib/AdminStore";
 
-type DocType = "PDF" | "Word" | "Excel";
-
 export default function Knowledge() {
-  const { knowledge = [], addKnowledgeDoc, removeKnowledgeDoc } = useAdminStore();
+  const { knowledge, addKnowledgeDoc, removeKnowledgeDoc } = useAdminStore();
 
   const onPickFiles = (files: FileList | null) => {
     if (!files) return;
     Array.from(files).forEach((f) => {
       const ext = f.name.toLowerCase().split(".").pop() || "";
-      const type: DocType =
-        ext === "pdf" ? "PDF" : ext === "xlsx" || ext === "xls" || ext === "csv" ? "Excel" : "Word";
-
-      // ✅ Backticks fixed + size label as a string to avoid TS shape mismatches
-      const sizeKb = Math.max(1, Math.round(f.size / 1024));
+      const type =
+        ext === "pdf" ? "PDF" : ext === "xlsx" || ext === "xls" ? "Excel" : "Word";
       addKnowledgeDoc({
         id: `${Date.now()}_${f.name}`,
         name: f.name,
-        type,
-        size: `${sizeKb} KB`,
+        type: type as any,
+        size: `${Math.max(1, Math.round(f.size / 1024))} KB`,
         uploadedAt: "just now",
-      } as any);
+      });
     });
   };
 
@@ -36,13 +31,16 @@ export default function Knowledge() {
         </p>
       </div>
 
-      {/* Upload Section */}
+      {/* Upload Section (darker pastel, strong outline) */}
       <div className="rounded-xl border-2 border-black p-6 bg-gradient-to-br from-violet-200 via-rose-200 to-emerald-200 shadow">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <div className="text-lg font-bold text-black">Upload Documents</div>
-            <div className="text-black">PDF, Word, Excel (placeholder only — wiring later).</div>
+            <div className="text-black">
+              PDF, Word, Excel (placeholder only — wiring later).
+            </div>
           </div>
+
           <div className="flex items-center gap-3">
             <label className="cursor-pointer rounded-lg border-2 border-black bg-white px-4 py-2 text-sm font-bold text-black shadow hover:bg-gray-100">
               + Upload
@@ -54,6 +52,7 @@ export default function Knowledge() {
                 onChange={(e) => onPickFiles(e.target.files)}
               />
             </label>
+
             <button
               type="button"
               disabled
@@ -81,7 +80,7 @@ export default function Knowledge() {
           </div>
         ) : (
           <ul className="divide-y-2 divide-black/20">
-            {knowledge.map((d: any) => (
+            {knowledge.map((d) => (
               <li
                 key={d.id}
                 className="flex flex-col items-start justify-between gap-3 py-4 md:flex-row md:items-center"
@@ -97,6 +96,7 @@ export default function Knowledge() {
                     </div>
                   </div>
                 </div>
+
                 <div className="flex items-center gap-2">
                   <button
                     disabled
@@ -119,3 +119,4 @@ export default function Knowledge() {
     </div>
   );
 }
+
