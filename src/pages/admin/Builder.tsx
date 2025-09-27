@@ -1,15 +1,16 @@
 // src/pages/admin/Builder.tsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
-  Node,
   Edge,
-  useNodesState,
-  useEdgesState,
-  OnNodesChange,
+  Node,
+  OnConnect,
   OnEdgesChange,
-  Connection,
+  OnNodesChange,
+  addEdge,
+  useEdgesState,
+  useNodesState,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -17,272 +18,251 @@ import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
-/* ------------------------ helpers: deep merge + overrides ------------------------ */
-function mergeDeep<T>(base: T, patch: Partial<T>): T {
-  if (!patch) return base;
+// --- helpers --------------------------------------------------------------
+
+type BotMode = "basic" | "custom";
+type NodeLike = Node & {
+  data?: Record<string, any>;
+  // our templates sometimes set a custom type like "message" | "input" | "choice" | "action"
+  // ReactFlow will gracefully render unknown types as "default"; the warnings are harmless.
+};
+
+const OV_KEY = (bot: string, mode: BotMode) => `botOverrides:${bot}_${mode}`;
+
+function deepMerge<T extends Record<string, any>>(base: T, patch: Partial<T>): T {
   const out: any = Array.isArray(base) ? [...(base as any)] : { ...(base as any) };
   for (const k in patch) {
-    const v: any = (patch as any)[k];
-    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = mergeDeep((out as any)[k], v);
-    else out[k] = v;
+    const v = (patch as any)[k];
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      out[k] = deepMerge(out[k] ?? {}, v as any);
+    } else {
+      out[k] = v;
+    }
   }
   return out;
 }
-const ovKey = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
-const getOverrides = (bot: string, mode: "basic" | "custom") => {
+
+function loadOverrides(bot: string, mode: BotMode): Record<string, any> {
   try {
-    const raw = localStorage.getItem(ovKey(bot, mode));
-    return raw ? (JSON.parse(raw) as Record<string, any>) : {};
-  } catch {
-    return {};
-  }
-};
-const setOverrides = (bot: string, mode: "basic" | "custom", next: Record<string, any>) => {
-  localStorage.setItem(ovKey(bot, mode), JSON.stringify(next));
-};
+    const raw = localStorage.getItem(OV_KEY(bot, mode));
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {};
+}
 
-/* ----------------------------- component: Builder ----------------------------- */
+function saveOverrides(bot: string, mode: BotMode, ov: Record<string, any>) {
+  localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(ov));
+}
+
+function applyOverrides(nodes: NodeLike[], ov: Record<string, any>): NodeLike[] {
+  return nodes.map((n) => {
+    const patch = ov[n.id];
+    if (!patch?.data) return n;
+    return { ...n, data: deepMerge(n.data ?? {}, patch.data) };
+  });
+}
+
+// --- component ------------------------------------------------------------
+
 export default function Builder() {
-  const { currentBot } = useAdminStore(); // "LeadQualifier" | "AppointmentBooking" | ...
-  const mode = getBotSettings(currentBot as any).mode as "basic" | "custom";
-  const tplKey = `${currentBot}_${mode}` as keyof typeof templates;
+  const { currentBot } = useAdminStore(); // e.g. "LeadQualifier"
+  const mode = useMemo(
+    () => (getBotSettings(currentBot as any).mode as BotMode) ?? "basic",
+    [currentBot]
+  );
 
-  const base = templates[tplKey];
-  const [overrides, setOv] = useState<Record<string, any>>(() => getOverrides(currentBot, mode));
+  const tplKey = `${currentBot}_${mode}`;
+  const base = templates[tplKey] ?? { nodes: [], edges: [] };
 
-  // apply overrides onto the template without mutating the template
-  const merged = useMemo(() => {
-    if (!base) return { nodes: [] as Node[], edges: [] as Edge[] };
-    const nodes = base.nodes.map((n: any) => {
-      const ov = overrides[n.id];
-      return ov ? { ...n, data: mergeDeep(n.data || {}, ov.data || {}) } : n;
-    });
-    const edges = base.edges as Edge[];
-    return { nodes: nodes as Node[], edges };
-  }, [base, overrides]);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(merged.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(merged.edges);
-
-  // keep canvas in sync if bot/mode or overrides change
-  useEffect(() => {
-    setNodes(merged.nodes);
-    setEdges(merged.edges);
-  }, [merged.nodes, merged.edges, setNodes, setEdges]);
-
-  /* ------------------------ selection managed by id ------------------------ */
+  // local state that we own (does not get blown away on keystrokes)
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState<NodeLike>([]);
+  const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [overrides, setOverridesState] = useState<Record<string, any>>({});
 
-  const handleNodeClick = useCallback((_evt: React.MouseEvent, node: Node) => {
-    setSelectedId(node.id);
+  // initialize once per (bot,mode)
+  useEffect(() => {
+    const ov = loadOverrides(currentBot, mode);
+    setOverridesState(ov);
+    setSelectedId(null);
+    setNodes(applyOverrides((base.nodes as NodeLike[]) ?? [], ov));
+    setEdges((base.edges as Edge[]) ?? []);
+  }, [tplKey, base.nodes, base.edges, currentBot, mode, setNodes, setEdges]);
+
+  // handlers that DO NOT re-init the graph
+  const onNodesChange: OnNodesChange = useCallback(
+    (changes) => onNodesChangeBase(changes),
+    [onNodesChangeBase]
+  );
+
+  const onEdgesChange: OnEdgesChange = useCallback(
+    (changes) => onEdgesChangeBase(changes),
+    [onEdgesChangeBase]
+  );
+
+  const onConnect: OnConnect = useCallback(
+    (connection) => setEdges((eds) => addEdge(connection, eds)),
+    []
+  );
+
+  const onNodeClick = useCallback((_: any, n: Node) => {
+    setSelectedId(n.id);
   }, []);
 
-  // ensure selection still valid if nodes change
-  useEffect(() => {
-    if (!selectedId) return;
-    const stillExists = nodes.some((n) => n.id === selectedId);
-    if (!stillExists) setSelectedId(null);
-  }, [nodes, selectedId]);
+  // selected node & convenience updaters
+  const selected = useMemo(
+    () => nodes.find((n) => n.id === selectedId) as NodeLike | undefined,
+    [nodes, selectedId]
+  );
 
-  /* ------------------------ editor form state per node ------------------------ */
-  type EditorState = {
-    title?: string;
-    text?: string;
-    label?: string;
-    placeholder?: string;
-    options?: string[]; // for "choice" nodes
-    to?: string;        // for "action" nodes
+  const patchSelectedData = (patch: Record<string, any>) => {
+    if (!selected) return;
+
+    // 1) update local nodes immediately (preserve selection)
+    setNodes((prev) =>
+      prev.map((n) => (n.id === selected.id ? { ...n, data: deepMerge(n.data ?? {}, patch) } : n))
+    );
+
+    // 2) update overrides in memory + persist
+    const nextOverrides = {
+      ...overrides,
+      [selected.id]: { data: deepMerge((overrides[selected.id]?.data ?? {}), patch) },
+    };
+    setOverridesState(nextOverrides);
+    saveOverrides(currentBot, mode, nextOverrides);
   };
 
-  const [editor, setEditor] = useState<EditorState>({});
+  // --- styling (subtle gradient + dotted background) ----------------------
+  const canvasClass =
+    "rounded-2xl border bg-[radial-gradient(ellipse_at_top_left,rgba(124,58,237,0.10),rgba(16,185,129,0.10))]";
 
-  // when selection changes, load current node data into the editor form
-  useEffect(() => {
-    if (!selectedId) {
-      setEditor({});
-      return;
-    }
-    const n = nodes.find((x) => x.id === selectedId);
-    if (!n) {
-      setEditor({});
-      return;
-    }
-    const d = (n.data || {}) as EditorState;
-    setEditor({
-      title: d.title || "",
-      text: d.text || "",
-      label: d.label || "",
-      placeholder: d.placeholder || "",
-      options: Array.isArray(d.options) ? d.options : [],
-      to: d.to || "",
-    });
-  }, [selectedId, nodes]);
+  // --- inline editor ------------------------------------------------------
+  const labelCls =
+    "text-xs font-bold uppercase tracking-wide text-foreground/80";
+  const inputCls =
+    "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-400/40";
 
-  // push form changes onto the selected node + persist overrides
-  const applyPatch = useCallback(
-    (patch: Partial<EditorState>) => {
-      if (!selectedId) return;
-
-      // 1) local form state (for smooth typing)
-      setEditor((prev) => ({ ...prev, ...patch }));
-
-      // 2) update nodes in place (preserve selection)
-      setNodes((prev) =>
-        prev.map((n) =>
-          n.id === selectedId ? { ...n, data: mergeDeep(n.data || {}, patch) } : n
-        )
+  const Editor = () => {
+    if (!selected) {
+      return (
+        <div className="text-sm text-foreground/70">
+          Select a node above to edit its text and labels.
+        </div>
       );
+    }
 
-      // 3) save overrides for this bot & mode
-      const nextOv = {
-        ...overrides,
-        [selectedId]: {
-          data: mergeDeep((overrides[selectedId]?.data || {}) as any, patch as any),
-        },
-      };
-      setOv(nextOv);
-      setOverrides(currentBot, mode, nextOv);
-    },
-    [selectedId, setNodes, overrides, currentBot, mode]
-  );
+    // Plain fields that cover the common node types we use in templates
+    const d = selected.data ?? {};
+    const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      patchSelectedData({ [k]: e.target.value });
 
-  /* ------------------------------ react-flow wiring ------------------------------ */
-  const handleConnect = useCallback((_c: Connection) => {
-    // You can enable manual edge creation later if you wish:
-    // setEdges((eds) => addEdge(c, eds));
-  }, []);
+    return (
+      <div className="space-y-4">
+        {/* Title / Label */}
+        <div className="space-y-1">
+          <div className={labelCls}>{d.title != null ? "Title" : "Label"}</div>
+          <input
+            className={inputCls}
+            value={String(d.title ?? d.label ?? "")}
+            onChange={(e) =>
+              patchSelectedData(d.title != null ? { title: e.target.value } : { label: e.target.value })
+            }
+            placeholder="Type here…"
+          />
+        </div>
 
-  /* ----------------------------------- UI ----------------------------------- */
-  const Card = ({ children }: { children: React.ReactNode }) => (
-    <div className="rounded-2xl border bg-card ring-1 ring-border">{children}</div>
-  );
+        {/* Text / Placeholder */}
+        {"text" in d || "placeholder" in d ? (
+          <div className="space-y-1">
+            <div className={labelCls}>{d.text != null ? "Text" : "Placeholder"}</div>
+            {d.text != null ? (
+              <textarea
+                className={inputCls}
+                rows={4}
+                value={String(d.text ?? "")}
+                onChange={set("text")}
+                placeholder="Message text…"
+              />
+            ) : (
+              <input
+                className={inputCls}
+                value={String(d.placeholder ?? "")}
+                onChange={set("placeholder")}
+                placeholder="e.g. you@domain.com"
+              />
+            )}
+          </div>
+        ) : null}
+
+        {/* Options (choice) */}
+        {Array.isArray(d.options) && (
+          <div className="space-y-1">
+            <div className={labelCls}>Options (one per line)</div>
+            <textarea
+              className={inputCls}
+              rows={5}
+              value={(d.options as string[]).join("\n")}
+              onChange={(e) =>
+                patchSelectedData({
+                  options: e.target.value
+                    .split("\n")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+              placeholder="Option A\nOption B\nOption C"
+            />
+          </div>
+        )}
+
+        {/* Action target (action node) */}
+        {"to" in d && (
+          <div className="space-y-1">
+            <div className={labelCls}>Email / Target</div>
+            <input
+              className={inputCls}
+              value={String(d.to ?? "")}
+              onChange={set("to")}
+              placeholder="admin@example.com"
+            />
+          </div>
+        )}
+
+        <div className="text-xs text-foreground/60">
+          Changes save automatically for this bot & mode.
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="w-full grid gap-4"
-         style={{ gridTemplateRows: "minmax(70vh, 70vh) auto" }}>
+    <div className="w-full space-y-4">
       {/* Canvas */}
-      <Card>
-        <div className="h-full">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange as OnNodesChange}
-            onEdgesChange={onEdgesChange as OnEdgesChange}
-            onConnect={handleConnect}
-            onNodeClick={handleNodeClick}
-            fitView
-            proOptions={{ hideAttribution: true }}
-          >
-            {/* A soft dotted background with a subtle brand-ish tint */}
-            <Background
-              variant="dots"
-              gap={24}
-              size={1.5}
-              color="rgba(60, 60, 120, 0.30)"
-            />
-            <Controls position="bottom-right" />
-          </ReactFlow>
-        </div>
-      </Card>
+      <div className={`${canvasClass} overflow-hidden`} style={{ height: 540 }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeClick={onNodeClick}
+          fitView
+          proOptions={{ hideAttribution: true }}
+          // nodeTypes={customNodeTypes} // (optional) if you add custom node components later
+          selectionOnDrag
+          panOnDrag
+        >
+          <Background variant="dots" gap={20} size={1.5} />
+          <Controls position="bottom-right" />
+          {/* <MiniMap />  // intentionally removed per your preference */}
+        </ReactFlow>
+      </div>
 
-      {/* Editor (shorter) */}
-      <Card>
-        <div className="p-4">
-          <div className="text-sm font-extrabold mb-3">
-            Edit Text <span className="font-normal">(per node)</span>
-          </div>
-
-          {!selectedId ? (
-            <div className="text-sm text-foreground/70">
-              Select a node above to edit its text and labels.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Title */}
-              <div>
-                <div className="text-xs font-bold uppercase text-foreground/80 mb-1">Title</div>
-                <input
-                  className="w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold"
-                  value={editor.title ?? ""}
-                  onChange={(e) => applyPatch({ title: e.target.value })}
-                  placeholder="Node title"
-                />
-              </div>
-
-              {/* Text (multi-line) */}
-              <div>
-                <div className="text-xs font-bold uppercase text-foreground/80 mb-1">Text</div>
-                <textarea
-                  className="w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold"
-                  rows={3}
-                  value={editor.text ?? ""}
-                  onChange={(e) => applyPatch({ text: e.target.value })}
-                  placeholder="Body text or prompt"
-                />
-              </div>
-
-              {/* Label */}
-              <div>
-                <div className="text-xs font-bold uppercase text-foreground/80 mb-1">Label</div>
-                <input
-                  className="w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold"
-                  value={editor.label ?? ""}
-                  onChange={(e) => applyPatch({ label: e.target.value })}
-                  placeholder="Field or button label"
-                />
-              </div>
-
-              {/* Placeholder */}
-              <div>
-                <div className="text-xs font-bold uppercase text-foreground/80 mb-1">Placeholder</div>
-                <input
-                  className="w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold"
-                  value={editor.placeholder ?? ""}
-                  onChange={(e) => applyPatch({ placeholder: e.target.value })}
-                  placeholder="Input placeholder"
-                />
-              </div>
-
-              {/* Options (for choice nodes) */}
-              <div>
-                <div className="text-xs font-bold uppercase text-foreground/80 mb-1">
-                  Options (one per line)
-                </div>
-                <textarea
-                  className="w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold"
-                  rows={4}
-                  value={(editor.options ?? []).join("\n")}
-                  onChange={(e) =>
-                    applyPatch({
-                      options: e.target
-                        .value
-                        .split("\n")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  placeholder={"Option A\nOption B\nOption C"}
-                />
-              </div>
-
-              {/* To / Email (for action nodes) */}
-              <div>
-                <div className="text-xs font-bold uppercase text-foreground/80 mb-1">Email / Target</div>
-                <input
-                  className="w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold"
-                  value={editor.to ?? ""}
-                  onChange={(e) => applyPatch({ to: e.target.value })}
-                  placeholder="admin@example.com or webhook target"
-                />
-              </div>
-
-              <div className="text-xs text-foreground/70">
-                Changes save automatically for this bot &amp; mode.
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
+      {/* Editor */}
+      <div className="rounded-2xl border bg-card p-4">
+        <div className="font-extrabold mb-2">Edit Text <span className="font-normal text-foreground/70">(per node)</span></div>
+        <Editor />
+      </div>
     </div>
   );
 }
