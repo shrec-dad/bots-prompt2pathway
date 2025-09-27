@@ -1,5 +1,5 @@
 // src/pages/admin/Builder.tsx
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -69,24 +69,13 @@ const nodeTypes = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Helpers: deep-merge + per-bot/mode overrides persisted to storage */
+/* Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
 type RFNode = Node & {
   type?: "default" | "input" | "output" | "group" | "message" | "choice" | "action";
   data?: any;
 };
-
-function mergeDeep<T>(base: T, patch: Partial<T>): T {
-  if (!patch) return base;
-  const out: any = Array.isArray(base) ? [...(base as any)] : { ...(base as any) };
-  for (const k in patch) {
-    const v: any = (patch as any)[k];
-    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = mergeDeep((out as any)[k], v);
-    else out[k] = v;
-  }
-  return out;
-}
 
 const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
 
@@ -98,8 +87,8 @@ function getOverrides(bot: string, mode: "basic" | "custom") {
   return {};
 }
 
-function setOverrides(bot: string, mode: "basic" | "custom", next: Record<string, any>) {
-  localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(next));
+function saveOverrides(bot: string, mode: "basic" | "custom", overrides: Record<string, any>) {
+  localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(overrides));
 }
 
 /* ------------------------------------------------------------------ */
@@ -112,41 +101,61 @@ export default function Builder() {
   const tplKey = `${currentBot}_${mode}`;
   const base = templates[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined;
 
-  // ---- Missing-template guard (so we don't render a blank canvas)
+  // Store overrides in state
+  const [overrides, setOverridesState] = useState<Record<string, any>>(() => 
+    getOverrides(currentBot, mode)
+  );
+
+  // ---- Missing-template guard
   if (!base) {
     return (
       <div className="rounded-2xl border bg-card p-6">
         <div className="text-lg font-extrabold mb-1">No flow template found</div>
         <div className="text-sm text-foreground/70">
           I couldn't find a template for <b>{currentBot}</b> in <b>{mode}</b> mode.&nbsp;
-          Make sure there is an entry in <code>templates</code> for{" "}
-          <code>{tplKey}</code>.
+          Make sure there is an entry in <code>templates</code> for <code>{tplKey}</code>.
         </div>
       </div>
     );
   }
 
-  // Per-bot/mode overrides - store as state
-  const [overrides, setOverridesState] = useState<Record<string, any>>(() => 
-    getOverrides(currentBot, mode)
-  );
-
-  // Apply overrides to the base template to get initial nodes
-  const initialNodes = useMemo(() => {
-    return base.nodes.map((n) => {
-      const o = overrides[n.id];
-      return o ? { ...n, data: mergeDeep(n.data || {}, o.data || {}) } : n;
+  // Merge base template with overrides
+  const getInitialNodes = () => {
+    return base.nodes.map((baseNode) => {
+      const override = overrides[baseNode.id];
+      if (override && override.data) {
+        return {
+          ...baseNode,
+          data: { ...(baseNode.data || {}), ...(override.data || {}) }
+        };
+      }
+      return baseNode;
     });
-  }, [base.nodes, overrides]);
+  };
 
-  // React Flow state - initialize with merged nodes
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  // React Flow state
+  const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(base.edges);
 
   // Selection state
   const [selectedId, setSelectedId] = useState<string | null>(null);
   
-  // Find selected node from current nodes state
+  // Local form state for the editor (this prevents the re-render issues)
+  const [editorValues, setEditorValues] = useState<any>({});
+
+  // When selection changes, populate editor values from the selected node
+  useEffect(() => {
+    if (selectedId) {
+      const node = nodes.find(n => n.id === selectedId);
+      if (node) {
+        setEditorValues(node.data || {});
+      }
+    } else {
+      setEditorValues({});
+    }
+  }, [selectedId, nodes]);
+
+  // Get selected node
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
     [nodes, selectedId]
@@ -162,65 +171,56 @@ export default function Builder() {
     setEdges((eds) => addEdge(connection, eds));
   }, [setEdges]);
 
-  // Save editor changes
-  const saveField = useCallback((fieldName: string, value: any) => {
-    if (!selectedId) return;
-    
-    // Create the patch object
-    const patch = { [fieldName]: value };
-    
-    // Update nodes state immediately for UI responsiveness
+  // Update local editor state
+  const updateEditorValue = (field: string, value: any) => {
+    setEditorValues(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Save changes (called on blur or with debounce)
+  const saveChanges = useCallback(() => {
+    if (!selectedId || !editorValues) return;
+
+    // Update nodes
     setNodes((prevNodes) =>
       prevNodes.map((node) => {
         if (node.id === selectedId) {
           return {
             ...node,
-            data: {
-              ...(node.data || {}),
-              ...patch
-            }
+            data: { ...editorValues }
           };
         }
         return node;
       })
     );
-    
-    // Update overrides for persistence
-    setOverridesState((prevOverrides) => {
-      const currentOverride = prevOverrides[selectedId] || {};
-      const newOverrides = {
-        ...prevOverrides,
-        [selectedId]: { 
-          data: { 
-            ...(currentOverride.data || {}), 
-            ...patch 
-          } 
-        },
-      };
-      
-      // Save to localStorage
-      setOverrides(currentBot, mode, newOverrides);
-      
-      return newOverrides;
-    });
-  }, [selectedId, currentBot, mode, setNodes]);
+
+    // Update and persist overrides
+    const newOverrides = {
+      ...overrides,
+      [selectedId]: { data: editorValues }
+    };
+    setOverridesState(newOverrides);
+    saveOverrides(currentBot, mode, newOverrides);
+  }, [selectedId, editorValues, currentBot, mode, setNodes, overrides]);
 
   // Small label helper
   const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-foreground/80 mb-1">{children}</div>
+    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
   );
 
-  // Side editor UI (per node type)
+  // Side editor UI
   const Editor = () => {
     if (!selected) {
       return (
-        <div className="text-sm text-foreground/70">
+        <div className="text-sm text-purple-600">
           Select a node above to edit its text and labels.
         </div>
       );
     }
 
-    const common = "w-full rounded-lg border bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400";
+    const inputClass = "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
     if (selected.type === "message" || selected.type === "default" || !selected.type) {
       return (
@@ -228,19 +228,21 @@ export default function Builder() {
           <div>
             <FieldLabel>Title</FieldLabel>
             <input
-              className={common}
-              value={selected.data?.title || ""}
-              onChange={(e) => saveField("title", e.target.value)}
+              className={inputClass}
+              value={editorValues.title || ""}
+              onChange={(e) => updateEditorValue("title", e.target.value)}
+              onBlur={saveChanges}
               placeholder="Enter title..."
             />
           </div>
           <div>
             <FieldLabel>Text</FieldLabel>
             <textarea
-              className={common}
+              className={inputClass}
               rows={4}
-              value={selected.data?.text || ""}
-              onChange={(e) => saveField("text", e.target.value)}
+              value={editorValues.text || ""}
+              onChange={(e) => updateEditorValue("text", e.target.value)}
+              onBlur={saveChanges}
               placeholder="Enter message text..."
             />
           </div>
@@ -254,18 +256,20 @@ export default function Builder() {
           <div>
             <FieldLabel>Label</FieldLabel>
             <input
-              className={common}
-              value={selected.data?.label || ""}
-              onChange={(e) => saveField("label", e.target.value)}
+              className={inputClass}
+              value={editorValues.label || ""}
+              onChange={(e) => updateEditorValue("label", e.target.value)}
+              onBlur={saveChanges}
               placeholder="Enter label..."
             />
           </div>
           <div>
             <FieldLabel>Placeholder</FieldLabel>
             <input
-              className={common}
-              value={selected.data?.placeholder || ""}
-              onChange={(e) => saveField("placeholder", e.target.value)}
+              className={inputClass}
+              value={editorValues.placeholder || ""}
+              onChange={(e) => updateEditorValue("placeholder", e.target.value)}
+              onBlur={saveChanges}
               placeholder="Enter placeholder text..."
             />
           </div>
@@ -274,22 +278,23 @@ export default function Builder() {
     }
 
     if (selected.type === "choice") {
-      const options: string[] = selected.data?.options || [];
+      const options = editorValues.options || [];
       return (
         <div className="space-y-3">
           <div>
             <FieldLabel>Label</FieldLabel>
             <input
-              className={common}
-              value={selected.data?.label || ""}
-              onChange={(e) => saveField("label", e.target.value)}
+              className={inputClass}
+              value={editorValues.label || ""}
+              onChange={(e) => updateEditorValue("label", e.target.value)}
+              onBlur={saveChanges}
               placeholder="Enter label..."
             />
           </div>
           <div>
             <FieldLabel>Options (one per line)</FieldLabel>
             <textarea
-              className={common}
+              className={inputClass}
               rows={5}
               value={options.join("\n")}
               onChange={(e) => {
@@ -297,8 +302,9 @@ export default function Builder() {
                   .split("\n")
                   .map((s) => s.trim())
                   .filter(Boolean);
-                saveField("options", newOptions);
+                updateEditorValue("options", newOptions);
               }}
+              onBlur={saveChanges}
               placeholder="Option 1&#10;Option 2&#10;Option 3"
             />
           </div>
@@ -312,18 +318,20 @@ export default function Builder() {
           <div>
             <FieldLabel>Label</FieldLabel>
             <input
-              className={common}
-              value={selected.data?.label || ""}
-              onChange={(e) => saveField("label", e.target.value)}
+              className={inputClass}
+              value={editorValues.label || ""}
+              onChange={(e) => updateEditorValue("label", e.target.value)}
+              onBlur={saveChanges}
               placeholder="Enter label..."
             />
           </div>
           <div>
             <FieldLabel>Email / Target</FieldLabel>
             <input
-              className={common}
-              value={selected.data?.to || ""}
-              onChange={(e) => saveField("to", e.target.value)}
+              className={inputClass}
+              value={editorValues.to || ""}
+              onChange={(e) => updateEditorValue("to", e.target.value)}
+              onBlur={saveChanges}
               placeholder="email@example.com"
             />
           </div>
@@ -338,7 +346,7 @@ export default function Builder() {
     <div className="w-full h-full grid grid-rows-[1fr_auto] gap-4">
       {/* Canvas wrapper with beautiful pastel gradient */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
-        {/* React Flow container with pastel background */}
+        {/* React Flow container */}
         <div
           className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
           style={{ 
@@ -373,15 +381,23 @@ export default function Builder() {
         </div>
       </div>
 
-      {/* Side editor box with matching pastel theme */}
+      {/* Side editor box */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg">
-        <div className="text-sm font-extrabold mb-2 text-purple-900">
+        <div className="text-sm font-extrabold mb-3 text-purple-900">
           Edit Text <span className="font-normal text-purple-700">(per node)</span>
         </div>
         <Editor />
         {selected && (
-          <div className="mt-3 text-xs text-purple-600">
-            Changes save automatically for this bot (<b>{currentBot}</b>) in <b>{mode}</b> mode.
+          <div className="mt-4 space-y-2">
+            <button
+              onClick={saveChanges}
+              className="w-full py-2 px-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-semibold text-sm"
+            >
+              Save Changes
+            </button>
+            <div className="text-xs text-purple-600 text-center">
+              Changes auto-save when you click away from a field
+            </div>
           </div>
         )}
       </div>
