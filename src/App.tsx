@@ -1,8 +1,7 @@
 // src/App.tsx
 import React from "react";
-import AppRoutes from "./routes"; // this file must NOT create a BrowserRouter
+import AppRoutes from "./routes";
 
 export default function App() {
-  // App is now a thin shell that renders your route tree.
   return <AppRoutes />;
 }
