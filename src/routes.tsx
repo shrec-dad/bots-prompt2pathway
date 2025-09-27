@@ -2,12 +2,10 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
-// Public pages
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import Widget from "@/pages/Widget";
 
-// Admin shell + pages
 import AdminLayout from "@/pages/admin/AdminLayout";
 import Dashboard from "@/pages/admin/Dashboard";
 import Bots from "@/pages/admin/Bots";
@@ -29,7 +27,12 @@ export default function AppRoutes() {
 
       {/* Admin */}
       <Route path="/admin" element={<AdminLayout />}>
+        {/* index renders Dashboard at /admin */}
         <Route index element={<Dashboard />} />
+
+        {/* alias so /admin/dashboard also works */}
+        <Route path="dashboard" element={<Dashboard />} />
+
         <Route path="bots" element={<Bots />} />
         <Route path="builder" element={<Builder />} />
         <Route path="branding" element={<Branding />} />
@@ -41,7 +44,7 @@ export default function AppRoutes() {
         <Route path="preview" element={<Preview />} />
       </Route>
 
-      {/* Optional redirect helper */}
+      {/* legacy redirect (optional) */}
       <Route path="/admin/preview/*" element={<Navigate to="/admin/preview" replace />} />
 
       {/* 404 */}
