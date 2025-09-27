@@ -1,113 +1,41 @@
 // src/pages/admin/AdminLayout.tsx
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { LayoutDashboard, Users, Bot, Puzzle, Book, Settings, Eye } from "lucide-react";
 
-const linkBase =
-  "block w-full rounded-lg px-3 py-2 font-semibold border-2 border-black bg-white hover:bg-neutral-50 transition";
-const linkActive =
-  "bg-gradient-to-r from-purple-200 via-blue-200 to-teal-200";
+const NavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => (
+  <NavLink
+    to={to}
+    className={({ isActive }) =>
+      `flex items-center gap-3 rounded-2xl border-2 border-black px-4 py-3 transition
+       ${isActive ? "bg-gradient-to-r from-purple-200 via-indigo-200 to-teal-200" : "bg-white hover:bg-black/5"}`
+    }
+  >
+    <Icon className="w-5 h-5" />
+    <span className="font-semibold">{label}</span>
+  </NavLink>
+);
 
 export default function AdminLayout() {
   return (
-    <div className="min-h-screen grid grid-cols-[260px,1fr]">
-      {/* Left sidebar */}
-      <aside className="border-r-2 border-black bg-white">
-        <div className="p-4">
-          <div className="mb-4 rounded-xl border-2 border-black bg-gradient-to-r from-purple-200 via-blue-200 to-teal-200 p-4">
-            <div className="text-xl font-extrabold text-black">Admin</div>
-            <div className="text-sm text-black/80">Multi-Bot Platform</div>
-          </div>
-
-          <nav className="space-y-2">
-            <NavLink
-              to="/admin"
-              end
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Dashboard
-            </NavLink>
-            <NavLink
-              to="/admin/bots"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Bots
-            </NavLink>
-            <NavLink
-              to="/admin/builder"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Builder
-            </NavLink>
-            <NavLink
-              to="/admin/branding"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Branding
-            </NavLink>
-            <NavLink
-              to="/admin/analytics"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Analytics
-            </NavLink>
-            <NavLink
-              to="/admin/integrations"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Integrations
-            </NavLink>
-            <NavLink
-              to="/admin/clients"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Clients
-            </NavLink>
-            <NavLink
-              to="/admin/nurture"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Nurture
-            </NavLink>
-            <NavLink
-              to="/admin/settings"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Settings
-            </NavLink>
-
-            {/* NEW: Preview in nav */}
-            <NavLink
-              to="/admin/preview"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Preview Widget
-            </NavLink>
-          </nav>
+    <div className="min-h-screen grid md:grid-cols-[260px_1fr]">
+      <aside className="p-4 space-y-3 border-r-2 border-black">
+        <div className="rounded-2xl p-4 border-2 border-black bg-gradient-to-r from-purple-200 via-indigo-200 to-teal-200">
+          <div className="text-xl font-black">Admin</div>
+          <div className="text-sm opacity-80">Multi-Bot Platform</div>
         </div>
+
+        <NavItem to="/admin" icon={LayoutDashboard} label="Dashboard" />
+        <NavItem to="/admin/clients" icon={Users} label="Clients" />
+        <NavItem to="/admin/bots" icon={Bot} label="Bots" />
+        <NavItem to="/admin/builder" icon={Puzzle} label="Builder" />
+        <NavItem to="/admin/knowledge" icon={Book} label="Knowledge" />
+        <NavItem to="/admin/nurture" icon={Book} label="Nurture" />
+        <NavItem to="/admin/settings" icon={Settings} label="Settings" />
+        <NavItem to="/admin/preview" icon={Eye} label="Preview" />
       </aside>
 
-      {/* Right content */}
-      <main className="p-6 bg-neutral-50">
+      <main className="p-4 md:p-6">
         <Outlet />
       </main>
     </div>
