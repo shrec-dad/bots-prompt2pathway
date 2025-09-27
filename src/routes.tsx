@@ -2,14 +2,11 @@
 import React from "react";
 import { createBrowserRouter } from "react-router-dom";
 
-// Admin shell (your left-nav + right content)
 import AdminLayout from "./pages/admin/adminlayout";
 
-// Public pages
 import Home from "./pages/Index";
 import Widget from "./pages/Widget";
 
-// Admin pages
 import AdminDashboard from "./pages/admin/Index";
 import Clients from "./pages/admin/Clients";
 import Bots from "./pages/admin/Bots";
@@ -24,24 +21,22 @@ import Preview from "./pages/admin/Preview";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Home /> },
-
   {
     path: "/admin",
     element: <AdminLayout />,
     children: [
-      { index: true, element: <AdminDashboard /> },   // /admin
-      { path: "clients", element: <Clients /> },      // /admin/clients
-      { path: "bots", element: <Bots /> },            // /admin/bots
-      { path: "builder", element: <Builder /> },      // /admin/builder
-      { path: "knowledge", element: <Knowledge /> },  // ✅ /admin/knowledge
-      { path: "nurture", element: <Nurture /> },      // /admin/nurture
-      { path: "branding", element: <Branding /> },    // /admin/branding
-      { path: "analytics", element: <Analytics /> },  // /admin/analytics
-      { path: "integrations", element: <Integrations /> }, // /admin/integrations
-      { path: "settings", element: <Settings /> },    // /admin/settings
-      { path: "preview", element: <Preview /> },      // /admin/preview
+      { index: true, element: <AdminDashboard /> },
+      { path: "clients", element: <Clients /> },
+      { path: "bots", element: <Bots /> },
+      { path: "builder", element: <Builder /> },
+      { path: "knowledge", element: <Knowledge /> },   // ✅ this route
+      { path: "nurture", element: <Nurture /> },
+      { path: "branding", element: <Branding /> },
+      { path: "analytics", element: <Analytics /> },
+      { path: "integrations", element: <Integrations /> },
+      { path: "settings", element: <Settings /> },
+      { path: "preview", element: <Preview /> },
     ],
   },
-
   { path: "/widget", element: <Widget /> },
 ]);
