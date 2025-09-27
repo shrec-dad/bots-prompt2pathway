@@ -1,65 +1,193 @@
 // src/pages/admin/Preview.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
 
-const prettyName: Record<string, string> = {
-  "lead-qualifier": "Lead Qualifier",
-  "appointment-bot": "Appointment Booking",
-  "customer-support": "Customer Support",
-  "waitlist-bot": "Waitlist",
-  "social-bot": "Social Media",
-};
+/** Small palette helper so we match the rest of your app */
+const card = "rounded-2xl border-[2px] border-black/80 shadow-[0_6px_0_#000] bg-white";
+const grad = "bg-[linear-gradient(135deg,#f7d7ff_0%,#dfe4ff_40%,#c8f4ea_100%)]";
+
+/** The faux bot modal we preview when the bubble is clicked */
+function BotModal({
+  open,
+  onClose,
+  title,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-10 flex items-center justify-center"
+      style={{ pointerEvents: "none" }} // let the overlay pass clicks except on the modal
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/30"
+        onClick={onClose}
+        style={{ pointerEvents: "auto" }}
+      />
+
+      {/* Modal */}
+      <div
+        className={`${card} ${grad}`}
+        style={{
+          width: 740,
+          maxWidth: "92vw",
+          pointerEvents: "auto",
+        }}
+      >
+        {/* Title bar */}
+        <div className="relative px-6 py-4 rounded-t-2xl">
+          <div className="font-extrabold text-lg">Quick intake to match you with the right plan</div>
+          {/* progress */}
+          <div className="mt-3 h-2 w-full rounded-full bg-black/10 overflow-hidden">
+            <div className="h-full w-1/3 bg-black/50 rounded-full" />
+          </div>
+
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 h-8 w-8 grid place-items-center rounded-full border-2 border-black bg-white hover:bg-black hover:text-white transition-colors"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-8 pb-8 pt-6">
+          <div className="text-6xl text-center select-none">👋</div>
+          <h2 className="mt-4 text-center text-4xl font-extrabold">
+            Welcome to the Waitlist
+          </h2>
+          <p className="mt-4 text-center text-[18px] text-black/70">
+            I’ll ask a few quick questions to help our team help you.
+          </p>
+          <p className="mt-2 text-center text-black/60">
+            Press <span className="font-bold">Enter</span> to continue.
+          </p>
+
+          {/* Actions */}
+          <div className="mt-8 flex items-center justify-between">
+            <button
+              className="px-6 py-3 rounded-2xl border-2 border-black bg-white text-lg font-bold shadow-[0_4px_0_#000] active:translate-y-[2px] active:shadow-[0_2px_0_#000]"
+              onClick={onClose}
+            >
+              Close
+            </button>
+
+            <button
+              className="px-8 py-3 rounded-2xl border-2 border-black bg-[#b8b9ff] text-lg font-bold shadow-[0_4px_0_#000] active:translate-y-[2px] active:shadow-[0_2px_0_#000]"
+              onClick={onClose}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * AutoScale wraps children and scales them down to fit the container when needed.
+ * This keeps the modal from overflowing the preview canvas.
+ */
+function AutoScale({
+  children,
+  padding = 24,
+}: {
+  children: React.ReactNode;
+  padding?: number;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const ro = new ResizeObserver(() => {
+      const c = containerRef.current;
+      const d = contentRef.current;
+      if (!c || !d) return;
+
+      const cw = c.clientWidth - padding * 2;
+      const ch = c.clientHeight - padding * 2;
+      const dw = d.scrollWidth;
+      const dh = d.scrollHeight;
+
+      const next = Math.min(1, cw / dw, ch / dh);
+      setScale(Number.isFinite(next) ? next : 1);
+    });
+
+    if (containerRef.current) ro.observe(containerRef.current);
+    if (contentRef.current) ro.observe(contentRef.current);
+    return () => ro.disconnect();
+  }, [padding]);
+
+  return (
+    <div ref={containerRef} className="relative h-full w-full overflow-hidden">
+      <div
+        ref={contentRef}
+        className="absolute left-1/2 top-1/2"
+        style={{
+          transform: `translate(-50%, -50%) scale(${scale})`,
+          transformOrigin: "center center",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function Preview() {
+  // Controls
   const [botId, setBotId] = useState("waitlist-bot");
   const [mode, setMode] = useState<"popup" | "inline" | "sidebar">("popup");
   const [position, setPosition] = useState<"bottom-right" | "bottom-left">("bottom-right");
-  const [color, setColor] = useState<string>("#b7a6ff"); // pastel violet
-  const [size, setSize] = useState<number>(64);
+  const [color, setColor] = useState("#b392ff");
+  const [size, setSize] = useState(64);
   const [image, setImage] = useState<string>("");
-  const [open, setOpen] = useState<boolean>(true);
 
-  // new: editable welcome copy
-  const [welcomeTitle, setWelcomeTitle] = useState<string>(
-    `Welcome to the ${prettyName[botId] ?? "Bot"}`
-  );
-  const [welcomeSub, setWelcomeSub] = useState<string>(
-    "I’ll ask a few quick questions to help our team help you."
-  );
+  // Bubble -> modal
+  const [open, setOpen] = useState(false);
 
-  // keep title synced when bot changes (only if user didn’t customize)
-  useMemo(() => {
-    setWelcomeTitle((prev) =>
-      prev.startsWith("Welcome to") ? `Welcome to the ${prettyName[botId] ?? "Bot"}` : prev
-    );
-  }, [botId]);
+  // Make sure Preview page has a nice gradient background
+  const wrapperGrad = useMemo(
+    () =>
+      "bg-[linear-gradient(135deg,#ffeef8_0%,#f3e7fc_25%,#e7f0ff_50%,#e7fcf7_75%,#fff9e7_100%)]",
+    []
+  );
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-pink-50 via-purple-50 to-indigo-50 p-4 shadow-md">
-        <div className="text-lg font-extrabold mb-2">Widget Preview</div>
-        <p className="text-sm text-foreground/70">
-          Tune the widget and dialog copy. Click the bubble to open/close the modal.
+    <div className={`p-4 md:p-6 ${wrapperGrad}`}>
+      {/* Title */}
+      <div className={`${card} ${grad} p-5 mb-4`}>
+        <h1 className="text-2xl font-extrabold">Widget Preview</h1>
+        <p className="text-black/70 mt-1">
+          Tune the widget settings and see exactly what a customer will see.
         </p>
       </div>
 
       {/* Controls */}
-      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-4 shadow-md">
-        <div className="grid md:grid-cols-2 gap-4">
-          <label className="text-sm font-semibold">
-            Bot ID
+      <div className={`${card} ${grad} p-4 mb-5`}>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label className="block text-xs font-bold uppercase mb-1">Bot ID</label>
             <input
-              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border-2 border-black px-3 py-2"
               value={botId}
               onChange={(e) => setBotId(e.target.value)}
-              placeholder="waitlist-bot"
             />
-          </label>
+          </div>
 
-          <label className="text-sm font-semibold">
-            Mode
+          <div>
+            <label className="block text-xs font-bold uppercase mb-1">Mode</label>
             <select
-              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border-2 border-black px-3 py-2"
               value={mode}
               onChange={(e) => setMode(e.target.value as any)}
             >
@@ -67,145 +195,107 @@ export default function Preview() {
               <option value="inline">inline</option>
               <option value="sidebar">sidebar</option>
             </select>
-          </label>
+          </div>
 
-          <label className="text-sm font-semibold">
-            Position
+          <div>
+            <label className="block text-xs font-bold uppercase mb-1">Position</label>
             <select
-              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border-2 border-black px-3 py-2"
               value={position}
               onChange={(e) => setPosition(e.target.value as any)}
             >
               <option value="bottom-right">bottom-right</option>
               <option value="bottom-left">bottom-left</option>
             </select>
-          </label>
+          </div>
 
-          <label className="text-sm font-semibold">
-            Color
+          <div>
+            <label className="block text-xs font-bold uppercase mb-1">Color</label>
             <input
-              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
               type="color"
+              className="h-10 w-full rounded-lg border-2 border-black p-1"
               value={color}
               onChange={(e) => setColor(e.target.value)}
             />
-          </label>
+          </div>
 
-          <label className="text-sm font-semibold">
-            Size (px)
+          <div>
+            <label className="block text-xs font-bold uppercase mb-1">Size (px)</label>
             <input
-              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
               type="number"
-              min={44}
-              max={120}
+              min={48}
+              max={96}
+              className="w-full rounded-lg border-2 border-black px-3 py-2"
               value={size}
-              onChange={(e) => setSize(parseInt(e.target.value || "64", 10))}
+              onChange={(e) => setSize(Number(e.target.value))}
             />
-          </label>
+          </div>
 
-          <label className="text-sm font-semibold">
-            Bubble Image URL (optional)
+          <div>
+            <label className="block text-xs font-bold uppercase mb-1">
+              Bubble Image URL (optional)
+            </label>
             <input
-              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border-2 border-black px-3 py-2"
+              placeholder="https://example.com/icon.png"
               value={image}
               onChange={(e) => setImage(e.target.value)}
-              placeholder="https://example.com/icon.png"
             />
-          </label>
-        </div>
-
-        {/* Copy overrides */}
-        <div className="mt-4 grid md:grid-cols-2 gap-4">
-          <label className="text-sm font-semibold">
-            Welcome Title
-            <input
-              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
-              value={welcomeTitle}
-              onChange={(e) => setWelcomeTitle(e.target.value)}
-            />
-          </label>
-          <label className="text-sm font-semibold">
-            Welcome Subtitle
-            <input
-              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
-              value={welcomeSub}
-              onChange={(e) => setWelcomeSub(e.target.value)}
-            />
-          </label>
+          </div>
         </div>
       </div>
 
-      {/* Live Preview area */}
-      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 p-4 shadow-md min-h-[60vh] relative overflow-hidden">
-        {/* The modal */}
-        {open && (
-          <div className="absolute inset-0 flex items-center justify-center p-3">
-            <div
-              className="
-                w-[92vw] max-w-[520px]
-                rounded-2xl border-2 border-black/70 bg-white shadow-2xl
-                overflow-hidden
-              "
-            >
-              {/* header */}
-              <div className="bg-gradient-to-r from-purple-300 via-indigo-300 to-teal-200 text-black/80 font-semibold px-4 py-3 flex items-center justify-between">
-                <span className="truncate">
-                  Quick intake to match you with the right plan
-                </span>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="w-8 h-8 rounded-full border-2 border-black/70 bg-white hover:bg-black/5 flex items-center justify-center"
-                  aria-label="Close"
-                >
-                  ✕
-                </button>
-              </div>
+      {/* Live Preview */}
+      <div className={`${card} p-0 overflow-hidden`}>
+        <div className="px-5 pt-4 pb-3 border-b-[2px] border-black/80">
+          <div className="font-extrabold">Live Preview</div>
+        </div>
 
-              {/* progress */}
-              <div className="px-4 pt-3">
-                <div className="h-2 rounded-full bg-black/10 overflow-hidden">
-                  <div className="h-full w-1/3 bg-black/70" />
-                </div>
-              </div>
-
-              {/* body */}
-              <div className="px-6 sm:px-8 py-8 text-center">
-                <div className="text-5xl mb-4">👋</div>
-                <h2 className="text-2xl sm:text-3xl font-black text-black tracking-tight mb-3">
-                  {welcomeTitle}
-                </h2>
-                <p className="text-base sm:text-lg text-black/70">{welcomeSub}</p>
-                <p className="text-sm text-black/60 mt-4">Press <b>Enter</b> to continue.</p>
-              </div>
-
-              {/* footer */}
-              <div className="px-6 py-5 flex items-center justify-between bg-black/5">
-                <button
-                  onClick={() => setOpen(false)}
-                  className="px-5 py-3 rounded-xl border-2 border-black bg-white font-bold hover:bg-black/5"
-                >
-                  Close
-                </button>
-                <button className="px-6 py-3 rounded-xl border-2 border-black bg-indigo-300 font-bold hover:bg-indigo-200">
-                  Next
-                </button>
-              </div>
+        {/* Canvas */}
+        <div
+          className={`${grad}`}
+          style={{
+            position: "relative",
+            height: "72vh",         // plenty of room so the modal isn’t clipped
+            maxHeight: "calc(100vh - 220px)",
+          }}
+        >
+          {/* Scale-to-fit layer */}
+          <AutoScale padding={16}>
+            <div className="relative" style={{ width: 960, height: 640 }}>
+              {/* This is where the modal renders and scales */}
+              <BotModal open={open} onClose={() => setOpen(false)} title="Welcome" />
             </div>
-          </div>
-        )}
+          </AutoScale>
 
-        {/* Bubble you can click to open again */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute right-4 bottom-4 pointer-events-auto">
-            <div onClick={() => setOpen(true)}>
-              <ChatWidget
-                botId={botId}
-                mode="popup"
-                position={position}
-                color={color}
-                size={size}
-                image={image || undefined}
-              />
+          {/* Bubble inside the preview canvas so it stays within the box */}
+          <div className="absolute inset-0">
+            <div className="relative h-full w-full">
+              <div className="absolute bottom-4 right-4">
+                {mode === "popup" && (
+                  <div onClick={() => setOpen(true)}>
+                    <ChatWidget
+                      botId={botId}
+                      mode="popup"
+                      position={position}
+                      color={color}
+                      size={size}
+                      image={image || undefined}
+                    />
+                  </div>
+                )}
+
+                {mode === "sidebar" && (
+                  <ChatWidget
+                    botId={botId}
+                    mode="sidebar"
+                    position={position}
+                    color={color}
+                    size={size}
+                    image={image || undefined}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>
