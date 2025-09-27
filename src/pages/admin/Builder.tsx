@@ -1,5 +1,5 @@
 // src/pages/admin/Builder.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -9,6 +9,8 @@ import ReactFlow, {
   Connection,
   Edge,
   Node,
+  Handle,
+  Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -17,7 +19,57 @@ import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
 /* ------------------------------------------------------------------ */
-/* Helpers: deep-merge + per-bot/mode overrides persisted to storage  */
+/* Custom Node Components                                            */
+/* ------------------------------------------------------------------ */
+
+const MessageNode = ({ data }: { data: any }) => (
+  <div className="px-4 py-2 shadow-md rounded-md bg-white border-2 border-stone-400">
+    <Handle type="target" position={Position.Top} />
+    <div className="font-bold">{data.title || "Message"}</div>
+    <div className="text-gray-500 text-sm">{data.text || "..."}</div>
+    <Handle type="source" position={Position.Bottom} />
+  </div>
+);
+
+const ChoiceNode = ({ data }: { data: any }) => (
+  <div className="px-4 py-2 shadow-md rounded-md bg-blue-50 border-2 border-blue-400">
+    <Handle type="target" position={Position.Top} />
+    <div className="font-bold">{data.label || "Choice"}</div>
+    <div className="text-xs text-gray-600 mt-1">
+      {(data.options || []).join(" | ") || "No options"}
+    </div>
+    <Handle type="source" position={Position.Bottom} />
+  </div>
+);
+
+const ActionNode = ({ data }: { data: any }) => (
+  <div className="px-4 py-2 shadow-md rounded-md bg-green-50 border-2 border-green-400">
+    <Handle type="target" position={Position.Top} />
+    <div className="font-bold">{data.label || "Action"}</div>
+    <div className="text-xs text-gray-600">{data.to || "..."}</div>
+    <Handle type="source" position={Position.Bottom} />
+  </div>
+);
+
+const InputNode = ({ data }: { data: any }) => (
+  <div className="px-4 py-2 shadow-md rounded-md bg-purple-50 border-2 border-purple-400">
+    <Handle type="target" position={Position.Top} />
+    <div className="font-bold">{data.label || "Input"}</div>
+    <div className="text-xs text-gray-600">{data.placeholder || "..."}</div>
+    <Handle type="source" position={Position.Bottom} />
+  </div>
+);
+
+// Register custom node types
+const nodeTypes = {
+  message: MessageNode,
+  choice: ChoiceNode,
+  action: ActionNode,
+  input: InputNode,
+};
+
+/* ------------------------------------------------------------------ */
+/* Helpers: deep-merge + per-bot/mode overrides persisted to storage */
 /* ------------------------------------------------------------------ */
 
 type RFNode = Node & {
@@ -51,7 +103,7 @@ function setOverrides(bot: string, mode: "basic" | "custom", next: Record<string
 }
 
 /* ------------------------------------------------------------------ */
-/* Component                                                           */
+/* Component                                                          */
 /* ------------------------------------------------------------------ */
 
 export default function Builder() {
@@ -66,7 +118,7 @@ export default function Builder() {
       <div className="rounded-2xl border bg-card p-6">
         <div className="text-lg font-extrabold mb-1">No flow template found</div>
         <div className="text-sm text-foreground/70">
-          I couldn’t find a template for <b>{currentBot}</b> in <b>{mode}</b> mode.&nbsp;
+          I couldn't find a template for <b>{currentBot}</b> in <b>{mode}</b> mode.&nbsp;
           Make sure there is an entry in <code>templates</code> for{" "}
           <code>{tplKey}</code>.
         </div>
@@ -91,11 +143,11 @@ export default function Builder() {
   const [nodes, setNodes, onNodesChange] = useNodesState(merged.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(merged.edges);
 
-  // Keep RF state in sync when merged changes
+  // Keep RF state in sync when merged changes (only on template/mode change)
   useEffect(() => {
     setNodes(merged.nodes as Node[]);
     setEdges(merged.edges as Edge[]);
-  }, [merged.nodes, merged.edges, setNodes, setEdges]);
+  }, [tplKey]); // Only update when template key changes, not on every override change
 
   // Selection + editor binding
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -104,29 +156,39 @@ export default function Builder() {
     [nodes, selectedId]
   );
 
-  const onNodeClick = (_: any, node: Node) => {
+  const onNodeClick = useCallback((_: any, node: Node) => {
     setSelectedId(node?.id || null);
-  };
+  }, []);
 
-  const onConnect = (connection: Connection) => {
+  const onConnect = useCallback((connection: Connection) => {
     setEdges((eds) => addEdge(connection, eds));
-  };
+  }, [setEdges]);
 
   // Save editor changes (persist + live update)
-  const saveField = (patch: Partial<RFNode["data"]>) => {
+  const saveField = useCallback((patch: Partial<RFNode["data"]>) => {
     if (!selectedId) return;
+    
+    // Update overrides
+    const currentOverride = overrides[selectedId] || {};
+    const newData = { ...((currentOverride.data) || {}), ...patch };
     const next = {
       ...overrides,
-      [selectedId]: { data: { ...((overrides[selectedId] || {}).data || {}), ...patch } },
+      [selectedId]: { data: newData },
     };
+    
     setOv(next);
     setOverrides(currentBot, mode, next);
 
     // Live update selected node in RF state
     setNodes((prev) =>
-      prev.map((n) => (n.id === selectedId ? { ...n, data: mergeDeep(n.data || {}, patch) } : n))
+      prev.map((n) => {
+        if (n.id === selectedId) {
+          return { ...n, data: { ...(n.data || {}), ...patch } };
+        }
+        return n;
+      })
     );
-  };
+  }, [selectedId, overrides, currentBot, mode, setNodes]);
 
   // Small label helper
   const FieldLabel = ({ children }: { children: React.ReactNode }) => (
@@ -145,7 +207,7 @@ export default function Builder() {
 
     const common = "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold";
 
-    if (selected.type === "message" || !selected.type) {
+    if (selected.type === "message" || selected.type === "default" || !selected.type) {
       return (
         <div className="space-y-3">
           <div>
@@ -154,6 +216,7 @@ export default function Builder() {
               className={common}
               value={selected.data?.title ?? ""}
               onChange={(e) => saveField({ title: e.target.value })}
+              placeholder="Enter title..."
             />
           </div>
           <div>
@@ -163,6 +226,7 @@ export default function Builder() {
               rows={4}
               value={selected.data?.text ?? ""}
               onChange={(e) => saveField({ text: e.target.value })}
+              placeholder="Enter message text..."
             />
           </div>
         </div>
@@ -178,6 +242,7 @@ export default function Builder() {
               className={common}
               value={selected.data?.label ?? ""}
               onChange={(e) => saveField({ label: e.target.value })}
+              placeholder="Enter label..."
             />
           </div>
           <div>
@@ -186,6 +251,7 @@ export default function Builder() {
               className={common}
               value={selected.data?.placeholder ?? ""}
               onChange={(e) => saveField({ placeholder: e.target.value })}
+              placeholder="Enter placeholder text..."
             />
           </div>
         </div>
@@ -202,6 +268,7 @@ export default function Builder() {
               className={common}
               value={selected.data?.label ?? ""}
               onChange={(e) => saveField({ label: e.target.value })}
+              placeholder="Enter label..."
             />
           </div>
           <div>
@@ -218,6 +285,7 @@ export default function Builder() {
                     .filter(Boolean),
                 })
               }
+              placeholder="Option 1&#10;Option 2&#10;Option 3"
             />
           </div>
         </div>
@@ -233,6 +301,7 @@ export default function Builder() {
               className={common}
               value={selected.data?.label ?? ""}
               onChange={(e) => saveField({ label: e.target.value })}
+              placeholder="Enter label..."
             />
           </div>
           <div>
@@ -241,6 +310,7 @@ export default function Builder() {
               className={common}
               value={selected.data?.to ?? ""}
               onChange={(e) => saveField({ to: e.target.value })}
+              placeholder="email@example.com"
             />
           </div>
         </div>
@@ -266,6 +336,7 @@ export default function Builder() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            nodeTypes={nodeTypes} // Register custom node types here
             fitView
             proOptions={{ hideAttribution: true }}
           >
