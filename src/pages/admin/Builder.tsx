@@ -58,12 +58,7 @@ const InputNode = ({ data }: { data: any }) => (
   </div>
 );
 
-const nodeTypes = {
-  message: MessageNode,
-  choice: ChoiceNode,
-  action: ActionNode,
-  input: InputNode,
-};
+const nodeTypes = { message: MessageNode, choice: ChoiceNode, action: ActionNode, input: InputNode };
 
 /* --------------------------------- Helpers -------------------------------- */
 
@@ -81,9 +76,8 @@ function getOverrides(bot: string, mode: "basic" | "custom") {
   } catch {}
   return {};
 }
-
-function saveOverrides(bot: string, mode: "basic" | "custom", overrides: Record<string, any>) {
-  localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(overrides));
+function saveOverrides(bot: string, mode: "basic" | "custom", ov: Record<string, any>) {
+  localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(ov));
 }
 
 /* -------------------------------- Component ------------------------------- */
@@ -98,29 +92,22 @@ export default function Builder() {
     [tplKey]
   );
 
-  const [overrides, setOverridesState] = useState<Record<string, any>>(() =>
-    getOverrides(currentBot, mode)
-  );
+  const [overrides, setOv] = useState<Record<string, any>>(() => getOverrides(currentBot, mode));
 
   const buildNodes = useCallback(
-    (srcNodes: RFNode[], ov: Record<string, any>) =>
-      srcNodes.map((n) => {
-        const o = ov[n.id];
-        return o?.data ? { ...n, data: { ...(n.data || {}), ...(o.data || {}) } } : n;
-      }),
+    (src: RFNode[], ov: Record<string, any>) =>
+      src.map((n) => (ov[n.id]?.data ? { ...n, data: { ...(n.data || {}), ...ov[n.id].data } } : n)),
     []
   );
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(
-    base ? buildNodes(base.nodes, overrides) : []
-  );
+  const [nodes, setNodes, onNodesChange] = useNodesState(base ? buildNodes(base.nodes, overrides) : []);
   const [edges, setEdges, onEdgesChange] = useEdgesState(base ? base.edges : []);
 
-  // rebuild when bot/mode changes (ensures correct flow shows)
+  // Refresh when bot/mode changes
   useEffect(() => {
     const nextBase = (templates as any)[`${currentBot}_${mode}`];
     const nextOv = getOverrides(currentBot, mode);
-    setOverridesState(nextOv);
+    setOv(nextOv);
     if (nextBase) {
       setNodes(buildNodes(nextBase.nodes, nextOv) as Node[]);
       setEdges(nextBase.edges as Edge[]);
@@ -140,23 +127,19 @@ export default function Builder() {
   }, [selectedId, nodes]);
 
   const onNodeClick = useCallback((_: any, n: Node) => setSelectedId(n?.id || null), []);
-  const onConnect = useCallback(
-    (c: Connection) => setEdges((eds) => addEdge(c, eds)),
-    [setEdges]
-  );
+  const onConnect = useCallback((c: Connection) => setEdges((eds) => addEdge(c, eds)), [setEdges]);
 
-  const updateEditorValue = (key: string, value: any) =>
-    setEditorValues((prev: any) => ({ ...prev, [key]: value }));
+  const updateEditorValue = (k: string, v: any) => setEditorValues((p: any) => ({ ...p, [k]: v }));
 
   const saveChanges = useCallback(() => {
     if (!selectedId) return;
     setNodes((prev) => prev.map((n) => (n.id === selectedId ? { ...n, data: { ...editorValues } } : n)));
     const nextOv = { ...overrides, [selectedId]: { data: { ...editorValues } } };
-    setOverridesState(nextOv);
+    setOv(nextOv);
     saveOverrides(currentBot, mode, nextOv);
   }, [selectedId, editorValues, overrides, setNodes, currentBot, mode]);
 
-  /* ---------- HARD BLOCK of RF hotkeys when typing in inputs ----------- */
+  /* --------- FIX: Let inputs handle keys, block RF from seeing them ------- */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -165,24 +148,23 @@ export default function Builder() {
         (t.tagName === "INPUT" ||
           t.tagName === "TEXTAREA" ||
           (t as HTMLElement).isContentEditable);
-      if (!isField) return;
-      // stop RF global listeners from seeing keystrokes
-      e.stopPropagation();
-      // don’t let Backspace/Delete hit RF or the browser history
-      if (e.key === "Backspace" || e.key === "Delete") {
-        e.preventDefault();
+
+      if (isField) {
+        // Important: do NOT preventDefault — allow typing and deleting.
+        // Just stop the event high up so React Flow never receives it.
+        (e as any).stopImmediatePropagation?.();
+        e.stopPropagation();
+        return;
       }
     };
-    // capture-phase so we beat RF’s listeners
     document.addEventListener("keydown", handler, { capture: true });
     return () => document.removeEventListener("keydown", handler, { capture: true } as any);
   }, []);
 
-  /* ------------------------------ Editor UI ------------------------------- */
-
   const FieldLabel = ({ children }: { children: React.ReactNode }) => (
     <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
   );
+  const stop = (e: React.KeyboardEvent) => e.stopPropagation();
 
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
@@ -192,15 +174,9 @@ export default function Builder() {
   const inputClass =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
-  const stop = (e: React.KeyboardEvent) => e.stopPropagation();
-
   const Editor = () => {
     if (!selected) {
-      return (
-        <div className="text-sm text-purple-600">
-          Select a node above to edit its text and labels.
-        </div>
-      );
+      return <div className="text-sm text-purple-600">Select a node above to edit its text and labels.</div>;
     }
 
     if (selected.type === "input") {
@@ -297,7 +273,7 @@ export default function Builder() {
       );
     }
 
-    // default = message
+    // default => message
     return (
       <div className="space-y-3">
         <div>
@@ -327,11 +303,9 @@ export default function Builder() {
     );
   };
 
-  /* --------------------------------- UI ----------------------------------- */
-
   return (
     <div className="w-full h-full grid grid-rows-[1fr_auto] gap-4">
-      {/* Canvas wrapper (pastel) */}
+      {/* Canvas (pastel) */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
         <div
           className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
@@ -353,8 +327,7 @@ export default function Builder() {
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
-            /* Hard-disable delete/backspace shortcut */
-            deleteKeyCode={null}
+            deleteKeyCode={null} // disable RF delete hotkey
           >
             <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
