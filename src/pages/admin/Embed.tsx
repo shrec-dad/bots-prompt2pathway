@@ -1,59 +1,55 @@
 // src/pages/admin/Embed.tsx
-import React, { useRef } from "react";
-import "../../styles/admin-shared.css";
+import React from "react";
+import { useAdminStore } from "@/lib/AdminStore";
+
+const card = "rounded-2xl border-[2px] border-black/80 shadow-[0_6px_0_#000] bg-white";
+const grad = "bg-[linear-gradient(135deg,#f7d7ff_0%,#dfe4ff_40%,#c8f4ea_100%)]";
 
 export default function Embed() {
-  const codeRef = useRef<HTMLTextAreaElement>(null);
+  const { currentBot } = useAdminStore();
 
-  const code = `<script src="https://cdn.example.com/mybot-widget.js" async></script>
+  const popup = `<script type="module" src="/widget.js"></script>
+<div id="my-chat"></div>
 <script>
-  (function () {
-    var mount = function () {
-      if (window.MyBotWidget && window.MyBotWidget.mount) {
-        window.MyBotWidget.mount({
-          options: JSON.parse(decodeURIComponent("%7Bmode%3A'basic'%7D"))
-        });
-      } else {
-        console.warn("MyBotWidget not available yet.");
-      }
-    };
-    if (document.readyState === "complete") mount();
-    else window.addEventListener("load", mount);
-  })();
+  // Example mount – adapt to your widget bundling
+  window.initChatWidget?.("#my-chat", {
+    botId: "${currentBot}",
+    mode: "popup",
+    position: "bottom-right",
+    color: "#b392ff"
+  });
 </script>`;
 
-  const copyToClipboard = () => {
-    if (codeRef.current) {
-      codeRef.current.select();
-      document.execCommand("copy");
-      alert("Embed code copied!");
-    }
-  };
+  const inline = `<div id="inline-bot"></div>
+<script>
+  window.initChatWidget?.("#inline-bot", {
+    botId: "${currentBot}",
+    mode: "inline",
+    width: 420
+  });
+</script>`;
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Fancy Header */}
-      <div className="rounded-2xl border-2 border-black p-6 bg-gradient-to-r from-blue-200 via-purple-200 to-pink-200">
-        <h1 className="text-2xl font-extrabold text-black">Embed Your Bot</h1>
-        <p className="mt-2 text-black">
-          Copy and paste the code below into your website to activate your bot.
+    <div className="p-4 md:p-6">
+      <div className={`${card} ${grad} p-5 mb-5`}>
+        <h1 className="text-2xl font-extrabold">Embed Code</h1>
+        <p className="mt-1 text-black/70">
+          Copy these snippets to embed the <b>{currentBot}</b> bot on your site.
         </p>
       </div>
 
-      {/* Code Box */}
-      <div className="rounded-2xl border-2 border-black bg-gray-900 p-4 relative">
-        <textarea
-          ref={codeRef}
-          value={code}
-          readOnly
-          className="w-full h-60 bg-gray-900 text-green-200 font-mono text-sm resize-none border-none focus:outline-none"
-        />
-        <button
-          onClick={copyToClipboard}
-          className="absolute top-3 right-3 px-3 py-1 bg-white border-2 border-black rounded-lg font-bold text-black hover:bg-gray-100"
-        >
-          Copy
-        </button>
+      <div className={`${card} p-5 mb-5`}>
+        <div className="font-bold mb-2">Popup bubble (recommended)</div>
+        <pre className="bg-black text-white p-3 rounded-lg overflow-auto text-xs">
+{popup}
+        </pre>
+      </div>
+
+      <div className={`${card} p-5`}>
+        <div className="font-bold mb-2">Inline (embed in page content)</div>
+        <pre className="bg-black text-white p-3 rounded-lg overflow-auto text-xs">
+{inline}
+        </pre>
       </div>
     </div>
   );
