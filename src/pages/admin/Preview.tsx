@@ -2,196 +2,132 @@
 import React, { useMemo, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
 
-// small helper so we can copy code
-async function copy(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    alert("Embed code copied!");
-  } catch {
-    alert("Could not copy. Select & copy manually.");
-  }
-}
-
-type Mode = "popup" | "inline" | "sidebar";
-type Pos  = "bottom-right" | "bottom-left";
-
 export default function Preview() {
-  // basic controls
   const [botId, setBotId] = useState("waitlist-bot");
-  const [mode, setMode] = useState<Mode>("popup");
-  const [pos, setPos]   = useState<Pos>("bottom-right");
-  const [color, setColor] = useState("#a78bfa"); // pastel purple (matches Builder vibe)
-  const [size, setSize] = useState(64);
-  const [image, setImage] = useState<string>("");
+  const [mode, setMode] = useState<"popup" | "inline" | "sidebar">("popup");
+  const [position, setPosition] = useState<"bottom-right" | "bottom-left">(
+    "bottom-right"
+  );
+  const [color, setColor] = useState<string>("#a78bfa");
+  const [size, setSize] = useState<number>(64);
+  const [imgUrl, setImgUrl] = useState("");
 
-  // embed snippet (customers can paste this in their site)
-  const embed = useMemo(() => {
-    const opts = encodeURIComponent(
-      JSON.stringify({ botId, mode, position: pos, color, size, image })
-    );
-    return [
-      `<script src="https://cdn.example.com/mybot-widget.js" async></script>`,
-      `<script>(function(){`,
-      `  function mount(){`,
-      `    if(window.MyBotWidget && window.MyBotWidget.mount){`,
-      `      window.MyBotWidget.mount(document.body, JSON.parse(decodeURIComponent("${opts}")));`,
-      `    }`,
-      `  }`,
-      `  if(document.readyState==="complete") mount(); else window.addEventListener("load", mount);`,
-      `})();</script>`
-    ].join("\n");
-  }, [botId, mode, pos, color, size, image]);
+  const containerStyle: React.CSSProperties = {
+    position: "relative",
+    minHeight: 520,
+    border: "2px solid #000",
+    borderRadius: 12,
+    background:
+      "linear-gradient(135deg,#fde2f3 0%,#ede9fe 25%,#e0f2fe 50%,#dcfce7 75%,#fef3c7 100%)",
+    overflow: "hidden",
+  };
+
+  const previewNote =
+    mode === "inline"
+      ? "Inline mode is placed at the current DOM position."
+      : mode === "sidebar"
+      ? "Sidebar mode shows a full-height panel."
+      : "Popup mode shows a floating bubble that opens a panel on click.";
+
+  const openDefault = mode !== "popup"; // open by default for inline/sidebar
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Heading */}
-      <div className="rounded-xl border-2 border-black bg-white p-6">
+    <div className="space-y-4">
+      <div className="rounded-xl border-2 border-black p-4 bg-white">
         <h1 className="text-2xl font-bold">Widget Preview</h1>
-        <p className="text-black/80 mt-1">
-          Tune the widget settings and see exactly what a customer will see. You can also copy a ready-to-paste embed.
+        <p className="text-sm text-black/70">
+          Tune the widget settings and see exactly what a customer will see.
+          You can also copy a ready-to-paste embed.
         </p>
       </div>
 
       {/* Controls */}
-      <div className="rounded-xl border-2 border-black bg-gradient-to-r from-purple-200 via-indigo-200 to-teal-200 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <label className="block">
-            <div className="font-bold">Bot ID</div>
+      <div className="rounded-xl border-2 border-black p-4 bg-gradient-to-r from-purple-200 via-blue-200 to-teal-200">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <label className="font-bold text-sm">Bot ID</label>
             <input
-              className="mt-1 w-full rounded-md border-2 border-black px-3 py-2"
+              className="w-full mt-1 px-3 py-2 border-2 border-black rounded-lg"
               value={botId}
               onChange={(e) => setBotId(e.target.value)}
-              placeholder="waitlist-bot"
             />
-          </label>
+          </div>
 
-          <label className="block">
-            <div className="font-bold">Mode</div>
+          <div>
+            <label className="font-bold text-sm">Mode</label>
             <select
-              className="mt-1 w-full rounded-md border-2 border-black px-3 py-2"
+              className="w-full mt-1 px-3 py-2 border-2 border-black rounded-lg"
               value={mode}
-              onChange={(e) => setMode(e.target.value as Mode)}
+              onChange={(e) => setMode(e.target.value as any)}
             >
               <option value="popup">popup (floating bubble)</option>
-              <option value="inline">inline (sits in content)</option>
-              <option value="sidebar">sidebar (full-height)</option>
+              <option value="inline">inline</option>
+              <option value="sidebar">sidebar</option>
             </select>
-          </label>
+          </div>
 
-          <label className="block">
-            <div className="font-bold">Position</div>
+          <div>
+            <label className="font-bold text-sm">Position</label>
             <select
-              className="mt-1 w-full rounded-md border-2 border-black px-3 py-2"
-              value={pos}
-              onChange={(e) => setPos(e.target.value as Pos)}
-              disabled={mode === "inline"}
+              className="w-full mt-1 px-3 py-2 border-2 border-black rounded-lg"
+              value={position}
+              onChange={(e) => setPosition(e.target.value as any)}
             >
               <option value="bottom-right">bottom-right</option>
               <option value="bottom-left">bottom-left</option>
             </select>
-          </label>
+          </div>
 
-          <label className="block">
-            <div className="font-bold">Color</div>
+          <div>
+            <label className="font-bold text-sm">Color</label>
             <input
-              className="mt-1 w-full rounded-md border-2 border-black px-3 py-2"
               type="color"
+              className="w-full mt-1 h-[42px] border-2 border-black rounded-lg"
               value={color}
               onChange={(e) => setColor(e.target.value)}
             />
-          </label>
+          </div>
 
-          <label className="block">
-            <div className="font-bold">Size (px)</div>
+          <div>
+            <label className="font-bold text-sm">Size (px)</label>
             <input
-              className="mt-1 w-full rounded-md border-2 border-black px-3 py-2"
               type="number"
-              min={48}
-              max={120}
+              min={44}
+              max={96}
+              className="w-full mt-1 px-3 py-2 border-2 border-black rounded-lg"
               value={size}
               onChange={(e) => setSize(Number(e.target.value || 64))}
-              disabled={mode === "sidebar"}
             />
-          </label>
+          </div>
 
-          <label className="block md:col-span-1">
-            <div className="font-bold">Bubble Image URL (optional)</div>
+          <div>
+            <label className="font-bold text-sm">Bubble Image URL (optional)</label>
             <input
-              className="mt-1 w-full rounded-md border-2 border-black px-3 py-2"
-              type="url"
-              value={image}
-              onChange={(e) => setImage(e.target.value)}
+              className="w-full mt-1 px-3 py-2 border-2 border-black rounded-lg"
+              value={imgUrl}
+              onChange={(e) => setImgUrl(e.target.value)}
               placeholder="https://example.com/icon.png"
             />
-          </label>
+          </div>
         </div>
+        <div className="mt-2 text-sm font-semibold">{previewNote}</div>
       </div>
 
-      {/* Live preview surface */}
-      <div className="rounded-xl border-2 border-black bg-white p-0 overflow-hidden">
-        <div className="p-4 border-b-2 border-black font-bold">Live Preview</div>
-
-        {/* A big canvas so you can see popup + sidebar positions easily */}
-        <div
-          className="relative"
-          style={{
-            width: "100%",
-            height: "60vh",
-            background:
-              "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
-          }}
-        >
-          {/* Inline mode renders inside a centered content card */}
-          {mode === "inline" ? (
-            <div className="absolute inset-0 grid place-items-center p-6">
-              <div className="w-full max-w-3xl h-64 rounded-xl border-2 border-black bg-white relative">
-                <div className="p-3 border-b-2 border-black font-semibold">
-                  Your page content
-                </div>
-                <div className="p-3">
-                  <ChatWidget
-                    mode="inline"
-                    botId={botId}
-                    color={color}
-                    size={size}
-                    position={pos}
-                    image={image || undefined}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Popup/sidebar render over the preview surface */}
-              <ChatWidget
-                mode={mode}
-                botId={botId}
-                color={color}
-                size={size}
-                position={pos}
-                image={image || undefined}
-              />
-            </>
-          )}
+      {/* Live Preview */}
+      <div className="rounded-xl border-2 border-black bg-white">
+        <div className="px-4 py-2 border-b-2 border-black font-bold">Live Preview</div>
+        <div style={containerStyle}>
+          <ChatWidget
+            mode={mode}
+            botId={botId}
+            color={color}
+            size={size}
+            position={position}
+            image={imgUrl || undefined}
+            preview
+            openDefault={openDefault}
+          />
         </div>
-      </div>
-
-      {/* Embed code */}
-      <div className="rounded-xl border-2 border-black bg-gradient-to-r from-purple-200 via-pink-200 to-yellow-200 p-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="font-bold text-lg">Embed</h2>
-          <button
-            className="px-4 py-2 rounded-md bg-black text-white font-semibold"
-            onClick={() => copy(embed)}
-          >
-            Copy
-          </button>
-        </div>
-        <textarea
-          className="w-full h-56 rounded-md border-2 border-black font-mono text-sm p-3"
-          value={embed}
-          readOnly
-        />
       </div>
     </div>
   );
