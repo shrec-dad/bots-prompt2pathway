@@ -33,9 +33,15 @@ export default function Nurture() {
   };
 
   return (
-    <div className="admin-page bg-grad-pink">
-      <div className="h-row">
-        <div className="h-title">Nurture (Day 1–14)</div>
+    <div
+      className="admin-page p-6 rounded-2xl border-2 border-purple-200 shadow-lg"
+      style={{
+        background:
+          "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
+      }}
+    >
+      <div className="h-row mb-6">
+        <div className="h-title text-black">Nurture (Day 1–14)</div>
         <div className="stack" style={{ gridTemplateColumns: "auto auto" }}>
           <button className="btn primary" onClick={save}>
             Save Schedule
@@ -44,19 +50,26 @@ export default function Nurture() {
       </div>
 
       <div className="admin-section stack">
-        <p>
+        <p className="text-black">
           Create simple 7–14 day sequences now. This page has placeholders ready
           to wire to your email service later.
         </p>
 
-        <div className="grid-2">
+        <div className="grid-2 gap-4">
           {steps.map((s, idx) => (
-            <div className="card stack" key={idx}>
+            <div
+              className="card stack border-2 border-black rounded-xl bg-white"
+              key={idx}
+            >
               <div className="h-row">
-                <div className="h-title">Day {idx + 1}</div>
+                <div className="h-title text-black">Day {idx + 1}</div>
                 <label
-                  className="label"
-                  style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  className="label text-black"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
                 >
                   <input
                     type="checkbox"
@@ -72,9 +85,9 @@ export default function Nurture() {
               </div>
 
               <div className="stack">
-                <label className="label">Subject</label>
+                <label className="label text-black">Subject</label>
                 <input
-                  className="input"
+                  className="input border-2 border-purple-300 rounded-lg"
                   placeholder="Subject for Day X"
                   value={s.subject}
                   onChange={(e) => {
@@ -86,9 +99,9 @@ export default function Nurture() {
               </div>
 
               <div className="stack">
-                <label className="label">Message</label>
+                <label className="label text-black">Message</label>
                 <textarea
-                  className="textarea"
+                  className="textarea border-2 border-purple-300 rounded-lg"
                   placeholder="Short message for Day X"
                   value={s.message}
                   onChange={(e) => {
@@ -102,7 +115,7 @@ export default function Nurture() {
           ))}
         </div>
 
-        <button className="btn primary" onClick={save}>
+        <button className="btn primary mt-6" onClick={save}>
           Save All
         </button>
       </div>
