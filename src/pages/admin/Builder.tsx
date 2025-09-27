@@ -1,5 +1,5 @@
 // src/pages/admin/Builder.tsx
-import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -11,7 +11,6 @@ import ReactFlow, {
   Node,
   Handle,
   Position,
-  ReactFlowProvider,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -59,12 +58,7 @@ const InputNode = ({ data }: { data: any }) => (
   </div>
 );
 
-const nodeTypes = { 
-  message: MessageNode, 
-  choice: ChoiceNode, 
-  action: ActionNode, 
-  input: InputNode 
-};
+const nodeTypes = { message: MessageNode, choice: ChoiceNode, action: ActionNode, input: InputNode };
 
 /* --------------------------------- Helpers -------------------------------- */
 
@@ -73,117 +67,104 @@ type RFNode = Node & {
   data?: any;
 };
 
-const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected group after &#x27;_&#x27; at position 6: {bot}_̲" style="color:#cc0000">{bot}_</span></span>{mode}`;
+const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
 
 function getOverrides(bot: string, mode: "basic" | "custom") {
   try {
     const raw = localStorage.getItem(OV_KEY(bot, mode));
     if (raw) return JSON.parse(raw) as Record<string, any>;
-  } catch (e) {
-    console.error("Error loading overrides:", e);
-  }
+  } catch {}
   return {};
 }
-
 function saveOverrides(bot: string, mode: "basic" | "custom", ov: Record<string, any>) {
-  try {
-    localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(ov));
-  } catch (e) {
-    console.error("Error saving overrides:", e);
-  }
+  localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(ov));
 }
 
-/* -------------------------------- Main Component ------------------------------- */
+/* -------------------------------- Component ------------------------------- */
 
-function BuilderContent() {
+export default function Builder() {
   const { currentBot } = useAdminStore();
-  const mode = (getBotSettings(currentBot as any)?.mode || "basic") as "basic" | "custom";
-  const [isEditorFocused, setIsEditorFocused] = useState(false);
+  const mode = (getBotSettings(currentBot as any).mode || "basic") as "basic" | "custom";
 
-  const tplKey = `<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected group after &#x27;_&#x27; at position 13: {currentBot}_̲" style="color:#cc0000">{currentBot}_</span></span>{mode}`;
-  
-  // Get base template with fallback
-  const base = useMemo(() => {
-    const template = (templates as any)[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined;
-    if (!template) {
-      console.warn(`No template found for ${tplKey}, using default`);
-      // Return a default template structure
-      return {
-        nodes: [
-          {
-            id: '1',
-            type: 'message',
-            position: { x: 250, y: 50 },
-            data: { title: 'Welcome', text: 'Hello! How can I help you today?' }
-          }
-        ],
-        edges: []
-      };
-    }
-    return template;
-  }, [tplKey]);
+  const tplKey = `${currentBot}_${mode}`;
+  const base = useMemo(
+    () => (templates as any)[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined,
+    [tplKey]
+  );
 
   const [overrides, setOv] = useState<Record<string, any>>(() => getOverrides(currentBot, mode));
 
   const buildNodes = useCallback(
     (src: RFNode[], ov: Record<string, any>) =>
-      src.map((n) => ({
-        ...n,
-        data: ov[n.id]?.data ? { ...(n.data || {}), ...ov[n.id].data } : (n.data || {})
-      })),
+      src.map((n) => (ov[n.id]?.data ? { ...n, data: { ...(n.data || {}), ...ov[n.id].data } } : n)),
     []
   );
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(buildNodes(base.nodes, overrides));
-  const [edges, setEdges, onEdgesChange] = useEdgesState(base.edges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(base ? buildNodes(base.nodes, overrides) : []);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(base ? base.edges : []);
 
   // Refresh when bot/mode changes
   useEffect(() => {
-    const nextBase = (templates as any)[`<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected group after &#x27;_&#x27; at position 13: {currentBot}_̲" style="color:#cc0000">{currentBot}_</span></span>{mode}`] || base;
+    const nextBase = (templates as any)[`${currentBot}_${mode}`];
     const nextOv = getOverrides(currentBot, mode);
     setOv(nextOv);
-    setNodes(buildNodes(nextBase.nodes, nextOv) as Node[]);
-    setEdges(nextBase.edges as Edge[]);
-  }, [currentBot, mode, setNodes, setEdges, buildNodes, base]);
+    if (nextBase) {
+      setNodes(buildNodes(nextBase.nodes, nextOv) as Node[]);
+      setEdges(nextBase.edges as Edge[]);
+    } else {
+      setNodes([]);
+      setEdges([]);
+    }
+  }, [currentBot, mode, setNodes, setEdges, buildNodes]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValues, setEditorValues] = useState<any>({});
 
   useEffect(() => {
-    if (!selectedId) {
-      setEditorValues({});
-      return;
-    }
+    if (!selectedId) return setEditorValues({});
     const n = nodes.find((x) => x.id === selectedId);
-    if (n) {
-      setEditorValues(n.data || {});
-    }
+    setEditorValues(n?.data || {});
   }, [selectedId, nodes]);
 
-  const onNodeClick = useCallback((_: any, n: Node) => {
-    if (!isEditorFocused) {
-      setSelectedId(n?.id || null);
-    }
-  }, [isEditorFocused]);
-
+  const onNodeClick = useCallback((_: any, n: Node) => setSelectedId(n?.id || null), []);
   const onConnect = useCallback((c: Connection) => setEdges((eds) => addEdge(c, eds)), [setEdges]);
 
-  const updateEditorValue = useCallback((k: string, v: any) => {
-    setEditorValues((p: any) => ({ ...p, [k]: v }));
-  }, []);
+  const updateEditorValue = (k: string, v: any) => setEditorValues((p: any) => ({ ...p, [k]: v }));
 
   const saveChanges = useCallback(() => {
     if (!selectedId) return;
-    
-    const updatedNodes = nodes.map((n) => 
-      n.id === selectedId ? { ...n, data: { ...editorValues } } : n
-    );
-    setNodes(updatedNodes);
-    
+    setNodes((prev) => prev.map((n) => (n.id === selectedId ? { ...n, data: { ...editorValues } } : n)));
     const nextOv = { ...overrides, [selectedId]: { data: { ...editorValues } } };
     setOv(nextOv);
     saveOverrides(currentBot, mode, nextOv);
-  }, [selectedId, editorValues, overrides, nodes, setNodes, currentBot, mode]);
+  }, [selectedId, editorValues, overrides, setNodes, currentBot, mode]);
+
+  /* --------- FIX: Let inputs handle keys, block RF from seeing them ------- */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const isField =
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          (t as HTMLElement).isContentEditable);
+
+      if (isField) {
+        // Important: do NOT preventDefault — allow typing and deleting.
+        // Just stop the event high up so React Flow never receives it.
+        (e as any).stopImmediatePropagation?.();
+        e.stopPropagation();
+        return;
+      }
+    };
+    document.addEventListener("keydown", handler, { capture: true });
+    return () => document.removeEventListener("keydown", handler, { capture: true } as any);
+  }, []);
+
+  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
+  );
+  const stop = (e: React.KeyboardEvent) => e.stopPropagation();
 
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
@@ -192,20 +173,6 @@ function BuilderContent() {
 
   const inputClass =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
-
-  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
-  );
-
-  const handleInputFocus = useCallback((e: React.FocusEvent) => {
-    e.stopPropagation();
-    setIsEditorFocused(true);
-  }, []);
-
-  const handleInputBlur = useCallback((e: React.FocusEvent) => {
-    e.stopPropagation();
-    setIsEditorFocused(false);
-  }, []);
 
   const Editor = () => {
     if (!selected) {
@@ -221,10 +188,9 @@ function BuilderContent() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
+              onBlur={saveChanges}
+              onKeyDown={stop}
               placeholder="Enter label…"
-              autoComplete="off"
             />
           </div>
           <div>
@@ -233,10 +199,9 @@ function BuilderContent() {
               className={inputClass}
               value={editorValues.placeholder || ""}
               onChange={(e) => updateEditorValue("placeholder", e.target.value)}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
+              onBlur={saveChanges}
+              onKeyDown={stop}
               placeholder="Enter placeholder…"
-              autoComplete="off"
             />
           </div>
         </div>
@@ -253,10 +218,9 @@ function BuilderContent() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
+              onBlur={saveChanges}
+              onKeyDown={stop}
               placeholder="Enter label…"
-              autoComplete="off"
             />
           </div>
           <div>
@@ -265,15 +229,15 @@ function BuilderContent() {
               className={inputClass}
               rows={5}
               value={options.join("\n")}
-              onChange={(e) => {
-                const lines = e.target.value.split("\n");
-                const filteredOptions = lines.filter(line => line.length > 0);
-                updateEditorValue("options", filteredOptions);
-              }}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
+              onChange={(e) =>
+                updateEditorValue(
+                  "options",
+                  e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
+                )
+              }
+              onBlur={saveChanges}
+              onKeyDown={stop}
               placeholder={"Option 1\nOption 2\nOption 3"}
-              autoComplete="off"
             />
           </div>
         </div>
@@ -289,10 +253,9 @@ function BuilderContent() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
+              onBlur={saveChanges}
+              onKeyDown={stop}
               placeholder="Enter label…"
-              autoComplete="off"
             />
           </div>
           <div>
@@ -301,10 +264,9 @@ function BuilderContent() {
               className={inputClass}
               value={editorValues.to || ""}
               onChange={(e) => updateEditorValue("to", e.target.value)}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
+              onBlur={saveChanges}
+              onKeyDown={stop}
               placeholder="email@example.com"
-              autoComplete="off"
             />
           </div>
         </div>
@@ -320,10 +282,9 @@ function BuilderContent() {
             className={inputClass}
             value={editorValues.title || ""}
             onChange={(e) => updateEditorValue("title", e.target.value)}
-            onFocus={handleInputFocus}
-            onBlur={handleInputBlur}
+            onBlur={saveChanges}
+            onKeyDown={stop}
             placeholder="Enter title…"
-            autoComplete="off"
           />
         </div>
         <div>
@@ -333,10 +294,9 @@ function BuilderContent() {
             rows={4}
             value={editorValues.text || ""}
             onChange={(e) => updateEditorValue("text", e.target.value)}
-            onFocus={handleInputFocus}
-            onBlur={handleInputBlur}
+            onBlur={saveChanges}
+            onKeyDown={stop}
             placeholder="Enter message text…"
-            autoComplete="off"
           />
         </div>
       </div>
@@ -360,21 +320,14 @@ function BuilderContent() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={isEditorFocused ? undefined : onNodesChange}
-            onEdgesChange={isEditorFocused ? undefined : onEdgesChange}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
-            deleteKeyCode={isEditorFocused ? null : "Delete"}
-            selectionOnDrag={!isEditorFocused}
-            selectNodesOnDrag={!isEditorFocused}
-            panOnDrag={!isEditorFocused}
-            zoomOnScroll={!isEditorFocused}
-            nodesDraggable={!isEditorFocused}
-            nodesConnectable={!isEditorFocused}
-            elementsSelectable={!isEditorFocused}
+            deleteKeyCode={null} // disable RF delete hotkey
           >
             <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
@@ -386,12 +339,7 @@ function BuilderContent() {
       </div>
 
       {/* Editor (pastel) */}
-      <div 
-        className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg"
-        onMouseDown={(e) => e.stopPropagation()}
-        onMouseUp={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg">
         <div className="text-sm font-extrabold mb-3 text-purple-900">
           Edit Text <span className="font-normal text-purple-700">(per node)</span>
         </div>
@@ -405,20 +353,11 @@ function BuilderContent() {
               Save Changes
             </button>
             <div className="text-xs text-purple-600 text-center">
-              Changes are saved when you click the Save button
+              Changes auto-save when you click away from a field
             </div>
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-// Wrap with ReactFlowProvider
-export default function Builder() {
-  return (
-    <ReactFlowProvider>
-      <BuilderContent />
-    </ReactFlowProvider>
   );
 }
