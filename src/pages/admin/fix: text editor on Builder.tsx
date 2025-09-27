@@ -18,7 +18,7 @@ import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
-/* ---------- Custom Node Components (unchanged visual) ---------- */
+/* ---------- Custom Node Components (visuals unchanged) ---------- */
 
 const MessageNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-white border-2 border-stone-400">
@@ -86,11 +86,14 @@ function saveOverrides(bot: string, mode: "basic" | "custom", overrides: Record<
   localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(overrides));
 }
 
-/* Stop React Flow shortcuts from triggering while typing in editor fields */
-const stopFlowShortcuts: React.KeyboardEventHandler<
+/* Stop RF shortcuts while editing (used at capture phase) */
+const stopFlowShortcutsCapture: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
+  e.stopPropagation();
+};
+/* Also stop at the field level (bubble phase) */
+const stopFlowShortcutsField: React.KeyboardEventHandler<
   HTMLInputElement | HTMLTextAreaElement
 > = (e) => {
-  // Always stop propagation so RF doesn't see Backspace/Delete/Ctrl+A/Ctrl+Z/etc.
   e.stopPropagation();
 };
 
@@ -106,6 +109,30 @@ export default function Builder() {
     getOverrides(currentBot, mode)
   );
 
+  // React Flow state
+  const [nodes, setNodes, onNodesChange] = useNodesState<RFNode[]>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>([]);
+
+  // Selection & editor state
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editorValues, setEditorValues] = useState<any>({});
+
+  // Load template + overrides whenever bot or mode changes
+  useEffect(() => {
+    if (!base) return;
+    const freshOverrides = getOverrides(currentBot, mode);
+    setOverridesState(freshOverrides);
+
+    const mergedNodes = base.nodes.map((n) => {
+      const o = freshOverrides[n.id];
+      return o && o.data ? { ...n, data: { ...(n.data || {}), ...(o.data || {}) } } : n;
+    });
+    setNodes(mergedNodes);
+    setEdges(base.edges);
+    setSelectedId(null);
+    setEditorValues({});
+  }, [currentBot, mode, base, setNodes, setEdges]);
+
   if (!base) {
     return (
       <div className="rounded-2xl border bg-card p-6">
@@ -118,28 +145,16 @@ export default function Builder() {
     );
   }
 
-  const getInitialNodes = () =>
-    base.nodes.map((baseNode) => {
-      const override = overrides[baseNode.id];
-      return override && override.data
-        ? { ...baseNode, data: { ...(baseNode.data || {}), ...(override.data || {}) } }
-        : baseNode;
-    });
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
-  const [edges, setEdges, onEdgesChange] = useEdgesState(base.edges);
-
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editorValues, setEditorValues] = useState<any>({});
-
+  // Rebuild editorValues ONLY when the selection changes (prevents the 1-letter reset)
   useEffect(() => {
-    if (selectedId) {
-      const node = nodes.find((n) => n.id === selectedId);
-      setEditorValues(node?.data || {});
-    } else {
+    if (!selectedId) {
       setEditorValues({});
+      return;
     }
-  }, [selectedId, nodes]);
+    const node = nodes.find((n) => n.id === selectedId);
+    setEditorValues(node?.data || {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]); // <-- intentionally NOT dependent on `nodes`
 
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
@@ -174,6 +189,9 @@ export default function Builder() {
     <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
   );
 
+  const inputClass =
+    "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
+
   const Editor = () => {
     if (!selected) {
       return (
@@ -182,9 +200,6 @@ export default function Builder() {
         </div>
       );
     }
-
-    const inputClass =
-      "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
     if (selected.type === "message" || selected.type === "default" || !selected.type) {
       return (
@@ -196,7 +211,7 @@ export default function Builder() {
               value={editorValues.title || ""}
               onChange={(e) => updateEditorValue("title", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stopFlowShortcutsField}
               placeholder="Enter title..."
             />
           </div>
@@ -208,7 +223,7 @@ export default function Builder() {
               value={editorValues.text || ""}
               onChange={(e) => updateEditorValue("text", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stopFlowShortcutsField}
               placeholder="Enter message text..."
             />
           </div>
@@ -226,7 +241,7 @@ export default function Builder() {
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stopFlowShortcutsField}
               placeholder="Enter label..."
             />
           </div>
@@ -237,7 +252,7 @@ export default function Builder() {
               value={editorValues.placeholder || ""}
               onChange={(e) => updateEditorValue("placeholder", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stopFlowShortcutsField}
               placeholder="Enter placeholder text..."
             />
           </div>
@@ -256,7 +271,7 @@ export default function Builder() {
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stopFlowShortcutsField}
               placeholder="Enter label..."
             />
           </div>
@@ -273,7 +288,7 @@ export default function Builder() {
                 )
               }
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stopFlowShortcutsField}
               placeholder={"Option 1\nOption 2\nOption 3"}
             />
           </div>
@@ -291,7 +306,7 @@ export default function Builder() {
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stopFlowShortcutsField}
               placeholder="Enter label..."
             />
           </div>
@@ -302,7 +317,7 @@ export default function Builder() {
               value={editorValues.to || ""}
               onChange={(e) => updateEditorValue("to", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stopFlowShortcutsField}
               placeholder="email@example.com"
             />
           </div>
@@ -337,9 +352,9 @@ export default function Builder() {
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
-            /* >>> Fixes: stop RF from stealing Backspace/Delete & selection keys */
-            deleteKeyCode={[]}          // disables deleting with keyboard
-            selectionKeyCode={null}     // prevents holding a key to enter selection mode
+            // Stop RF from eating text-edit keys:
+            deleteKeyCode={[]}        // disable delete/backspace node removal
+            selectionKeyCode={null}   // no key needed for selection mode
           >
             <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
@@ -350,8 +365,11 @@ export default function Builder() {
         </div>
       </div>
 
-      {/* Editor (kept) */}
-      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg">
+      {/* Editor (kept). Capture-phase handler blocks RF shortcuts for everything inside */}
+      <div
+        className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg"
+        onKeyDownCapture={stopFlowShortcutsCapture}
+      >
         <div className="text-sm font-extrabold mb-3 text-purple-900">
           Edit Text <span className="font-normal text-purple-700">(per node)</span>
         </div>
