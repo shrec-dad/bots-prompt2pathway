@@ -2,12 +2,12 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// Public pages
+// Public
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import Widget from "@/pages/Widget";
 
-// Admin shell + pages
+// Admin
 import AdminLayout from "@/pages/admin/AdminLayout";
 import Dashboard from "@/pages/admin/Dashboard";
 import Bots from "@/pages/admin/Bots";
@@ -18,8 +18,8 @@ import Integrations from "@/pages/admin/Integrations";
 import Clients from "@/pages/admin/Clients";
 import Nurture from "@/pages/admin/Nurture";
 import Settings from "@/pages/admin/Settings";
-import Preview from "@/pages/admin/Preview";
-import Knowledge from "@/pages/admin/Knowledge"; // <-- add this
+import Knowledge from "@/pages/admin/Knowledge";   // <-- NEW
+import Preview from "@/pages/admin/Preview";       // <-- already created
 
 export default function AppRoutes() {
   return (
@@ -29,26 +29,23 @@ export default function AppRoutes() {
         <Route path="/" element={<Index />} />
         <Route path="/widget" element={<Widget />} />
 
-        {/* Admin */}
+        {/* Admin shell */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="clients" element={<Clients />} />
           <Route path="bots" element={<Bots />} />
           <Route path="builder" element={<Builder />} />
-          <Route path="knowledge" element={<Knowledge />} /> {/* <-- new */}
-          <Route path="nurture" element={<Nurture />} />
           <Route path="branding" element={<Branding />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="integrations" element={<Integrations />} />
+          <Route path="knowledge" element={<Knowledge />} /> {/* <-- NEW */}
+          <Route path="nurture" element={<Nurture />} />
           <Route path="settings" element={<Settings />} />
           <Route path="preview" element={<Preview />} />
         </Route>
 
-        {/* Legacy/redirects if needed */}
-        <Route
-          path="/admin/preview/*"
-          element={<Navigate to="/admin/preview" replace />}
-        />
+        {/* Legacy redirect (optional) */}
+        <Route path="/admin/preview/*" element={<Navigate to="/admin/preview" replace />} />
 
         {/* 404 */}
         <Route path="*" element={<NotFound />} />
