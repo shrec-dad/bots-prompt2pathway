@@ -1,134 +1,213 @@
 // src/pages/admin/Preview.tsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
-import ModalChat from "@/components/ModalChat";
 
-type Mode = "popup" | "inline" | "sidebar";
-type Pos = "bottom-right" | "bottom-left";
+const prettyName: Record<string, string> = {
+  "lead-qualifier": "Lead Qualifier",
+  "appointment-bot": "Appointment Booking",
+  "customer-support": "Customer Support",
+  "waitlist-bot": "Waitlist",
+  "social-bot": "Social Media",
+};
 
 export default function Preview() {
   const [botId, setBotId] = useState("waitlist-bot");
-  const [mode, setMode] = useState<Mode>("popup");
-  const [pos, setPos] = useState<Pos>("bottom-right");
-  const [color, setColor] = useState("#7aa8ff");
-  const [size, setSize] = useState(64);
-  const [image, setImage] = useState("");
+  const [mode, setMode] = useState<"popup" | "inline" | "sidebar">("popup");
+  const [position, setPosition] = useState<"bottom-right" | "bottom-left">("bottom-right");
+  const [color, setColor] = useState<string>("#b7a6ff"); // pastel violet
+  const [size, setSize] = useState<number>(64);
+  const [image, setImage] = useState<string>("");
+  const [open, setOpen] = useState<boolean>(true);
 
-  // NEW: control modal open/close
-  const [open, setOpen] = useState(false);
+  // new: editable welcome copy
+  const [welcomeTitle, setWelcomeTitle] = useState<string>(
+    `Welcome to the ${prettyName[botId] ?? "Bot"}`
+  );
+  const [welcomeSub, setWelcomeSub] = useState<string>(
+    "I’ll ask a few quick questions to help our team help you."
+  );
+
+  // keep title synced when bot changes (only if user didn’t customize)
+  useMemo(() => {
+    setWelcomeTitle((prev) =>
+      prev.startsWith("Welcome to") ? `Welcome to the ${prettyName[botId] ?? "Bot"}` : prev
+    );
+  }, [botId]);
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="rounded-2xl border-2 border-black bg-white">
-        <div className="p-4 border-b-2 border-black bg-gradient-to-r from-purple-100 via-purple-50 to-teal-50 rounded-t-2xl">
-          <h1 className="text-xl font-extrabold">Widget Preview</h1>
-          <p className="text-sm text-black/70">
-            Tune the widget settings and see exactly what a customer will see.
-          </p>
-        </div>
+      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-pink-50 via-purple-50 to-indigo-50 p-4 shadow-md">
+        <div className="text-lg font-extrabold mb-2">Widget Preview</div>
+        <p className="text-sm text-foreground/70">
+          Tune the widget and dialog copy. Click the bubble to open/close the modal.
+        </p>
+      </div>
 
-        {/* Controls */}
-        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 rounded-b-2xl">
-          <div className="space-y-2">
-            <div className="text-xs font-bold uppercase">Bot ID</div>
+      {/* Controls */}
+      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-4 shadow-md">
+        <div className="grid md:grid-cols-2 gap-4">
+          <label className="text-sm font-semibold">
+            Bot ID
             <input
-              className="w-full rounded-lg border-2 border-black px-3 py-2"
+              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
               value={botId}
               onChange={(e) => setBotId(e.target.value)}
+              placeholder="waitlist-bot"
             />
-          </div>
+          </label>
 
-          <div className="space-y-2">
-            <div className="text-xs font-bold uppercase">Mode</div>
+          <label className="text-sm font-semibold">
+            Mode
             <select
-              className="w-full rounded-lg border-2 border-black px-3 py-2"
+              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
               value={mode}
-              onChange={(e) => setMode(e.target.value as Mode)}
+              onChange={(e) => setMode(e.target.value as any)}
             >
               <option value="popup">popup (floating bubble)</option>
               <option value="inline">inline</option>
               <option value="sidebar">sidebar</option>
             </select>
-          </div>
+          </label>
 
-          <div className="space-y-2">
-            <div className="text-xs font-bold uppercase">Position</div>
+          <label className="text-sm font-semibold">
+            Position
             <select
-              className="w-full rounded-lg border-2 border-black px-3 py-2"
-              value={pos}
-              onChange={(e) => setPos(e.target.value as Pos)}
+              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+              value={position}
+              onChange={(e) => setPosition(e.target.value as any)}
             >
               <option value="bottom-right">bottom-right</option>
               <option value="bottom-left">bottom-left</option>
             </select>
-          </div>
+          </label>
 
-          <div className="space-y-2">
-            <div className="text-xs font-bold uppercase">Bubble Image URL (optional)</div>
+          <label className="text-sm font-semibold">
+            Color
             <input
-              className="w-full rounded-lg border-2 border-black px-3 py-2"
-              placeholder="https://example.com/icon.png"
-              value={image}
-              onChange={(e) => setImage(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs font-bold uppercase">Color</div>
-            <input
+              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
               type="color"
-              className="w-24 h-10 rounded border-2 border-black"
               value={color}
               onChange={(e) => setColor(e.target.value)}
             />
-          </div>
+          </label>
 
-          <div className="space-y-2">
-            <div className="text-xs font-bold uppercase">Size (px)</div>
+          <label className="text-sm font-semibold">
+            Size (px)
             <input
+              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
               type="number"
-              min={48}
+              min={44}
               max={120}
-              step={2}
-              className="w-full rounded-lg border-2 border-black px-3 py-2"
               value={size}
-              onChange={(e) => setSize(Number(e.target.value) || 64)}
+              onChange={(e) => setSize(parseInt(e.target.value || "64", 10))}
             />
-          </div>
+          </label>
+
+          <label className="text-sm font-semibold">
+            Bubble Image URL (optional)
+            <input
+              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+              value={image}
+              onChange={(e) => setImage(e.target.value)}
+              placeholder="https://example.com/icon.png"
+            />
+          </label>
+        </div>
+
+        {/* Copy overrides */}
+        <div className="mt-4 grid md:grid-cols-2 gap-4">
+          <label className="text-sm font-semibold">
+            Welcome Title
+            <input
+              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+              value={welcomeTitle}
+              onChange={(e) => setWelcomeTitle(e.target.value)}
+            />
+          </label>
+          <label className="text-sm font-semibold">
+            Welcome Subtitle
+            <input
+              className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+              value={welcomeSub}
+              onChange={(e) => setWelcomeSub(e.target.value)}
+            />
+          </label>
         </div>
       </div>
 
-      {/* Live Preview container */}
-      <div className="rounded-2xl border-2 border-black overflow-hidden">
-        <div className="px-4 py-2 font-semibold bg-white border-b-2 border-black">
-          Live Preview
-        </div>
-        <div
-          className="relative"
-          style={{
-            height: 480,
-            background:
-              "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
-          }}
-        >
-          {/* The bubble */}
-          <ChatWidget
-            mode={mode}
-            botId={botId}
-            color={color}
-            size={size}
-            position={pos}
-            image={image || undefined}
-            onClick={() => setOpen(true)} // <-- open modal on click
-          />
+      {/* Live Preview area */}
+      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 p-4 shadow-md min-h-[60vh] relative overflow-hidden">
+        {/* The modal */}
+        {open && (
+          <div className="absolute inset-0 flex items-center justify-center p-3">
+            <div
+              className="
+                w-[92vw] max-w-[520px]
+                rounded-2xl border-2 border-black/70 bg-white shadow-2xl
+                overflow-hidden
+              "
+            >
+              {/* header */}
+              <div className="bg-gradient-to-r from-purple-300 via-indigo-300 to-teal-200 text-black/80 font-semibold px-4 py-3 flex items-center justify-between">
+                <span className="truncate">
+                  Quick intake to match you with the right plan
+                </span>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="w-8 h-8 rounded-full border-2 border-black/70 bg-white hover:bg-black/5 flex items-center justify-center"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
 
-          {/* The modal chat */}
-          <ModalChat
-            open={open}
-            onClose={() => setOpen(false)}
-            accent={color}
-            title="Quick intake to match you with the right plan"
-          />
+              {/* progress */}
+              <div className="px-4 pt-3">
+                <div className="h-2 rounded-full bg-black/10 overflow-hidden">
+                  <div className="h-full w-1/3 bg-black/70" />
+                </div>
+              </div>
+
+              {/* body */}
+              <div className="px-6 sm:px-8 py-8 text-center">
+                <div className="text-5xl mb-4">👋</div>
+                <h2 className="text-2xl sm:text-3xl font-black text-black tracking-tight mb-3">
+                  {welcomeTitle}
+                </h2>
+                <p className="text-base sm:text-lg text-black/70">{welcomeSub}</p>
+                <p className="text-sm text-black/60 mt-4">Press <b>Enter</b> to continue.</p>
+              </div>
+
+              {/* footer */}
+              <div className="px-6 py-5 flex items-center justify-between bg-black/5">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="px-5 py-3 rounded-xl border-2 border-black bg-white font-bold hover:bg-black/5"
+                >
+                  Close
+                </button>
+                <button className="px-6 py-3 rounded-xl border-2 border-black bg-indigo-300 font-bold hover:bg-indigo-200">
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bubble you can click to open again */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute right-4 bottom-4 pointer-events-auto">
+            <div onClick={() => setOpen(true)}>
+              <ChatWidget
+                botId={botId}
+                mode="popup"
+                position={position}
+                color={color}
+                size={size}
+                image={image || undefined}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
