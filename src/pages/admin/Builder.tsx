@@ -1,5 +1,5 @@
 // src/pages/admin/Builder.tsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -126,69 +126,84 @@ export default function Builder() {
     );
   }
 
-  // Per-bot/mode overrides
-  const [overrides, setOv] = useState<Record<string, any>>(() => getOverrides(currentBot, mode));
+  // Per-bot/mode overrides - store as state
+  const [overrides, setOverridesState] = useState<Record<string, any>>(() => 
+    getOverrides(currentBot, mode)
+  );
 
-  // Apply overrides to the base template
-  const merged = useMemo(() => {
-    const nodes = base.nodes.map((n) => {
+  // Apply overrides to the base template to get initial nodes
+  const initialNodes = useMemo(() => {
+    return base.nodes.map((n) => {
       const o = overrides[n.id];
       return o ? { ...n, data: mergeDeep(n.data || {}, o.data || {}) } : n;
     });
-    const edges = base.edges;
-    return { nodes, edges };
-  }, [base.nodes, base.edges, overrides]);
+  }, [base.nodes, overrides]);
 
-  // React Flow state
-  const [nodes, setNodes, onNodesChange] = useNodesState(merged.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(merged.edges);
+  // React Flow state - initialize with merged nodes
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(base.edges);
 
-  // Keep RF state in sync when merged changes (only on template/mode change)
-  useEffect(() => {
-    setNodes(merged.nodes as Node[]);
-    setEdges(merged.edges as Edge[]);
-  }, [tplKey]); // Only update when template key changes, not on every override change
-
-  // Selection + editor binding
+  // Selection state
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  
+  // Find selected node from current nodes state
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
     [nodes, selectedId]
   );
 
+  // Handle node click
   const onNodeClick = useCallback((_: any, node: Node) => {
     setSelectedId(node?.id || null);
   }, []);
 
+  // Handle connections
   const onConnect = useCallback((connection: Connection) => {
     setEdges((eds) => addEdge(connection, eds));
   }, [setEdges]);
 
-  // Save editor changes (persist + live update)
-  const saveField = useCallback((patch: Partial<RFNode["data"]>) => {
+  // Save editor changes
+  const saveField = useCallback((fieldName: string, value: any) => {
     if (!selectedId) return;
     
-    // Update overrides
-    const currentOverride = overrides[selectedId] || {};
-    const newData = { ...((currentOverride.data) || {}), ...patch };
-    const next = {
-      ...overrides,
-      [selectedId]: { data: newData },
-    };
+    // Create the patch object
+    const patch = { [fieldName]: value };
     
-    setOv(next);
-    setOverrides(currentBot, mode, next);
-
-    // Live update selected node in RF state
-    setNodes((prev) =>
-      prev.map((n) => {
-        if (n.id === selectedId) {
-          return { ...n, data: { ...(n.data || {}), ...patch } };
+    // Update nodes state immediately for UI responsiveness
+    setNodes((prevNodes) =>
+      prevNodes.map((node) => {
+        if (node.id === selectedId) {
+          return {
+            ...node,
+            data: {
+              ...(node.data || {}),
+              ...patch
+            }
+          };
         }
-        return n;
+        return node;
       })
     );
-  }, [selectedId, overrides, currentBot, mode, setNodes]);
+    
+    // Update overrides for persistence
+    setOverridesState((prevOverrides) => {
+      const currentOverride = prevOverrides[selectedId] || {};
+      const newOverrides = {
+        ...prevOverrides,
+        [selectedId]: { 
+          data: { 
+            ...(currentOverride.data || {}), 
+            ...patch 
+          } 
+        },
+      };
+      
+      // Save to localStorage
+      setOverrides(currentBot, mode, newOverrides);
+      
+      return newOverrides;
+    });
+  }, [selectedId, currentBot, mode, setNodes]);
 
   // Small label helper
   const FieldLabel = ({ children }: { children: React.ReactNode }) => (
@@ -205,7 +220,7 @@ export default function Builder() {
       );
     }
 
-    const common = "w-full rounded-lg border bg-card px-3 py-2 text-sm font-semibold";
+    const common = "w-full rounded-lg border bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400";
 
     if (selected.type === "message" || selected.type === "default" || !selected.type) {
       return (
@@ -214,8 +229,8 @@ export default function Builder() {
             <FieldLabel>Title</FieldLabel>
             <input
               className={common}
-              value={selected.data?.title ?? ""}
-              onChange={(e) => saveField({ title: e.target.value })}
+              value={selected.data?.title || ""}
+              onChange={(e) => saveField("title", e.target.value)}
               placeholder="Enter title..."
             />
           </div>
@@ -224,8 +239,8 @@ export default function Builder() {
             <textarea
               className={common}
               rows={4}
-              value={selected.data?.text ?? ""}
-              onChange={(e) => saveField({ text: e.target.value })}
+              value={selected.data?.text || ""}
+              onChange={(e) => saveField("text", e.target.value)}
               placeholder="Enter message text..."
             />
           </div>
@@ -240,8 +255,8 @@ export default function Builder() {
             <FieldLabel>Label</FieldLabel>
             <input
               className={common}
-              value={selected.data?.label ?? ""}
-              onChange={(e) => saveField({ label: e.target.value })}
+              value={selected.data?.label || ""}
+              onChange={(e) => saveField("label", e.target.value)}
               placeholder="Enter label..."
             />
           </div>
@@ -249,8 +264,8 @@ export default function Builder() {
             <FieldLabel>Placeholder</FieldLabel>
             <input
               className={common}
-              value={selected.data?.placeholder ?? ""}
-              onChange={(e) => saveField({ placeholder: e.target.value })}
+              value={selected.data?.placeholder || ""}
+              onChange={(e) => saveField("placeholder", e.target.value)}
               placeholder="Enter placeholder text..."
             />
           </div>
@@ -266,8 +281,8 @@ export default function Builder() {
             <FieldLabel>Label</FieldLabel>
             <input
               className={common}
-              value={selected.data?.label ?? ""}
-              onChange={(e) => saveField({ label: e.target.value })}
+              value={selected.data?.label || ""}
+              onChange={(e) => saveField("label", e.target.value)}
               placeholder="Enter label..."
             />
           </div>
@@ -277,14 +292,13 @@ export default function Builder() {
               className={common}
               rows={5}
               value={options.join("\n")}
-              onChange={(e) =>
-                saveField({
-                  options: e.target.value
-                    .split("\n")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
+              onChange={(e) => {
+                const newOptions = e.target.value
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                saveField("options", newOptions);
+              }}
               placeholder="Option 1&#10;Option 2&#10;Option 3"
             />
           </div>
@@ -299,8 +313,8 @@ export default function Builder() {
             <FieldLabel>Label</FieldLabel>
             <input
               className={common}
-              value={selected.data?.label ?? ""}
-              onChange={(e) => saveField({ label: e.target.value })}
+              value={selected.data?.label || ""}
+              onChange={(e) => saveField("label", e.target.value)}
               placeholder="Enter label..."
             />
           </div>
@@ -308,8 +322,8 @@ export default function Builder() {
             <FieldLabel>Email / Target</FieldLabel>
             <input
               className={common}
-              value={selected.data?.to ?? ""}
-              onChange={(e) => saveField({ to: e.target.value })}
+              value={selected.data?.to || ""}
+              onChange={(e) => saveField("to", e.target.value)}
               placeholder="email@example.com"
             />
           </div>
@@ -322,12 +336,17 @@ export default function Builder() {
 
   return (
     <div className="w-full h-full grid grid-rows-[1fr_auto] gap-4">
-      {/* Canvas wrapper with a subtle gradient */}
-      <div className="rounded-2xl border bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-indigo-50 via-white to-emerald-50 p-1">
-        {/* EXPLICIT HEIGHT FIX: React Flow needs a concrete height */}
+      {/* Canvas wrapper with beautiful pastel gradient */}
+      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
+        {/* React Flow container with pastel background */}
         <div
-          className="rounded-xl overflow-hidden border bg-white"
-          style={{ width: "100%", minHeight: 480, height: "70vh" }}
+          className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
+          style={{ 
+            width: "100%", 
+            minHeight: 480, 
+            height: "70vh",
+            background: "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)"
+          }}
         >
           <ReactFlow
             nodes={nodes}
@@ -336,24 +355,32 @@ export default function Builder() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
-            nodeTypes={nodeTypes} // Register custom node types here
+            nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
           >
-            <Background gap={24} size={1} color="#d1d5db" />
-            <Controls showInteractive={false} />
+            <Background 
+              gap={20} 
+              size={1} 
+              color="#e9d5ff" 
+              style={{ opacity: 0.3 }}
+            />
+            <Controls 
+              showInteractive={false}
+              className="bg-white/80 backdrop-blur-sm rounded-lg shadow-lg border border-purple-200"
+            />
           </ReactFlow>
         </div>
       </div>
 
-      {/* Side editor box */}
-      <div className="rounded-2xl border bg-card p-4 ring-1 ring-border">
-        <div className="text-sm font-extrabold mb-2">
-          Edit Text <span className="font-normal text-foreground/70">(per node)</span>
+      {/* Side editor box with matching pastel theme */}
+      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg">
+        <div className="text-sm font-extrabold mb-2 text-purple-900">
+          Edit Text <span className="font-normal text-purple-700">(per node)</span>
         </div>
         <Editor />
         {selected && (
-          <div className="mt-3 text-xs text-foreground/70">
+          <div className="mt-3 text-xs text-purple-600">
             Changes save automatically for this bot (<b>{currentBot}</b>) in <b>{mode}</b> mode.
           </div>
         )}
