@@ -29,7 +29,55 @@ export default function Preview() {
       ? "Sidebar mode shows a full-height panel."
       : "Popup mode shows a floating bubble that opens a panel on click.";
 
-  const openDefault = mode !== "popup"; // open by default for inline/sidebar
+  const openDefault = mode !== "popup"; // auto-open inline/sidebar in preview
+
+  // ---------- EMBED CODE (iframe overlay) ----------
+  const embedCode = useMemo(() => {
+    const origin =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "https://YOUR_DOMAIN";
+
+    const params = new URLSearchParams({
+      botId,
+      mode,
+      position,
+      color,
+      size: String(size),
+    });
+    if (imgUrl) params.set("image", imgUrl);
+
+    // Make the iframe big enough to contain the popup panel when open.
+    // For sidebar, we anchor full height.
+    const dim =
+      mode === "sidebar"
+        ? { w: "360px", h: "100vh" }
+        : { w: "380px", h: "560px" };
+
+    const side = position === "bottom-left" ? "left:24px;" : "right:24px;";
+
+    return `<!-- Bot Widget -->
+<iframe
+  src="${origin}/widget?${params.toString()}"
+  style="position:fixed; bottom:24px; ${side} width:${dim.w}; height:${dim.h}; border:0; z-index:999999; background:transparent;"
+  title="Bot Widget"
+  loading="lazy"
+></iframe>`;
+  }, [botId, mode, position, color, size, imgUrl]);
+
+  const copyEmbed = async () => {
+    try {
+      await navigator.clipboard.writeText(embedCode);
+      alert("Embed code copied to clipboard!");
+    } catch {
+      // Fallback: select the textarea if clipboard fails (permissions, http, etc.)
+      const ta = document.getElementById("embed-ta") as HTMLTextAreaElement | null;
+      if (ta) {
+        ta.focus();
+        ta.select();
+      }
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -127,6 +175,34 @@ export default function Preview() {
             preview
             openDefault={openDefault}
           />
+        </div>
+      </div>
+
+      {/* Embed code (copy & paste) */}
+      <div className="rounded-xl border-2 border-black overflow-hidden">
+        <div className="px-4 py-2 border-b-2 border-black font-bold bg-gradient-to-r from-purple-200 via-blue-200 to-teal-200">
+          Embed Code (copy & paste)
+        </div>
+        <div className="p-4 space-y-2 bg-white">
+          <textarea
+            id="embed-ta"
+            readOnly
+            className="w-full h-40 font-mono text-sm border-2 border-black rounded-lg p-3"
+            value={embedCode}
+          />
+          <div className="flex justify-end">
+            <button
+              onClick={copyEmbed}
+              className="px-4 py-2 rounded-lg border-2 border-black bg-purple-500 text-white font-bold hover:bg-purple-600"
+            >
+              Copy
+            </button>
+          </div>
+          <div className="text-xs text-black/70">
+            This iframe points at <code>/widget</code> with your settings in the querystring.
+            Paste it into any website’s HTML. For <b>sidebar</b> mode, the iframe fills the full
+            height on the chosen side; for <b>popup</b> it’s sized to fit the panel when opened.
+          </div>
         </div>
       </div>
     </div>
