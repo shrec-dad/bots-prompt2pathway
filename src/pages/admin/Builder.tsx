@@ -92,35 +92,31 @@ export default function Builder() {
   const { currentBot } = useAdminStore();
   const mode = (getBotSettings(currentBot as any).mode || "basic") as "basic" | "custom";
 
-  // template for this bot/mode
   const tplKey = `${currentBot}_${mode}`;
   const base = useMemo(
     () => (templates as any)[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined,
     [tplKey]
   );
 
-  // overrides loaded from storage for this bot/mode
   const [overrides, setOverridesState] = useState<Record<string, any>>(() =>
     getOverrides(currentBot, mode)
   );
 
-  // build initial nodes by merging base + overrides
   const buildNodes = useCallback(
     (srcNodes: RFNode[], ov: Record<string, any>) =>
       srcNodes.map((n) => {
         const o = ov[n.id];
-        return o && o.data ? { ...n, data: { ...(n.data || {}), ...(o.data || {}) } } : n;
+        return o?.data ? { ...n, data: { ...(n.data || {}), ...(o.data || {}) } } : n;
       }),
     []
   );
 
-  // reactflow state
   const [nodes, setNodes, onNodesChange] = useNodesState(
     base ? buildNodes(base.nodes, overrides) : []
   );
   const [edges, setEdges, onEdgesChange] = useEdgesState(base ? base.edges : []);
 
-  // when bot or mode changes, refresh everything
+  // rebuild when bot/mode changes (ensures correct flow shows)
   useEffect(() => {
     const nextBase = (templates as any)[`${currentBot}_${mode}`];
     const nextOv = getOverrides(currentBot, mode);
@@ -134,60 +130,53 @@ export default function Builder() {
     }
   }, [currentBot, mode, setNodes, setEdges, buildNodes]);
 
-  // selection + editor form state (decoupled from nodes)
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValues, setEditorValues] = useState<any>({});
 
-  // when selection changes, load form values from the node
   useEffect(() => {
-    if (!selectedId) {
-      setEditorValues({});
-      return;
-    }
+    if (!selectedId) return setEditorValues({});
     const n = nodes.find((x) => x.id === selectedId);
     setEditorValues(n?.data || {});
   }, [selectedId, nodes]);
 
   const onNodeClick = useCallback((_: any, n: Node) => setSelectedId(n?.id || null), []);
-
   const onConnect = useCallback(
     (c: Connection) => setEdges((eds) => addEdge(c, eds)),
     [setEdges]
   );
 
-  // local form updates only (no RF update here)
   const updateEditorValue = (key: string, value: any) =>
     setEditorValues((prev: any) => ({ ...prev, [key]: value }));
 
-  // commit to nodes + overrides (called onBlur or Save)
   const saveChanges = useCallback(() => {
     if (!selectedId) return;
-
-    // update nodes in place
-    setNodes((prev) =>
-      prev.map((n) => (n.id === selectedId ? { ...n, data: { ...editorValues } } : n))
-    );
-
-    // persist overrides
+    setNodes((prev) => prev.map((n) => (n.id === selectedId ? { ...n, data: { ...editorValues } } : n)));
     const nextOv = { ...overrides, [selectedId]: { data: { ...editorValues } } };
     setOverridesState(nextOv);
     saveOverrides(currentBot, mode, nextOv);
   }, [selectedId, editorValues, overrides, setNodes, currentBot, mode]);
 
-  /* --------- stop React Flow from stealing Backspace/Delete/typing -------- */
-  const stopRFHotkeys = (e: React.KeyboardEvent) => {
-    const t = e.target as HTMLElement | null;
-    const isField =
-      t &&
-      (t.tagName === "INPUT" ||
-        t.tagName === "TEXTAREA" ||
-        (t as HTMLElement).isContentEditable);
-    if (isField) {
-      // prevent RF’s global handlers from seeing editor keystrokes
+  /* ---------- HARD BLOCK of RF hotkeys when typing in inputs ----------- */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const isField =
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          (t as HTMLElement).isContentEditable);
+      if (!isField) return;
+      // stop RF global listeners from seeing keystrokes
       e.stopPropagation();
-    }
-  };
-  const stop = (e: React.KeyboardEvent) => e.stopPropagation();
+      // don’t let Backspace/Delete hit RF or the browser history
+      if (e.key === "Backspace" || e.key === "Delete") {
+        e.preventDefault();
+      }
+    };
+    // capture-phase so we beat RF’s listeners
+    document.addEventListener("keydown", handler, { capture: true });
+    return () => document.removeEventListener("keydown", handler, { capture: true } as any);
+  }, []);
 
   /* ------------------------------ Editor UI ------------------------------- */
 
@@ -202,6 +191,8 @@ export default function Builder() {
 
   const inputClass =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
+
+  const stop = (e: React.KeyboardEvent) => e.stopPropagation();
 
   const Editor = () => {
     if (!selected) {
@@ -339,11 +330,8 @@ export default function Builder() {
   /* --------------------------------- UI ----------------------------------- */
 
   return (
-    <div
-      className="w-full h-full grid grid-rows-[1fr_auto] gap-4"
-      onKeyDownCapture={stopRFHotkeys}
-    >
-      {/* Pastel canvas wrapper (kept exactly) */}
+    <div className="w-full h-full grid grid-rows-[1fr_auto] gap-4">
+      {/* Canvas wrapper (pastel) */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
         <div
           className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
@@ -365,6 +353,8 @@ export default function Builder() {
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
+            /* Hard-disable delete/backspace shortcut */
+            deleteKeyCode={null}
           >
             <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
@@ -375,7 +365,7 @@ export default function Builder() {
         </div>
       </div>
 
-      {/* Editor (kept) */}
+      {/* Editor (pastel) */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg">
         <div className="text-sm font-extrabold mb-3 text-purple-900">
           Edit Text <span className="font-normal text-purple-700">(per node)</span>
