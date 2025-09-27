@@ -18,13 +18,13 @@ import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
-/* ---------- Custom Node Components (unchanged visual) ---------- */
+/* ------------------------- Custom Node Components ------------------------- */
 
 const MessageNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-white border-2 border-stone-400">
     <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.title || "Message"}</div>
-    <div className="text-gray-500 text-sm">{data.text || "..."}</div>
+    <div className="font-bold">{data?.title || "Message"}</div>
+    <div className="text-gray-500 text-sm">{data?.text || "…"}</div>
     <Handle type="source" position={Position.Bottom} />
   </div>
 );
@@ -32,9 +32,9 @@ const MessageNode = ({ data }: { data: any }) => (
 const ChoiceNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-blue-50 border-2 border-blue-400">
     <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.label || "Choice"}</div>
+    <div className="font-bold">{data?.label || "Choice"}</div>
     <div className="text-xs text-gray-600 mt-1">
-      {(data.options || []).join(" | ") || "No options"}
+      {(data?.options || []).join(" | ") || "No options"}
     </div>
     <Handle type="source" position={Position.Bottom} />
   </div>
@@ -43,8 +43,8 @@ const ChoiceNode = ({ data }: { data: any }) => (
 const ActionNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-green-50 border-2 border-green-400">
     <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.label || "Action"}</div>
-    <div className="text-xs text-gray-600">{data.to || "..."}</div>
+    <div className="font-bold">{data?.label || "Action"}</div>
+    <div className="text-xs text-gray-600">{data?.to || "…"}</div>
     <Handle type="source" position={Position.Bottom} />
   </div>
 );
@@ -52,8 +52,8 @@ const ActionNode = ({ data }: { data: any }) => (
 const InputNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-purple-50 border-2 border-purple-400">
     <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.label || "Input"}</div>
-    <div className="text-xs text-gray-600">{data.placeholder || "..."}</div>
+    <div className="font-bold">{data?.label || "Input"}</div>
+    <div className="text-xs text-gray-600">{data?.placeholder || "…"}</div>
     <Handle type="source" position={Position.Bottom} />
   </div>
 );
@@ -65,7 +65,7 @@ const nodeTypes = {
   input: InputNode,
 };
 
-/* -------------------------- Helpers --------------------------- */
+/* --------------------------------- Helpers -------------------------------- */
 
 type RFNode = Node & {
   type?: "default" | "input" | "output" | "group" | "message" | "choice" | "action";
@@ -86,132 +86,128 @@ function saveOverrides(bot: string, mode: "basic" | "custom", overrides: Record<
   localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(overrides));
 }
 
-/* Stop React Flow shortcuts from triggering while typing in editor fields */
-const stopFlowShortcuts: React.KeyboardEventHandler<
-  HTMLInputElement | HTMLTextAreaElement
-> = (e) => {
-  // Always stop propagation so RF doesn't see Backspace/Delete/Ctrl+A/Ctrl+Z/etc.
-  e.stopPropagation();
-};
-
-/* ------------------------- Component -------------------------- */
+/* -------------------------------- Component ------------------------------- */
 
 export default function Builder() {
   const { currentBot } = useAdminStore();
   const mode = (getBotSettings(currentBot as any).mode || "basic") as "basic" | "custom";
-  const tplKey = `${currentBot}_${mode}`;
-  const base = templates[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined;
 
+  // template for this bot/mode
+  const tplKey = `${currentBot}_${mode}`;
+  const base = useMemo(
+    () => (templates as any)[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined,
+    [tplKey]
+  );
+
+  // overrides loaded from storage for this bot/mode
   const [overrides, setOverridesState] = useState<Record<string, any>>(() =>
     getOverrides(currentBot, mode)
   );
 
-  if (!base) {
-    return (
-      <div className="rounded-2xl border bg-card p-6">
-        <div className="text-lg font-extrabold mb-1">No flow template found</div>
-        <div className="text-sm text-foreground/70">
-          I couldn't find a template for <b>{currentBot}</b> in <b>{mode}</b> mode.&nbsp;
-          Make sure there is an entry in <code>templates</code> for <code>{tplKey}</code>.
-        </div>
-      </div>
-    );
-  }
+  // build initial nodes by merging base + overrides
+  const buildNodes = useCallback(
+    (srcNodes: RFNode[], ov: Record<string, any>) =>
+      srcNodes.map((n) => {
+        const o = ov[n.id];
+        return o && o.data ? { ...n, data: { ...(n.data || {}), ...(o.data || {}) } } : n;
+      }),
+    []
+  );
 
-  const getInitialNodes = () =>
-    base.nodes.map((baseNode) => {
-      const override = overrides[baseNode.id];
-      return override && override.data
-        ? { ...baseNode, data: { ...(baseNode.data || {}), ...(override.data || {}) } }
-        : baseNode;
-    });
+  // reactflow state
+  const [nodes, setNodes, onNodesChange] = useNodesState(
+    base ? buildNodes(base.nodes, overrides) : []
+  );
+  const [edges, setEdges, onEdgesChange] = useEdgesState(base ? base.edges : []);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
-  const [edges, setEdges, onEdgesChange] = useEdgesState(base.edges);
+  // when bot or mode changes, refresh everything
+  useEffect(() => {
+    const nextBase = (templates as any)[`${currentBot}_${mode}`];
+    const nextOv = getOverrides(currentBot, mode);
+    setOverridesState(nextOv);
+    if (nextBase) {
+      setNodes(buildNodes(nextBase.nodes, nextOv) as Node[]);
+      setEdges(nextBase.edges as Edge[]);
+    } else {
+      setNodes([]);
+      setEdges([]);
+    }
+  }, [currentBot, mode, setNodes, setEdges, buildNodes]);
 
+  // selection + editor form state (decoupled from nodes)
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValues, setEditorValues] = useState<any>({});
 
+  // when selection changes, load form values from the node
   useEffect(() => {
-    if (selectedId) {
-      const node = nodes.find((n) => n.id === selectedId);
-      setEditorValues(node?.data || {});
-    } else {
+    if (!selectedId) {
       setEditorValues({});
+      return;
     }
+    const n = nodes.find((x) => x.id === selectedId);
+    setEditorValues(n?.data || {});
   }, [selectedId, nodes]);
+
+  const onNodeClick = useCallback((_: any, n: Node) => setSelectedId(n?.id || null), []);
+
+  const onConnect = useCallback(
+    (c: Connection) => setEdges((eds) => addEdge(c, eds)),
+    [setEdges]
+  );
+
+  // local form updates only (no RF update here)
+  const updateEditorValue = (key: string, value: any) =>
+    setEditorValues((prev: any) => ({ ...prev, [key]: value }));
+
+  // commit to nodes + overrides (called onBlur or Save)
+  const saveChanges = useCallback(() => {
+    if (!selectedId) return;
+
+    // update nodes in place
+    setNodes((prev) =>
+      prev.map((n) => (n.id === selectedId ? { ...n, data: { ...editorValues } } : n))
+    );
+
+    // persist overrides
+    const nextOv = { ...overrides, [selectedId]: { data: { ...editorValues } } };
+    setOverridesState(nextOv);
+    saveOverrides(currentBot, mode, nextOv);
+  }, [selectedId, editorValues, overrides, setNodes, currentBot, mode]);
+
+  /* --------- stop React Flow from stealing Backspace/Delete/typing -------- */
+  const stopRFHotkeys = (e: React.KeyboardEvent) => {
+    const t = e.target as HTMLElement | null;
+    const isField =
+      t &&
+      (t.tagName === "INPUT" ||
+        t.tagName === "TEXTAREA" ||
+        (t as HTMLElement).isContentEditable);
+    if (isField) {
+      // prevent RF’s global handlers from seeing editor keystrokes
+      e.stopPropagation();
+    }
+  };
+  const stop = (e: React.KeyboardEvent) => e.stopPropagation();
+
+  /* ------------------------------ Editor UI ------------------------------- */
+
+  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
+  );
 
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
     [nodes, selectedId]
   );
 
-  const onNodeClick = useCallback((_: any, node: Node) => {
-    setSelectedId(node?.id || null);
-  }, []);
-
-  const onConnect = useCallback(
-    (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
-    [setEdges]
-  );
-
-  const updateEditorValue = (field: string, value: any) =>
-    setEditorValues((prev) => ({ ...prev, [field]: value }));
-
-  const saveChanges = useCallback(() => {
-    if (!selectedId) return;
-
-    setNodes((prev) =>
-      prev.map((n) => (n.id === selectedId ? { ...n, data: { ...editorValues } } : n))
-    );
-
-    const next = { ...overrides, [selectedId]: { data: editorValues } };
-    setOverridesState(next);
-    saveOverrides(currentBot, mode, next);
-  }, [selectedId, editorValues, overrides, currentBot, mode, setNodes]);
-
-  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
-  );
+  const inputClass =
+    "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
   const Editor = () => {
     if (!selected) {
       return (
         <div className="text-sm text-purple-600">
           Select a node above to edit its text and labels.
-        </div>
-      );
-    }
-
-    const inputClass =
-      "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
-
-    if (selected.type === "message" || selected.type === "default" || !selected.type) {
-      return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Title</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.title || ""}
-              onChange={(e) => updateEditorValue("title", e.target.value)}
-              onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
-              placeholder="Enter title..."
-            />
-          </div>
-          <div>
-            <FieldLabel>Text</FieldLabel>
-            <textarea
-              className={inputClass}
-              rows={4}
-              value={editorValues.text || ""}
-              onChange={(e) => updateEditorValue("text", e.target.value)}
-              onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
-              placeholder="Enter message text..."
-            />
-          </div>
         </div>
       );
     }
@@ -226,8 +222,8 @@ export default function Builder() {
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
-              placeholder="Enter label..."
+              onKeyDown={stop}
+              placeholder="Enter label…"
             />
           </div>
           <div>
@@ -237,8 +233,8 @@ export default function Builder() {
               value={editorValues.placeholder || ""}
               onChange={(e) => updateEditorValue("placeholder", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
-              placeholder="Enter placeholder text..."
+              onKeyDown={stop}
+              placeholder="Enter placeholder…"
             />
           </div>
         </div>
@@ -246,7 +242,7 @@ export default function Builder() {
     }
 
     if (selected.type === "choice") {
-      const options = editorValues.options || [];
+      const options: string[] = editorValues.options || [];
       return (
         <div className="space-y-3">
           <div>
@@ -256,8 +252,8 @@ export default function Builder() {
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
-              placeholder="Enter label..."
+              onKeyDown={stop}
+              placeholder="Enter label…"
             />
           </div>
           <div>
@@ -273,7 +269,7 @@ export default function Builder() {
                 )
               }
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stop}
               placeholder={"Option 1\nOption 2\nOption 3"}
             />
           </div>
@@ -291,8 +287,8 @@ export default function Builder() {
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
-              placeholder="Enter label..."
+              onKeyDown={stop}
+              placeholder="Enter label…"
             />
           </div>
           <div>
@@ -302,7 +298,7 @@ export default function Builder() {
               value={editorValues.to || ""}
               onChange={(e) => updateEditorValue("to", e.target.value)}
               onBlur={saveChanges}
-              onKeyDown={stopFlowShortcuts}
+              onKeyDown={stop}
               placeholder="email@example.com"
             />
           </div>
@@ -310,12 +306,44 @@ export default function Builder() {
       );
     }
 
-    return null;
+    // default = message
+    return (
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Title</FieldLabel>
+          <input
+            className={inputClass}
+            value={editorValues.title || ""}
+            onChange={(e) => updateEditorValue("title", e.target.value)}
+            onBlur={saveChanges}
+            onKeyDown={stop}
+            placeholder="Enter title…"
+          />
+        </div>
+        <div>
+          <FieldLabel>Text</FieldLabel>
+          <textarea
+            className={inputClass}
+            rows={4}
+            value={editorValues.text || ""}
+            onChange={(e) => updateEditorValue("text", e.target.value)}
+            onBlur={saveChanges}
+            onKeyDown={stop}
+            placeholder="Enter message text…"
+          />
+        </div>
+      </div>
+    );
   };
 
+  /* --------------------------------- UI ----------------------------------- */
+
   return (
-    <div className="w-full h-full grid grid-rows-[1fr_auto] gap-4">
-      {/* Canvas wrapper with pastel gradient (kept) */}
+    <div
+      className="w-full h-full grid grid-rows-[1fr_auto] gap-4"
+      onKeyDownCapture={stopRFHotkeys}
+    >
+      {/* Pastel canvas wrapper (kept exactly) */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
         <div
           className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
@@ -337,9 +365,6 @@ export default function Builder() {
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
-            /* >>> Fixes: stop RF from stealing Backspace/Delete & selection keys */
-            deleteKeyCode={[]}          // disables deleting with keyboard
-            selectionKeyCode={null}     // prevents holding a key to enter selection mode
           >
             <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
