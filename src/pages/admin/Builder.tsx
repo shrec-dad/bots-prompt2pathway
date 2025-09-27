@@ -67,7 +67,7 @@ type RFNode = Node & {
   data?: any;
 };
 
-const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
+const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected group after &#x27;_&#x27; at position 6: {bot}_̲" style="color:#cc0000">{bot}_</span></span>{mode}`;
 
 function getOverrides(bot: string, mode: "basic" | "custom") {
   try {
@@ -86,8 +86,9 @@ export default function Builder() {
   const { currentBot } = useAdminStore();
   const mode = (getBotSettings(currentBot as any).mode || "basic") as "basic" | "custom";
   const editorRef = useRef<HTMLDivElement>(null);
+  const [isEditingText, setIsEditingText] = useState(false);
 
-  const tplKey = `${currentBot}_${mode}`;
+  const tplKey = `<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected group after &#x27;_&#x27; at position 13: {currentBot}_̲" style="color:#cc0000">{currentBot}_</span></span>{mode}`;
   const base = useMemo(
     () => (templates as any)[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined,
     [tplKey]
@@ -106,7 +107,7 @@ export default function Builder() {
 
   // Refresh when bot/mode changes
   useEffect(() => {
-    const nextBase = (templates as any)[`${currentBot}_${mode}`];
+    const nextBase = (templates as any)[`<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected group after &#x27;_&#x27; at position 13: {currentBot}_̲" style="color:#cc0000">{currentBot}_</span></span>{mode}`];
     const nextOv = getOverrides(currentBot, mode);
     setOv(nextOv);
     if (nextBase) {
@@ -140,27 +141,30 @@ export default function Builder() {
     saveOverrides(currentBot, mode, nextOv);
   }, [selectedId, editorValues, overrides, setNodes, currentBot, mode]);
 
-  // Block all events from bubbling up from the editor section
+  // Comprehensive event blocking when editing
   useEffect(() => {
-    const editorEl = editorRef.current;
-    if (!editorEl) return;
+    if (!isEditingText) return;
 
-    const blockEvent = (e: Event) => {
-      e.stopPropagation();
-      e.stopImmediatePropagation();
+    const blockEvent = (e: KeyboardEvent) => {
+      // Allow these events to propagate only if we're in an input/textarea
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
     };
 
-    // Capture all keyboard events at the editor level
-    ['keydown', 'keyup', 'keypress'].forEach(eventType => {
-      editorEl.addEventListener(eventType, blockEvent, true);
-    });
+    // Capture at document level with highest priority
+    document.addEventListener('keydown', blockEvent, true);
+    document.addEventListener('keyup', blockEvent, true);
+    document.addEventListener('keypress', blockEvent, true);
 
     return () => {
-      ['keydown', 'keyup', 'keypress'].forEach(eventType => {
-        editorEl.removeEventListener(eventType, blockEvent, true);
-      });
+      document.removeEventListener('keydown', blockEvent, true);
+      document.removeEventListener('keyup', blockEvent, true);
+      document.removeEventListener('keypress', blockEvent, true);
     };
-  }, []);
+  }, [isEditingText]);
 
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
@@ -173,6 +177,24 @@ export default function Builder() {
   const FieldLabel = ({ children }: { children: React.ReactNode }) => (
     <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
   );
+
+  // Prevent all event propagation from inputs
+  const handleInputEvents = {
+    onKeyDown: (e: React.KeyboardEvent) => {
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+    },
+    onKeyUp: (e: React.KeyboardEvent) => {
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+    },
+    onKeyPress: (e: React.KeyboardEvent) => {
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+    },
+    onFocus: () => setIsEditingText(true),
+    onBlur: () => setIsEditingText(false),
+  };
 
   const Editor = () => {
     if (!selected) {
@@ -190,6 +212,7 @@ export default function Builder() {
               onChange={(e) => updateEditorValue("label", e.target.value)}
               placeholder="Enter label…"
               autoComplete="off"
+              {...handleInputEvents}
             />
           </div>
           <div>
@@ -200,6 +223,7 @@ export default function Builder() {
               onChange={(e) => updateEditorValue("placeholder", e.target.value)}
               placeholder="Enter placeholder…"
               autoComplete="off"
+              {...handleInputEvents}
             />
           </div>
         </div>
@@ -218,6 +242,7 @@ export default function Builder() {
               onChange={(e) => updateEditorValue("label", e.target.value)}
               placeholder="Enter label…"
               autoComplete="off"
+              {...handleInputEvents}
             />
           </div>
           <div>
@@ -234,6 +259,7 @@ export default function Builder() {
               }
               placeholder={"Option 1\nOption 2\nOption 3"}
               autoComplete="off"
+              {...handleInputEvents}
             />
           </div>
         </div>
@@ -251,6 +277,7 @@ export default function Builder() {
               onChange={(e) => updateEditorValue("label", e.target.value)}
               placeholder="Enter label…"
               autoComplete="off"
+              {...handleInputEvents}
             />
           </div>
           <div>
@@ -261,6 +288,7 @@ export default function Builder() {
               onChange={(e) => updateEditorValue("to", e.target.value)}
               placeholder="email@example.com"
               autoComplete="off"
+              {...handleInputEvents}
             />
           </div>
         </div>
@@ -278,6 +306,7 @@ export default function Builder() {
             onChange={(e) => updateEditorValue("title", e.target.value)}
             placeholder="Enter title…"
             autoComplete="off"
+            {...handleInputEvents}
           />
         </div>
         <div>
@@ -289,6 +318,7 @@ export default function Builder() {
             onChange={(e) => updateEditorValue("text", e.target.value)}
             placeholder="Enter message text…"
             autoComplete="off"
+            {...handleInputEvents}
           />
         </div>
       </div>
@@ -319,11 +349,12 @@ export default function Builder() {
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
-            deleteKeyCode="Delete"
+            deleteKeyCode={isEditingText ? null : "Delete"}
             selectionOnDrag={false}
             selectNodesOnDrag={false}
-            panOnDrag={true}
-            zoomOnScroll={true}
+            panOnDrag={!isEditingText}
+            zoomOnScroll={!isEditingText}
+            panOnScroll={isEditingText}
           >
             <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
@@ -334,13 +365,22 @@ export default function Builder() {
         </div>
       </div>
 
-      {/* Editor (pastel) - with event isolation */}
+      {/* Editor (pastel) - with comprehensive event isolation */}
       <div 
         ref={editorRef}
         className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg"
-        onKeyDown={(e) => e.stopPropagation()}
-        onKeyUp={(e) => e.stopPropagation()}
-        onKeyPress={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          e.nativeEvent.stopImmediatePropagation();
+        }}
+        onKeyUp={(e) => {
+          e.stopPropagation();
+          e.nativeEvent.stopImmediatePropagation();
+        }}
+        onKeyPress={(e) => {
+          e.stopPropagation();
+          e.nativeEvent.stopImmediatePropagation();
+        }}
       >
         <div className="text-sm font-extrabold mb-3 text-purple-900">
           Edit Text <span className="font-normal text-purple-700">(per node)</span>
