@@ -85,7 +85,7 @@ function saveOverrides(bot: string, mode: "basic" | "custom", ov: Record<string,
 export default function Builder() {
   const { currentBot } = useAdminStore();
   const mode = (getBotSettings(currentBot as any).mode || "basic") as "basic" | "custom";
-  const [isEditingInput, setIsEditingInput] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const tplKey = `${currentBot}_${mode}`;
   const base = useMemo(
@@ -140,6 +140,28 @@ export default function Builder() {
     saveOverrides(currentBot, mode, nextOv);
   }, [selectedId, editorValues, overrides, setNodes, currentBot, mode]);
 
+  // Block all events from bubbling up from the editor section
+  useEffect(() => {
+    const editorEl = editorRef.current;
+    if (!editorEl) return;
+
+    const blockEvent = (e: Event) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    // Capture all keyboard events at the editor level
+    ['keydown', 'keyup', 'keypress'].forEach(eventType => {
+      editorEl.addEventListener(eventType, blockEvent, true);
+    });
+
+    return () => {
+      ['keydown', 'keyup', 'keypress'].forEach(eventType => {
+        editorEl.removeEventListener(eventType, blockEvent, true);
+      });
+    };
+  }, []);
+
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
     [nodes, selectedId]
@@ -147,11 +169,6 @@ export default function Builder() {
 
   const inputClass =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
-
-  // Prevent event propagation helper
-  const handleInputInteraction = (e: React.KeyboardEvent | React.MouseEvent) => {
-    e.stopPropagation();
-  };
 
   const FieldLabel = ({ children }: { children: React.ReactNode }) => (
     <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
@@ -171,12 +188,8 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
-              onFocus={() => setIsEditingInput(true)}
-              onBlur={() => setIsEditingInput(false)}
-              onKeyDown={handleInputInteraction}
-              onKeyUp={handleInputInteraction}
-              onClick={handleInputInteraction}
               placeholder="Enter label…"
+              autoComplete="off"
             />
           </div>
           <div>
@@ -185,12 +198,8 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.placeholder || ""}
               onChange={(e) => updateEditorValue("placeholder", e.target.value)}
-              onFocus={() => setIsEditingInput(true)}
-              onBlur={() => setIsEditingInput(false)}
-              onKeyDown={handleInputInteraction}
-              onKeyUp={handleInputInteraction}
-              onClick={handleInputInteraction}
               placeholder="Enter placeholder…"
+              autoComplete="off"
             />
           </div>
         </div>
@@ -207,12 +216,8 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
-              onFocus={() => setIsEditingInput(true)}
-              onBlur={() => setIsEditingInput(false)}
-              onKeyDown={handleInputInteraction}
-              onKeyUp={handleInputInteraction}
-              onClick={handleInputInteraction}
               placeholder="Enter label…"
+              autoComplete="off"
             />
           </div>
           <div>
@@ -224,15 +229,11 @@ export default function Builder() {
               onChange={(e) =>
                 updateEditorValue(
                   "options",
-                  e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
+                  e.target.value.split("\n").filter(s => s.trim()).map(s => s.trim())
                 )
               }
-              onFocus={() => setIsEditingInput(true)}
-              onBlur={() => setIsEditingInput(false)}
-              onKeyDown={handleInputInteraction}
-              onKeyUp={handleInputInteraction}
-              onClick={handleInputInteraction}
               placeholder={"Option 1\nOption 2\nOption 3"}
+              autoComplete="off"
             />
           </div>
         </div>
@@ -248,12 +249,8 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
-              onFocus={() => setIsEditingInput(true)}
-              onBlur={() => setIsEditingInput(false)}
-              onKeyDown={handleInputInteraction}
-              onKeyUp={handleInputInteraction}
-              onClick={handleInputInteraction}
               placeholder="Enter label…"
+              autoComplete="off"
             />
           </div>
           <div>
@@ -262,12 +259,8 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.to || ""}
               onChange={(e) => updateEditorValue("to", e.target.value)}
-              onFocus={() => setIsEditingInput(true)}
-              onBlur={() => setIsEditingInput(false)}
-              onKeyDown={handleInputInteraction}
-              onKeyUp={handleInputInteraction}
-              onClick={handleInputInteraction}
               placeholder="email@example.com"
+              autoComplete="off"
             />
           </div>
         </div>
@@ -283,12 +276,8 @@ export default function Builder() {
             className={inputClass}
             value={editorValues.title || ""}
             onChange={(e) => updateEditorValue("title", e.target.value)}
-            onFocus={() => setIsEditingInput(true)}
-            onBlur={() => setIsEditingInput(false)}
-            onKeyDown={handleInputInteraction}
-            onKeyUp={handleInputInteraction}
-            onClick={handleInputInteraction}
             placeholder="Enter title…"
+            autoComplete="off"
           />
         </div>
         <div>
@@ -298,12 +287,8 @@ export default function Builder() {
             rows={4}
             value={editorValues.text || ""}
             onChange={(e) => updateEditorValue("text", e.target.value)}
-            onFocus={() => setIsEditingInput(true)}
-            onBlur={() => setIsEditingInput(false)}
-            onKeyDown={handleInputInteraction}
-            onKeyUp={handleInputInteraction}
-            onClick={handleInputInteraction}
             placeholder="Enter message text…"
+            autoComplete="off"
           />
         </div>
       </div>
@@ -334,12 +319,11 @@ export default function Builder() {
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
-            deleteKeyCode={null}
-            selectionKeyCode={null}
-            multiSelectionKeyCode={null}
-            zoomActivationKeyCode={null}
-            panActivationKeyCode={null}
-            disableKeyboardA11y={isEditingInput}
+            deleteKeyCode="Delete"
+            selectionOnDrag={false}
+            selectNodesOnDrag={false}
+            panOnDrag={true}
+            zoomOnScroll={true}
           >
             <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
@@ -350,8 +334,14 @@ export default function Builder() {
         </div>
       </div>
 
-      {/* Editor (pastel) */}
-      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg">
+      {/* Editor (pastel) - with event isolation */}
+      <div 
+        ref={editorRef}
+        className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg"
+        onKeyDown={(e) => e.stopPropagation()}
+        onKeyUp={(e) => e.stopPropagation()}
+        onKeyPress={(e) => e.stopPropagation()}
+      >
         <div className="text-sm font-extrabold mb-3 text-purple-900">
           Edit Text <span className="font-normal text-purple-700">(per node)</span>
         </div>
