@@ -15,6 +15,7 @@ import Analytics from "@/pages/admin/Analytics";
 import Integrations from "@/pages/admin/Integrations";
 import Clients from "@/pages/admin/Clients";
 import Nurture from "@/pages/admin/Nurture";
+import Knowledge from "@/pages/admin/Knowledge";
 import Settings from "@/pages/admin/Settings";
 import Preview from "@/pages/admin/Preview";
 
