@@ -1,5 +1,5 @@
 // src/pages/admin/Builder.tsx
-import React, { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -19,48 +19,54 @@ import { templates } from "@/lib/templates";
 import { getBotSettings } from "@/lib/botSettings";
 
 /* ------------------------------------------------------------------ */
-/* Custom Node Components                                            */
+/* Custom Node Components (visuals kept the same; just added handle ids) */
 /* ------------------------------------------------------------------ */
 
+const cardBase =
+  "px-4 py-2 shadow-md rounded-md border-2 bg-white text-[13px] leading-snug";
+
 const MessageNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-white border-2 border-stone-400">
-    <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.title || "Message"}</div>
-    <div className="text-gray-500 text-sm">{data.text || "..."}</div>
-    <Handle type="source" position={Position.Bottom} />
+  <div className={`${cardBase} border-stone-400 select-none`}>
+    <Handle id="in" type="target" position={Position.Top} />
+    <div className="font-bold">{data?.title || "Message"}</div>
+    <div className="text-gray-500 text-sm">{data?.text || "..."}</div>
+    {/* default "out" for message */}
+    <Handle id="out" type="source" position={Position.Bottom} />
   </div>
 );
 
 const ChoiceNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-blue-50 border-2 border-blue-400">
-    <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.label || "Choice"}</div>
+  <div className={`${cardBase} border-blue-400 bg-blue-50 select-none`}>
+    <Handle id="in" type="target" position={Position.Top} />
+    <div className="font-bold">{data?.label || "Choice"}</div>
     <div className="text-xs text-gray-600 mt-1">
-      {(data.options || []).join(" | ") || "No options"}
+      {(data?.options || []).join(" · ") || "No options"}
     </div>
-    <Handle type="source" position={Position.Bottom} />
+    {/* default "out" for choice */}
+    <Handle id="out" type="source" position={Position.Bottom} />
   </div>
 );
 
 const ActionNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-green-50 border-2 border-green-400">
-    <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.label || "Action"}</div>
-    <div className="text-xs text-gray-600">{data.to || "..."}</div>
-    <Handle type="source" position={Position.Bottom} />
+  <div className={`${cardBase} border-green-400 bg-green-50 select-none`}>
+    <Handle id="in" type="target" position={Position.Top} />
+    <div className="font-bold">{data?.label || "Action"}</div>
+    <div className="text-xs text-gray-600">{data?.to || "..."}</div>
+    {/* default "out" for action */}
+    <Handle id="out" type="source" position={Position.Bottom} />
   </div>
 );
 
 const InputNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-purple-50 border-2 border-purple-400">
-    <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.label || "Input"}</div>
-    <div className="text-xs text-gray-600">{data.placeholder || "..."}</div>
-    <Handle type="source" position={Position.Bottom} />
+  <div className={`${cardBase} border-purple-400 bg-purple-50 select-none`}>
+    <Handle id="in" type="target" position={Position.Top} />
+    <div className="font-bold">{data?.label || "Input"}</div>
+    <div className="text-xs text-gray-600">{data?.placeholder || "..."}</div>
+    {/* many templates point edges to sourceHandle: "submit" */}
+    <Handle id="submit" type="source" position={Position.Bottom} />
   </div>
 );
 
-// Register custom node types
 const nodeTypes = {
   message: MessageNode,
   choice: ChoiceNode,
@@ -69,15 +75,23 @@ const nodeTypes = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Helpers                                                           */
+/* Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
 type RFNode = Node & {
-  type?: "default" | "input" | "output" | "group" | "message" | "choice" | "action";
+  type?:
+    | "default"
+    | "input"
+    | "output"
+    | "group"
+    | "message"
+    | "choice"
+    | "action";
   data?: any;
 };
 
-const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
+const OV_KEY = (bot: string, mode: "basic" | "custom") =>
+  `botOverrides:${bot}_${mode}`;
 
 function getOverrides(bot: string, mode: "basic" | "custom") {
   try {
@@ -87,7 +101,11 @@ function getOverrides(bot: string, mode: "basic" | "custom") {
   return {};
 }
 
-function saveOverrides(bot: string, mode: "basic" | "custom", overrides: Record<string, any>) {
+function saveOverrides(
+  bot: string,
+  mode: "basic" | "custom",
+  overrides: Record<string, any>
+) {
   localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(overrides));
 }
 
@@ -97,16 +115,15 @@ function saveOverrides(bot: string, mode: "basic" | "custom", overrides: Record<
 
 export default function Builder() {
   const { currentBot } = useAdminStore();
-  const mode = (getBotSettings(currentBot as any).mode || "basic") as "basic" | "custom";
+  const mode = (getBotSettings(currentBot as any).mode ||
+    "basic") as "basic" | "custom";
   const tplKey = `${currentBot}_${mode}`;
   const base = templates[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined;
 
-  // Store overrides in state
-  const [overrides, setOverridesState] = useState<Record<string, any>>(() => 
+  const [overrides, setOverridesState] = useState<Record<string, any>>(() =>
     getOverrides(currentBot, mode)
   );
 
-  // ---- Missing-template guard
   if (!base) {
     return (
       <div className="rounded-2xl border bg-card p-6">
@@ -119,98 +136,69 @@ export default function Builder() {
     );
   }
 
-  // Merge base template with overrides
-  const getInitialNodes = () => {
-    return base.nodes.map((baseNode) => {
-      const override = overrides[baseNode.id];
-      if (override && override.data) {
-        return {
-          ...baseNode,
-          data: { ...(baseNode.data || {}), ...(override.data || {}) }
-        };
-      }
-      return baseNode;
+  const getInitialNodes = () =>
+    base.nodes.map((n) => {
+      const o = overrides[n.id];
+      return o?.data ? { ...n, data: { ...(n.data || {}), ...o.data } } : n;
     });
-  };
 
-  // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(base.edges);
 
-  // Selection state
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  
-  // Local form state for the editor (this prevents the re-render issues)
   const [editorValues, setEditorValues] = useState<any>({});
 
-  // When selection changes, populate editor values from the selected node
   useEffect(() => {
     if (selectedId) {
-      const node = nodes.find(n => n.id === selectedId);
-      if (node) {
-        setEditorValues(node.data || {});
-      }
+      const node = nodes.find((n) => n.id === selectedId);
+      setEditorValues(node?.data || {});
     } else {
       setEditorValues({});
     }
   }, [selectedId, nodes]);
 
-  // Get selected node
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
     [nodes, selectedId]
   );
 
-  // Handle node click
   const onNodeClick = useCallback((_: any, node: Node) => {
     setSelectedId(node?.id || null);
   }, []);
 
-  // Handle connections
-  const onConnect = useCallback((connection: Connection) => {
-    setEdges((eds) => addEdge(connection, eds));
-  }, [setEdges]);
-
-  // Update local editor state
-  const updateEditorValue = (field: string, value: any) => {
-    setEditorValues(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Save changes (called on blur or with debounce)
-  const saveChanges = useCallback(() => {
-    if (!selectedId || !editorValues) return;
-
-    // Update nodes
-    setNodes((prevNodes) =>
-      prevNodes.map((node) => {
-        if (node.id === selectedId) {
-          return {
-            ...node,
-            data: { ...editorValues }
-          };
-        }
-        return node;
-      })
-    );
-
-    // Update and persist overrides
-    const newOverrides = {
-      ...overrides,
-      [selectedId]: { data: editorValues }
-    };
-    setOverridesState(newOverrides);
-    saveOverrides(currentBot, mode, newOverrides);
-  }, [selectedId, editorValues, currentBot, mode, setNodes, overrides]);
-
-  // Small label helper
-  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
+  const onConnect = useCallback(
+    (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
+    [setEdges]
   );
 
-  // Side editor UI
+  // Local editor updates (no canvas re-render)
+  const updateEditorValue = (field: string, value: any) =>
+    setEditorValues((p: any) => ({ ...p, [field]: value }));
+
+  const saveChanges = useCallback(() => {
+    if (!selectedId) return;
+
+    setNodes((prev) =>
+      prev.map((n) => (n.id === selectedId ? { ...n, data: { ...editorValues } } : n))
+    );
+
+    const next = { ...overrides, [selectedId]: { data: editorValues } };
+    setOverridesState(next);
+    saveOverrides(currentBot, mode, next);
+  }, [selectedId, editorValues, overrides, currentBot, mode, setNodes]);
+
+  // prevent the editor from bubbling events into the canvas
+  const stopAll = (e: React.SyntheticEvent) => e.stopPropagation();
+
+  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+    <div className="text-xs font-bold uppercase text-purple-700 mb-1">
+      {children}
+    </div>
+  );
+
+  const inputClass =
+    "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
+
   const Editor = () => {
     if (!selected) {
       return (
@@ -220,11 +208,9 @@ export default function Builder() {
       );
     }
 
-    const inputClass = "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
-
     if (selected.type === "message" || selected.type === "default" || !selected.type) {
       return (
-        <div className="space-y-3">
+        <div className="space-y-3" onMouseDown={stopAll} onClick={stopAll}>
           <div>
             <FieldLabel>Title</FieldLabel>
             <input
@@ -252,7 +238,7 @@ export default function Builder() {
 
     if (selected.type === "input") {
       return (
-        <div className="space-y-3">
+        <div className="space-y-3" onMouseDown={stopAll} onClick={stopAll}>
           <div>
             <FieldLabel>Label</FieldLabel>
             <input
@@ -278,9 +264,9 @@ export default function Builder() {
     }
 
     if (selected.type === "choice") {
-      const options = editorValues.options || [];
+      const options: string[] = editorValues.options || [];
       return (
-        <div className="space-y-3">
+        <div className="space-y-3" onMouseDown={stopAll} onClick={stopAll}>
           <div>
             <FieldLabel>Label</FieldLabel>
             <input
@@ -297,15 +283,14 @@ export default function Builder() {
               className={inputClass}
               rows={5}
               value={options.join("\n")}
-              onChange={(e) => {
-                const newOptions = e.target.value
-                  .split("\n")
-                  .map((s) => s.trim())
-                  .filter(Boolean);
-                updateEditorValue("options", newOptions);
-              }}
+              onChange={(e) =>
+                updateEditorValue(
+                  "options",
+                  e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
+                )
+              }
               onBlur={saveChanges}
-              placeholder="Option 1&#10;Option 2&#10;Option 3"
+              placeholder={"Option 1\nOption 2\nOption 3"}
             />
           </div>
         </div>
@@ -314,7 +299,7 @@ export default function Builder() {
 
     if (selected.type === "action") {
       return (
-        <div className="space-y-3">
+        <div className="space-y-3" onMouseDown={stopAll} onClick={stopAll}>
           <div>
             <FieldLabel>Label</FieldLabel>
             <input
@@ -344,16 +329,16 @@ export default function Builder() {
 
   return (
     <div className="w-full h-full grid grid-rows-[1fr_auto] gap-4">
-      {/* Canvas wrapper with beautiful pastel gradient */}
+      {/* Pastel canvas wrapper (unchanged visuals) */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
-        {/* React Flow container */}
         <div
           className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
-          style={{ 
-            width: "100%", 
-            minHeight: 480, 
+          style={{
+            width: "100%",
+            minHeight: 480,
             height: "70vh",
-            background: "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)"
+            background:
+              "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
           }}
         >
           <ReactFlow
@@ -366,14 +351,14 @@ export default function Builder() {
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
+            selectionOnDrag={false}
+            nodesDraggable
+            nodesConnectable
+            nodesFocusable
+            elevateNodesOnSelect
           >
-            <Background 
-              gap={20} 
-              size={1} 
-              color="#e9d5ff" 
-              style={{ opacity: 0.3 }}
-            />
-            <Controls 
+            <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
+            <Controls
               showInteractive={false}
               className="bg-white/80 backdrop-blur-sm rounded-lg shadow-lg border border-purple-200"
             />
@@ -381,8 +366,12 @@ export default function Builder() {
         </div>
       </div>
 
-      {/* Side editor box */}
-      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg">
+      {/* Editor (unchanged visuals, events don’t bubble) */}
+      <div
+        className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg"
+        onMouseDown={stopAll}
+        onClick={stopAll}
+      >
         <div className="text-sm font-extrabold mb-3 text-purple-900">
           Edit Text <span className="font-normal text-purple-700">(per node)</span>
         </div>
@@ -390,7 +379,10 @@ export default function Builder() {
         {selected && (
           <div className="mt-4 space-y-2">
             <button
-              onClick={saveChanges}
+              onClick={(e) => {
+                e.stopPropagation();
+                saveChanges();
+              }}
               className="w-full py-2 px-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-semibold text-sm"
             >
               Save Changes
