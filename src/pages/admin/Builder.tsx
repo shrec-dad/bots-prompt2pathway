@@ -1,5 +1,5 @@
 // src/pages/admin/Builder.tsx
-import React, { useMemo, useState, useCallback, useEffect } from "react";
+import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -85,6 +85,7 @@ function saveOverrides(bot: string, mode: "basic" | "custom", ov: Record<string,
 export default function Builder() {
   const { currentBot } = useAdminStore();
   const mode = (getBotSettings(currentBot as any).mode || "basic") as "basic" | "custom";
+  const [isEditingInput, setIsEditingInput] = useState(false);
 
   const tplKey = `${currentBot}_${mode}`;
   const base = useMemo(
@@ -147,6 +148,15 @@ export default function Builder() {
   const inputClass =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
+  // Prevent event propagation helper
+  const handleInputInteraction = (e: React.KeyboardEvent | React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
+  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
+  );
+
   const Editor = () => {
     if (!selected) {
       return <div className="text-sm text-purple-600">Select a node above to edit its text and labels.</div>;
@@ -161,6 +171,11 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
+              onFocus={() => setIsEditingInput(true)}
+              onBlur={() => setIsEditingInput(false)}
+              onKeyDown={handleInputInteraction}
+              onKeyUp={handleInputInteraction}
+              onClick={handleInputInteraction}
               placeholder="Enter label…"
             />
           </div>
@@ -170,6 +185,11 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.placeholder || ""}
               onChange={(e) => updateEditorValue("placeholder", e.target.value)}
+              onFocus={() => setIsEditingInput(true)}
+              onBlur={() => setIsEditingInput(false)}
+              onKeyDown={handleInputInteraction}
+              onKeyUp={handleInputInteraction}
+              onClick={handleInputInteraction}
               placeholder="Enter placeholder…"
             />
           </div>
@@ -187,6 +207,11 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
+              onFocus={() => setIsEditingInput(true)}
+              onBlur={() => setIsEditingInput(false)}
+              onKeyDown={handleInputInteraction}
+              onKeyUp={handleInputInteraction}
+              onClick={handleInputInteraction}
               placeholder="Enter label…"
             />
           </div>
@@ -202,6 +227,11 @@ export default function Builder() {
                   e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
                 )
               }
+              onFocus={() => setIsEditingInput(true)}
+              onBlur={() => setIsEditingInput(false)}
+              onKeyDown={handleInputInteraction}
+              onKeyUp={handleInputInteraction}
+              onClick={handleInputInteraction}
               placeholder={"Option 1\nOption 2\nOption 3"}
             />
           </div>
@@ -218,6 +248,11 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
+              onFocus={() => setIsEditingInput(true)}
+              onBlur={() => setIsEditingInput(false)}
+              onKeyDown={handleInputInteraction}
+              onKeyUp={handleInputInteraction}
+              onClick={handleInputInteraction}
               placeholder="Enter label…"
             />
           </div>
@@ -227,6 +262,11 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.to || ""}
               onChange={(e) => updateEditorValue("to", e.target.value)}
+              onFocus={() => setIsEditingInput(true)}
+              onBlur={() => setIsEditingInput(false)}
+              onKeyDown={handleInputInteraction}
+              onKeyUp={handleInputInteraction}
+              onClick={handleInputInteraction}
               placeholder="email@example.com"
             />
           </div>
@@ -243,6 +283,11 @@ export default function Builder() {
             className={inputClass}
             value={editorValues.title || ""}
             onChange={(e) => updateEditorValue("title", e.target.value)}
+            onFocus={() => setIsEditingInput(true)}
+            onBlur={() => setIsEditingInput(false)}
+            onKeyDown={handleInputInteraction}
+            onKeyUp={handleInputInteraction}
+            onClick={handleInputInteraction}
             placeholder="Enter title…"
           />
         </div>
@@ -253,16 +298,17 @@ export default function Builder() {
             rows={4}
             value={editorValues.text || ""}
             onChange={(e) => updateEditorValue("text", e.target.value)}
+            onFocus={() => setIsEditingInput(true)}
+            onBlur={() => setIsEditingInput(false)}
+            onKeyDown={handleInputInteraction}
+            onKeyUp={handleInputInteraction}
+            onClick={handleInputInteraction}
             placeholder="Enter message text…"
           />
         </div>
       </div>
     );
   };
-
-  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
-  );
 
   return (
     <div className="w-full h-full grid grid-rows-[1fr_auto] gap-4">
@@ -288,7 +334,12 @@ export default function Builder() {
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
-            deleteKeyCode={null} // disable RF delete hotkey
+            deleteKeyCode={null}
+            selectionKeyCode={null}
+            multiSelectionKeyCode={null}
+            zoomActivationKeyCode={null}
+            panActivationKeyCode={null}
+            disableKeyboardA11y={isEditingInput}
           >
             <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
