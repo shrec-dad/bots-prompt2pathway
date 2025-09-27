@@ -139,33 +139,6 @@ export default function Builder() {
     saveOverrides(currentBot, mode, nextOv);
   }, [selectedId, editorValues, overrides, setNodes, currentBot, mode]);
 
-  /* --------- FIX: Let inputs handle keys, block RF from seeing them ------- */
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      const isField =
-        t &&
-        (t.tagName === "INPUT" ||
-          t.tagName === "TEXTAREA" ||
-          (t as HTMLElement).isContentEditable);
-
-      if (isField) {
-        // Important: do NOT preventDefault — allow typing and deleting.
-        // Just stop the event high up so React Flow never receives it.
-        (e as any).stopImmediatePropagation?.();
-        e.stopPropagation();
-        return;
-      }
-    };
-    document.addEventListener("keydown", handler, { capture: true });
-    return () => document.removeEventListener("keydown", handler, { capture: true } as any);
-  }, []);
-
-  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
-  );
-  const stop = (e: React.KeyboardEvent) => e.stopPropagation();
-
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
     [nodes, selectedId]
@@ -188,8 +161,6 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
-              onBlur={saveChanges}
-              onKeyDown={stop}
               placeholder="Enter label…"
             />
           </div>
@@ -199,8 +170,6 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.placeholder || ""}
               onChange={(e) => updateEditorValue("placeholder", e.target.value)}
-              onBlur={saveChanges}
-              onKeyDown={stop}
               placeholder="Enter placeholder…"
             />
           </div>
@@ -218,8 +187,6 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
-              onBlur={saveChanges}
-              onKeyDown={stop}
               placeholder="Enter label…"
             />
           </div>
@@ -235,8 +202,6 @@ export default function Builder() {
                   e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
                 )
               }
-              onBlur={saveChanges}
-              onKeyDown={stop}
               placeholder={"Option 1\nOption 2\nOption 3"}
             />
           </div>
@@ -253,8 +218,6 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.label || ""}
               onChange={(e) => updateEditorValue("label", e.target.value)}
-              onBlur={saveChanges}
-              onKeyDown={stop}
               placeholder="Enter label…"
             />
           </div>
@@ -264,8 +227,6 @@ export default function Builder() {
               className={inputClass}
               value={editorValues.to || ""}
               onChange={(e) => updateEditorValue("to", e.target.value)}
-              onBlur={saveChanges}
-              onKeyDown={stop}
               placeholder="email@example.com"
             />
           </div>
@@ -282,8 +243,6 @@ export default function Builder() {
             className={inputClass}
             value={editorValues.title || ""}
             onChange={(e) => updateEditorValue("title", e.target.value)}
-            onBlur={saveChanges}
-            onKeyDown={stop}
             placeholder="Enter title…"
           />
         </div>
@@ -294,14 +253,16 @@ export default function Builder() {
             rows={4}
             value={editorValues.text || ""}
             onChange={(e) => updateEditorValue("text", e.target.value)}
-            onBlur={saveChanges}
-            onKeyDown={stop}
             placeholder="Enter message text…"
           />
         </div>
       </div>
     );
   };
+
+  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
+  );
 
   return (
     <div className="w-full h-full grid grid-rows-[1fr_auto] gap-4">
@@ -353,7 +314,7 @@ export default function Builder() {
               Save Changes
             </button>
             <div className="text-xs text-purple-600 text-center">
-              Changes auto-save when you click away from a field
+              Changes are saved when you click the Save button
             </div>
           </div>
         )}
