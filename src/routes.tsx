@@ -2,53 +2,52 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
-import Index from "@/pages/Index";
-import NotFound from "@/pages/NotFound";
-import Widget from "@/pages/Widget";
+// Layout
+import AdminLayout from "./pages/admin/AdminLayout";
 
-import AdminLayout from "@/pages/admin/AdminLayout";
-import Dashboard from "@/pages/admin/Dashboard";
-import Bots from "@/pages/admin/Bots";
-import Builder from "@/pages/admin/Builder";
-import Branding from "@/pages/admin/Branding";
-import Analytics from "@/pages/admin/Analytics";
-import Integrations from "@/pages/admin/Integrations";
-import Clients from "@/pages/admin/Clients";
-import Nurture from "@/pages/admin/Nurture";
-import Settings from "@/pages/admin/Settings";
-import Preview from "@/pages/admin/Preview";
+// Admin pages
+import Dashboard from "./pages/admin/Dashboard";
+import Clients from "./pages/admin/Clients";
+import Bots from "./pages/admin/Bots";
+import Builder from "./pages/admin/Builder";
+import Knowledge from "./pages/admin/Knowledge";
+import Nurture from "./pages/admin/Nurture";
+import Branding from "./pages/admin/Branding";
+import Integrations from "./pages/admin/Integrations";
+import Settings from "./pages/admin/Settings";
+import Analytics from "./pages/admin/Analytics";
+
+// ── Pick ONE of these depending on where your file lives ───────────────────────
+// If you moved it under /admin:
+import EmbedPage from "./pages/admin/Embed";
+// If it’s still at src/pages/EmbedPage.tsx, use this instead:
+// import EmbedPage from "./pages/EmbedPage";
+// ──────────────────────────────────────────────────────────────────────────────
 
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Public */}
-      <Route path="/" element={<Index />} />
-      <Route path="/widget" element={<Widget />} />
+      {/* Default redirect to admin dashboard */}
+      <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
 
-      {/* Admin */}
+      {/* All admin pages share the sidebar/header via AdminLayout */}
       <Route path="/admin" element={<AdminLayout />}>
-        {/* index renders Dashboard at /admin */}
-        <Route index element={<Dashboard />} />
-
-        {/* alias so /admin/dashboard also works */}
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-
+        <Route path="clients" element={<Clients />} />
         <Route path="bots" element={<Bots />} />
         <Route path="builder" element={<Builder />} />
-        <Route path="branding" element={<Branding />} />
-        <Route path="analytics" element={<Analytics />} />
-        <Route path="integrations" element={<Integrations />} />
-        <Route path="clients" element={<Clients />} />
+        <Route path="knowledge" element={<Knowledge />} />
         <Route path="nurture" element={<Nurture />} />
+        <Route path="branding" element={<Branding />} /> {/* << ONLY branding route */}
+        <Route path="integrations" element={<Integrations />} />
         <Route path="settings" element={<Settings />} />
-        <Route path="preview" element={<Preview />} />
+        <Route path="analytics" element={<Analytics />} />
+        <Route path="embed" element={<EmbedPage />} />
       </Route>
 
-      {/* legacy redirect (optional) */}
-      <Route path="/admin/preview/*" element={<Navigate to="/admin/preview" replace />} />
-
-      {/* 404 */}
-      <Route path="*" element={<NotFound />} />
+      {/* Catch-all → admin dashboard */}
+      <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
     </Routes>
   );
 }
