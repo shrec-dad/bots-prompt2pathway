@@ -1,105 +1,114 @@
 // src/pages/admin/AdminLayout.tsx
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { useAdminStore } from "@/lib/AdminStore";
 
-// Lucide icons (already in project)
-import {
-  LayoutDashboard,
-  Users2,
-  Bot,
-  Puzzle,
-  BookOpen,
-  Mail,
-  Palette,
-  Link2,
-  Settings,
-  BarChart3,
-} from "lucide-react";
-
-const NavItem = ({
-  to,
-  icon,
-  label,
-}: {
-  to: string;
-  icon: React.ReactNode;
-  label: string;
-}) => (
-  <NavLink
-    to={to}
-    className={({ isActive }) =>
-      [
-        "group flex items-center gap-3 rounded-xl px-4 py-3 text-base font-bold transition",
-        isActive
-          ? "bg-gradient-to-r from-violet-500/20 via-indigo-500/20 to-emerald-500/20 text-foreground"
-          : "text-foreground/85 hover:text-foreground hover:bg-muted/50",
-      ].join(" ")
-    }
-  >
-    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-border bg-gradient-to-br from-violet-500/15 via-indigo-500/15 to-emerald-500/15">
-      {icon}
-    </span>
-    <span>{label}</span>
-  </NavLink>
-);
+const linkBase =
+  "block w-full rounded-lg px-3 py-2 font-semibold border-2 border-black bg-white hover:bg-neutral-50 transition";
+const linkActive =
+  "bg-gradient-to-r from-purple-200 via-blue-200 to-teal-200";
 
 export default function AdminLayout() {
-  const { currentBot, setCurrentBot } = useAdminStore();
-
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* LEFT SIDEBAR */}
-      <aside className="w-72 shrink-0 border-r bg-card/50 backdrop-blur-sm">
-        <div className="px-6 pt-6 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600/20">
-              <Bot size={24} strokeWidth={2.2} />
-            </div>
-            <div>
-              <div className="text-sm text-foreground/70">Lead Qualifier Pro</div>
-              <div className="text-xl font-extrabold">Admin</div>
-            </div>
+    <div className="min-h-screen grid grid-cols-[260px,1fr]">
+      {/* Left sidebar */}
+      <aside className="border-r-2 border-black bg-white">
+        <div className="p-4">
+          <div className="mb-4 rounded-xl border-2 border-black bg-gradient-to-r from-purple-200 via-blue-200 to-teal-200 p-4">
+            <div className="text-xl font-extrabold text-black">Admin</div>
+            <div className="text-sm text-black/80">Multi-Bot Platform</div>
           </div>
-        </div>
 
-        <nav className="space-y-2 px-4 pb-28">
-          <NavItem to="/admin/dashboard" icon={<LayoutDashboard size={20} strokeWidth={2.2} />} label="Dashboard" />
-          <NavItem to="/admin/clients" icon={<Users2 size={20} strokeWidth={2.2} />} label="Clients" />
-          <NavItem to="/admin/bots" icon={<Bot size={20} strokeWidth={2.2} />} label="Bots" />
-          <NavItem to="/admin/builder" icon={<Puzzle size={20} strokeWidth={2.2} />} label="Builder" />
-          <NavItem to="/admin/knowledge" icon={<BookOpen size={20} strokeWidth={2.2} />} label="Knowledge" />
-          <NavItem to="/admin/nurture" icon={<Mail size={20} strokeWidth={2.2} />} label="Nurture" />
-          <NavItem to="/admin/branding" icon={<Palette size={20} strokeWidth={2.2} />} label="Branding" />
-          <NavItem to="/admin/integrations" icon={<Link2 size={20} strokeWidth={2.2} />} label="Integrations" />
-          <NavItem to="/admin/embed" icon={<Link2 size={20} strokeWidth={2.2} />} label="Embed" />
-          <NavItem to="/admin/settings" icon={<Settings size={20} strokeWidth={2.2} />} label="Settings" />
-          <NavItem to="/admin/analytics" icon={<BarChart3 size={20} strokeWidth={2.2} />} label="Analytics" />
-        </nav>
+          <nav className="space-y-2">
+            <NavLink
+              to="/admin"
+              end
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Dashboard
+            </NavLink>
+            <NavLink
+              to="/admin/bots"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Bots
+            </NavLink>
+            <NavLink
+              to="/admin/builder"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Builder
+            </NavLink>
+            <NavLink
+              to="/admin/branding"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Branding
+            </NavLink>
+            <NavLink
+              to="/admin/analytics"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Analytics
+            </NavLink>
+            <NavLink
+              to="/admin/integrations"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Integrations
+            </NavLink>
+            <NavLink
+              to="/admin/clients"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Clients
+            </NavLink>
+            <NavLink
+              to="/admin/nurture"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Nurture
+            </NavLink>
+            <NavLink
+              to="/admin/settings"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Settings
+            </NavLink>
+
+            {/* NEW: Preview in nav */}
+            <NavLink
+              to="/admin/preview"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? linkActive : ""}`
+              }
+            >
+              Preview Widget
+            </NavLink>
+          </nav>
+        </div>
       </aside>
 
-      {/* MAIN CONTENT */}
-      <main className="flex min-h-screen flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
-          <div className="flex items-center justify-between px-4 md:px-6 py-3">
-            <div className="text-sm font-semibold text-foreground/80">You are editing</div>
-            <select
-              value={currentBot}
-              onChange={(e) => setCurrentBot(e.target.value as any)}
-              className="rounded-lg border bg-card px-3 py-2 text-sm font-bold shadow-sm focus:outline-none"
-            >
-              <option value="LeadQualifier">Lead Qualifier</option>
-              <option value="AppointmentBooking">Appointment Booking</option>
-              <option value="CustomerSupport">Customer Support</option>
-              <option value="Waitlist">Waitlist</option>
-              <option value="SocialMedia">Social Media</option>
-            </select>
-          </div>
-        </header>
-
-        <section className="w-full flex-1 overflow-auto p-4 md:p-6">
-          <Outlet />
-        </section>
+      {/* Right content */}
+      <main className="p-6 bg-neutral-50">
+        <Outlet />
       </main>
     </div>
   );
