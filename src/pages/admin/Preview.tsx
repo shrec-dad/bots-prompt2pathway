@@ -3,30 +3,27 @@ import React from "react";
 
 export default function Preview() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50">
-      {/* Header */}
-      <div className="mb-6 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 p-6">
+      <div className="text-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Bot Preview</h1>
         <p className="text-gray-600 text-sm">
-          This is what your customers will see when they interact with your bot.
+          This is what customers will see. The preview loads the same widget route you’ll embed on a public site.
         </p>
       </div>
 
-      {/* Bot Preview Container */}
-      <div className="w-full max-w-md h-[600px] border-2 border-black rounded-xl overflow-hidden shadow-lg bg-white">
+      <div className="w-full max-w-md h-[620px] rounded-xl overflow-hidden border-2 border-black bg-white shadow-lg">
+        {/* The widget itself */}
         <iframe
-          src="/widget" // this assumes you have a widget route or embed endpoint
-          title="Bot Preview"
+          src="/widget"
+          title="Bot Widget Preview"
           className="w-full h-full"
           style={{ border: "none" }}
         />
       </div>
 
-      {/* Notes */}
-      <div className="mt-4 text-xs text-gray-500 text-center max-w-sm">
-        The preview uses the same widget embed code your customers will see when
-        you place the bot on a public site.
-      </div>
+      <p className="mt-4 text-xs text-gray-500 text-center">
+        Tip: adjust colors/logo in <span className="font-semibold">Branding</span>, then refresh this page.
+      </p>
     </div>
   );
 }
