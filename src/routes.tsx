@@ -1,11 +1,13 @@
 // src/routes.tsx
 import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
+// Public pages
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import Widget from "@/pages/Widget";
 
+// Admin shell + pages
 import AdminLayout from "@/pages/admin/AdminLayout";
 import Dashboard from "@/pages/admin/Dashboard";
 import Bots from "@/pages/admin/Bots";
@@ -17,38 +19,40 @@ import Clients from "@/pages/admin/Clients";
 import Nurture from "@/pages/admin/Nurture";
 import Settings from "@/pages/admin/Settings";
 import Preview from "@/pages/admin/Preview";
+import Knowledge from "@/pages/admin/Knowledge"; // <-- add this
 
 export default function AppRoutes() {
   return (
-    <Routes>
-      {/* Public */}
-      <Route path="/" element={<Index />} />
-      <Route path="/widget" element={<Widget />} />
+    <BrowserRouter>
+      <Routes>
+        {/* Public */}
+        <Route path="/" element={<Index />} />
+        <Route path="/widget" element={<Widget />} />
 
-      {/* Admin */}
-      <Route path="/admin" element={<AdminLayout />}>
-        {/* index renders Dashboard at /admin */}
-        <Route index element={<Dashboard />} />
+        {/* Admin */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="clients" element={<Clients />} />
+          <Route path="bots" element={<Bots />} />
+          <Route path="builder" element={<Builder />} />
+          <Route path="knowledge" element={<Knowledge />} /> {/* <-- new */}
+          <Route path="nurture" element={<Nurture />} />
+          <Route path="branding" element={<Branding />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="integrations" element={<Integrations />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="preview" element={<Preview />} />
+        </Route>
 
-        {/* alias so /admin/dashboard also works */}
-        <Route path="dashboard" element={<Dashboard />} />
+        {/* Legacy/redirects if needed */}
+        <Route
+          path="/admin/preview/*"
+          element={<Navigate to="/admin/preview" replace />}
+        />
 
-        <Route path="bots" element={<Bots />} />
-        <Route path="builder" element={<Builder />} />
-        <Route path="branding" element={<Branding />} />
-        <Route path="analytics" element={<Analytics />} />
-        <Route path="integrations" element={<Integrations />} />
-        <Route path="clients" element={<Clients />} />
-        <Route path="nurture" element={<Nurture />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="preview" element={<Preview />} />
-      </Route>
-
-      {/* legacy redirect (optional) */}
-      <Route path="/admin/preview/*" element={<Navigate to="/admin/preview" replace />} />
-
-      {/* 404 */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        {/* 404 */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
