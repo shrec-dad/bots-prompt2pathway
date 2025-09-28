@@ -7,8 +7,8 @@ export default function Embed() {
       <div className="rounded-2xl border-2 border-black bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-5 shadow-[0_6px_0_#000]">
         <h1 className="text-2xl font-extrabold">Embed Code</h1>
         <p className="text-black/70 mt-1">
-          This is the placeholder Embed page. If you can read this, the route
-          <code className="ml-1">/admin/embed</code> works.
+          This is the placeholder Embed page. If you can read this, the route{" "}
+          <code>/admin/embed</code> is wired correctly.
         </p>
       </div>
     </div>
