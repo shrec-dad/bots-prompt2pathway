@@ -110,7 +110,7 @@ export default function Bots() {
 
               <button
                 className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
-                onClick={() => (window.location.href = "/admin/builder")}
+                onClick={() => (window.location.href = `/admin/builder?bot=${b.key}`)}
                 aria-label={`Open ${b.name} in Builder`}
               >
                 Open Builder
