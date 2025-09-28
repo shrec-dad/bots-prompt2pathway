@@ -1,388 +1,237 @@
 // src/pages/admin/Builder.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import ReactFlow, {
-  Background, Controls, addEdge,
-  useEdgesState, useNodesState,
-  Connection, Edge, Node, Handle, Position
-} from "reactflow";
-import "reactflow/dist/style.css";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { getJSON, setJSON } from "@/lib/storage";
 
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { useAdminStore } from "@/lib/AdminStore";
-import { templates } from "@/lib/templates";
-import { getBotSettings, BotKey } from "@/lib/botSettings";
+// If you already export BotKey somewhere, you can keep that import.
+// Keeping it local avoids type conflicts and unblocks you quickly.
+export type BotKey =
+  | "LeadQualifier"
+  | "AppointmentBooking"
+  | "CustomerSupport"
+  | "Waitlist"
+  | "SocialMedia";
 
-/* ----------------------- Custom pastel nodes ----------------------- */
-const MessageNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-white border-2 border-stone-400">
-    <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.title || "Message"}</div>
-    <div className="text-gray-500 text-sm">{data.text || "..."}</div>
-    <Handle type="source" position={Position.Bottom} />
-  </div>
-);
-
-const ChoiceNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-blue-50 border-2 border-blue-400">
-    <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.label || "Choice"}</div>
-    <div className="text-xs text-gray-600 mt-1">
-      {(data.options || []).join(" | ") || "No options"}
-    </div>
-    <Handle type="source" position={Position.Bottom} />
-  </div>
-);
-
-const ActionNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-green-50 border-2 border-green-400">
-    <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.label || "Action"}</div>
-    <div className="text-xs text-gray-600">{data.to || "..."}</div>
-    <Handle type="source" position={Position.Bottom} />
-  </div>
-);
-
-const InputNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-purple-50 border-2 border-purple-400">
-    <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data.label || "Input"}</div>
-    <div className="text-xs text-gray-600">{data.placeholder || "..."}</div>
-    <Handle type="source" position={Position.Bottom} />
-  </div>
-);
-
-const nodeTypes = { message: MessageNode, choice: ChoiceNode, action: ActionNode, input: InputNode };
-
-/* ----------------------------- Helpers ----------------------------- */
-type RFNode = Node & {
-  type?: "default" | "input" | "output" | "group" | "message" | "choice" | "action";
-  data?: any;
-};
-
-const BOT_OPTIONS: { key: BotKey; label: string }[] = [
-  { key: "LeadQualifier", label: "Lead Qualifier" },
-  { key: "AppointmentBooking", label: "Appointment Booking" },
-  { key: "CustomerSupport", label: "Customer Support" },
-  { key: "Waitlist", label: "Waitlist" },
-  { key: "SocialMedia", label: "Social Media" },
+const ALL_BOT_KEYS: BotKey[] = [
+  "LeadQualifier",
+  "AppointmentBooking",
+  "CustomerSupport",
+  "Waitlist",
+  "SocialMedia",
 ];
 
-const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
+type Node = {
+  id: string;
+  label: string;
+  text: string;
+};
 
-function getOverrides(bot: string, mode: "basic" | "custom") {
-  try {
-    const raw = localStorage.getItem(OV_KEY(bot, mode));
-    if (raw) return JSON.parse(raw) as Record<string, any>;
-  } catch {}
-  return {};
-}
-function saveOverrides(bot: string, mode: "basic" | "custom", ov: Record<string, any>) {
-  localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(ov));
-}
+type FlowData = {
+  nodes: Node[];
+};
 
-/* ----------------------------- Component --------------------------- */
+// starter flows per bot (you can expand these later)
+const DEFAULT_FLOWS: Record<BotKey, FlowData> = {
+  LeadQualifier: {
+    nodes: [
+      { id: "welcome", label: "Welcome", text: "Welcome to our Lead Qualifier!" },
+      { id: "q1", label: "Budget?", text: "What's your budget range?" },
+    ],
+  },
+  AppointmentBooking: {
+    nodes: [
+      { id: "welcome", label: "Welcome", text: "Let’s find a time that works for you." },
+      { id: "q1", label: "Pick Time", text: "Choose an available slot." },
+    ],
+  },
+  CustomerSupport: {
+    nodes: [
+      { id: "welcome", label: "Welcome", text: "How can we help today?" },
+      { id: "q1", label: "Issue Type", text: "Billing, Shipping, Technical, or Other?" },
+    ],
+  },
+  Waitlist: {
+    nodes: [
+      { id: "welcome", label: "Welcome", text: "Join our waitlist and we’ll notify you!" },
+      { id: "q1", label: "Email", text: "What’s the best email to reach you?" },
+    ],
+  },
+  SocialMedia: {
+    nodes: [
+      { id: "welcome", label: "Welcome", text: "Glad you found us on social!" },
+      { id: "q1", label: "Platform", text: "Which platform should we connect on?" },
+    ],
+  },
+};
+
+const storageKey = (bot: BotKey) => `flow:${bot}`;
+
 export default function Builder() {
+  const [params] = useSearchParams();
   const navigate = useNavigate();
-  const [sp, setSp] = useSearchParams();
 
-  // current bot from store, but allow ?bot= to override
-  const { currentBot, setCurrentBot } = useAdminStore();
-  const urlBot = (sp.get("bot") as BotKey) || currentBot || "Waitlist";
+  // 1) derive initial bot from ?bot=
+  const initialBot = useMemo<BotKey>(() => {
+    const q = params.get("bot");
+    const key = (q ?? "Waitlist") as BotKey;
+    return (ALL_BOT_KEYS as readonly string[]).includes(key) ? key : "Waitlist";
+  }, [params]);
 
-  // update store if url differs
-  useEffect(() => {
-    if (urlBot !== currentBot) setCurrentBot(urlBot);
-  }, [urlBot, currentBot, setCurrentBot]);
-
-  const mode = (getBotSettings(urlBot).mode || "basic") as "basic" | "custom";
-  const tplKey = `${urlBot}_${mode}`;
-  const base = templates[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined;
-
-  const [overrides, setOverridesState] = useState<Record<string, any>>(() =>
-    getOverrides(urlBot, mode)
+  const [currentBot, setCurrentBot] = useState<BotKey>(initialBot);
+  const [flow, setFlow] = useState<FlowData>(() =>
+    getJSON<FlowData>(storageKey(initialBot), DEFAULT_FLOWS[initialBot])
   );
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
-  const getInitialNodes = useCallback(() => {
-    if (!base) return [];
-    return base.nodes.map((bn) => {
-      const ov = overrides[bn.id];
-      if (ov && ov.data) return { ...bn, data: { ...(bn.data || {}), ...(ov.data || {}) } };
-      return bn;
-    });
-  }, [base, overrides]);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(getInitialNodes());
-  const [edges, setEdges, onEdgesChange] = useEdgesState(base?.edges || []);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editorValues, setEditorValues] = useState<any>({});
-
-  // Reload when bot or mode changes
+  // keep in sync with URL changes
   useEffect(() => {
-    setOverridesState(getOverrides(urlBot, mode));
-  }, [urlBot, mode]);
+    if (currentBot !== initialBot) {
+      setCurrentBot(initialBot);
+      const saved = getJSON<FlowData>(storageKey(initialBot), DEFAULT_FLOWS[initialBot]);
+      setFlow(saved);
+      setSelectedNodeId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialBot]);
 
+  // persist on change
   useEffect(() => {
-    setNodes(getInitialNodes());
-    setEdges(base?.edges || []);
-    setSelectedId(null);
-    setEditorValues({});
-  }, [getInitialNodes, base, setNodes, setEdges]);
+    setJSON(storageKey(currentBot), flow);
+  }, [currentBot, flow]);
 
-  useEffect(() => {
-    if (selectedId) {
-      const n = nodes.find((n) => n.id === selectedId);
-      setEditorValues(n?.data || {});
-    } else {
-      setEditorValues({});
-    }
-  }, [selectedId, nodes]);
+  const selectedNode = flow.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
-  const onNodeClick = useCallback((_, node: Node) => setSelectedId(node?.id || null), []);
-  const onConnect = useCallback((c: Connection) => setEdges((eds) => addEdge(c, eds)), [setEdges]);
-
-  const updateEditorValue = (field: string, value: any) =>
-    setEditorValues((p: any) => ({ ...p, [field]: value }));
-
-  const saveChanges = useCallback(() => {
-    if (!selectedId) return;
-
-    setNodes((prev) =>
-      prev.map((n) => (n.id === selectedId ? { ...n, data: { ...editorValues } } : n))
-    );
-
-    const nextOv = { ...overrides, [selectedId]: { data: editorValues } };
-    setOverridesState(nextOv);
-    saveOverrides(urlBot, mode, nextOv);
-  }, [selectedId, editorValues, overrides, urlBot, mode, setNodes]);
-
-  // header UI
-  const Header = () => (
-    <div className="flex items-center justify-between mb-3">
-      <div className="flex items-center gap-3">
-        <div className="text-xl font-extrabold">Builder</div>
-        <select
-          value={urlBot}
-          onChange={(e) => {
-            const bot = e.target.value as BotKey;
-            setSp((old) => {
-              const next = new URLSearchParams(old);
-              next.set("bot", bot);
-              return next;
-            });
-            setCurrentBot(bot);
-            // nodes reload is handled by useEffect watching urlBot/mode
-          }}
-          className="rounded-lg border px-3 py-2 font-bold"
-        >
-          {BOT_OPTIONS.map((o) => (
-            <option key={o.key} value={o.key}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <button
-        onClick={() => navigate("/admin/preview")}
-        className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
-      >
-        Open Preview
-      </button>
-    </div>
-  );
-
-  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
-  );
-  const inputClass =
-    "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
-
-  const Editor = () => {
-    if (!selectedId) return <div className="text-sm text-purple-600">Select a node to edit.</div>;
-
-    const n = nodes.find((x) => x.id === selectedId);
-    if (!n) return null;
-
-    if (n.type === "choice") {
-      const options = editorValues.options || [];
-      return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Label</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.label || ""}
-              onChange={(e) => updateEditorValue("label", e.target.value)}
-              onBlur={saveChanges}
-              placeholder="Label…"
-            />
-          </div>
-          <div>
-            <FieldLabel>Options (one per line)</FieldLabel>
-            <textarea
-              className={inputClass}
-              rows={5}
-              value={options.join("\n")}
-              onChange={(e) =>
-                updateEditorValue(
-                  "options",
-                  e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
-                )
-              }
-              onBlur={saveChanges}
-              placeholder="Option 1&#10;Option 2&#10;Option 3"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    if (n.type === "action") {
-      return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Label</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.label || ""}
-              onChange={(e) => updateEditorValue("label", e.target.value)}
-              onBlur={saveChanges}
-              placeholder="Label…"
-            />
-          </div>
-          <div>
-            <FieldLabel>Email / Target</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.to || ""}
-              onChange={(e) => updateEditorValue("to", e.target.value)}
-              onBlur={saveChanges}
-              placeholder="email@example.com"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    if (n.type === "input") {
-      return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Label</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.label || ""}
-              onChange={(e) => updateEditorValue("label", e.target.value)}
-              onBlur={saveChanges}
-              placeholder="Label…"
-            />
-          </div>
-          <div>
-            <FieldLabel>Placeholder</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.placeholder || ""}
-              onChange={(e) => updateEditorValue("placeholder", e.target.value)}
-              onBlur={saveChanges}
-              placeholder="Enter text…"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    // default/message
-    return (
-      <div className="space-y-3">
-        <div>
-          <FieldLabel>Title</FieldLabel>
-          <input
-            className={inputClass}
-            value={editorValues.title || ""}
-            onChange={(e) => updateEditorValue("title", e.target.value)}
-            onBlur={saveChanges}
-            placeholder="Title…"
-          />
-        </div>
-        <div>
-          <FieldLabel>Text</FieldLabel>
-          <textarea
-            className={inputClass}
-            rows={4}
-            value={editorValues.text || ""}
-            onChange={(e) => updateEditorValue("text", e.target.value)}
-            onBlur={saveChanges}
-            placeholder="Enter message text…"
-          />
-        </div>
-      </div>
-    );
+  const changeBot = (bot: BotKey) => {
+    // update URL (and state via effect)
+    navigate(`/admin/builder?bot=${bot}`, { replace: true });
   };
 
-  if (!base) {
-    return (
-      <div className="rounded-2xl border bg-card p-6">
-        <Header />
-        <div className="text-sm">No template found for <b>{tplKey}</b>.</div>
-      </div>
+  const updateNode = (patch: Partial<Node>) => {
+    if (!selectedNode) return;
+    const updated = flow.nodes.map((n) =>
+      n.id === selectedNode.id ? { ...n, ...patch } : n
     );
-  }
+    setFlow({ nodes: updated });
+  };
+
+  const addNode = () => {
+    const id = `node_${Math.random().toString(36).slice(2, 8)}`;
+    const newNode: Node = { id, label: "New Step", text: "Describe this step..." };
+    setFlow({ nodes: [...flow.nodes, newNode] });
+    setSelectedNodeId(id);
+  };
+
+  const deleteNode = () => {
+    if (!selectedNode) return;
+    const filtered = flow.nodes.filter((n) => n.id !== selectedNode.id);
+    setFlow({ nodes: filtered });
+    setSelectedNodeId(null);
+  };
 
   return (
-    <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4 p-1">
-      <Header />
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between border-2 border-black rounded-2xl p-4 bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100">
+        <div className="flex items-center gap-3">
+          <div className="text-2xl font-extrabold">Bot Builder</div>
+          <div className="flex items-center gap-2">
+            <label className="font-semibold">Bot:</label>
+            <select
+              className="border-2 border-black rounded-lg px-3 py-2 bg-white font-bold"
+              value={currentBot}
+              onChange={(e) => changeBot(e.target.value as BotKey)}
+            >
+              {ALL_BOT_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-      {/* Canvas wrapper with pastel gradient */}
-      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
-        <div
-          className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
-          style={{
-            width: "100%",
-            minHeight: 480,
-            height: "60vh",
-            background:
-              "linear-gradient(135deg,#ffeef8 0%,#f3e7fc 25%,#e7f0ff 50%,#e7fcf7 75%,#fff9e7 100%)",
-          }}
-        >
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={onNodeClick}
-            nodeTypes={nodeTypes}
-            fitView
-            proOptions={{ hideAttribution: true }}
+        <div className="flex items-center gap-3">
+          <button
+            className="px-4 py-2 border-2 border-black rounded-lg bg-white font-bold"
+            onClick={addNode}
           >
-            <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
-            <Controls
-              showInteractive={false}
-              className="bg-white/80 backdrop-blur-sm rounded-lg shadow-lg border border-purple-200"
-            />
-          </ReactFlow>
+            + Add Node
+          </button>
+          <a
+            href={`/admin/preview?bot=${currentBot}`}
+            className="px-4 py-2 border-2 border-black rounded-lg bg-white font-bold"
+          >
+            Open Preview
+          </a>
         </div>
       </div>
 
-      {/* Editor box */}
-      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg">
-        <div className="text-sm font-extrabold mb-3 text-purple-900">
-          Edit Text <span className="font-normal text-purple-700">(per node)</span>
-        </div>
-        <Editor />
-        {selectedId && (
-          <div className="mt-4 space-y-2">
-            <button
-              onClick={saveChanges}
-              className="w-full py-2 px-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-semibold text-sm"
-            >
-              Save Changes
-            </button>
-            <div className="text-xs text-purple-600 text-center">
-              Changes auto-save when you click away from a field
-            </div>
+      {/* Main layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-6">
+        {/* Canvas (simple list for now) */}
+        <div className="border-2 border-black rounded-2xl p-4 bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 min-h-[520px]">
+          <div className="mb-3 text-lg font-extrabold">Canvas</div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {flow.nodes.map((n) => {
+              const selected = n.id === selectedNodeId;
+              return (
+                <button
+                  key={n.id}
+                  onClick={() => setSelectedNodeId(n.id)}
+                  className={`w-full text-left p-4 rounded-xl border-2 ${
+                    selected ? "border-indigo-600 bg-white" : "border-black bg-white"
+                  }`}
+                >
+                  <div className="font-bold">{n.label}</div>
+                  <div className="text-sm text-gray-600 line-clamp-3">{n.text}</div>
+                </button>
+              );
+            })}
           </div>
-        )}
+        </div>
+
+        {/* Editor */}
+        <div className="border-2 border-black rounded-2xl p-4 bg-white">
+          <div className="mb-3 text-lg font-extrabold flex items-center justify-between">
+            <span>Edit Text (per node)</span>
+            <button
+              onClick={deleteNode}
+              disabled={!selectedNode}
+              className={`px-3 py-1 border-2 rounded-lg font-bold ${
+                selectedNode ? "border-black bg-white" : "border-gray-300 text-gray-400"
+              }`}
+              title={selectedNode ? "Delete selected node" : "Select a node first"}
+            >
+              Delete
+            </button>
+          </div>
+
+          {!selectedNode ? (
+            <div className="text-gray-600">Select a node on the left to edit its text.</div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block font-semibold mb-1">Label</label>
+                <input
+                  className="w-full border-2 border-black rounded-lg px-3 py-2"
+                  value={selectedNode.label}
+                  onChange={(e) => updateNode({ label: e.target.value })}
+                  placeholder="Node label"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">Text</label>
+                <textarea
+                  className="w-full border-2 border-black rounded-lg px-3 py-2 min-h-[140px]"
+                  value={selectedNode.text}
+                  onChange={(e) => updateNode({ text: e.target.value })}
+                  placeholder="Node text"
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
