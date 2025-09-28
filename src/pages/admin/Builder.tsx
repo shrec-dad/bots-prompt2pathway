@@ -74,14 +74,7 @@ const nodeTypes = {
 /* --------------------------------- Helpers -------------------------------- */
 
 type RFNode = Node & {
-  type?:
-    | "default"
-    | "input"
-    | "output"
-    | "group"
-    | "message"
-    | "choice"
-    | "action";
+  type?: "default" | "input" | "output" | "group" | "message" | "choice" | "action" | "input";
   data?: any;
 };
 
@@ -103,9 +96,21 @@ function saveOverrides(
   localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(ov));
 }
 
-/* -------------------------------- Component ------------------------------- */
+// fallback for selecting bot if store setter not available
+const persistCurrentBot = (bot: BotKey) => {
+  try {
+    localStorage.setItem("currentBot", bot);
+  } catch {}
+};
+const readCurrentBot = (): BotKey | null => {
+  try {
+    return (localStorage.getItem("currentBot") as BotKey) || null;
+  } catch {
+    return null;
+  }
+};
 
-const ALL_BOTS: BotKey[] = [
+const BOT_OPTIONS: BotKey[] = [
   "LeadQualifier",
   "AppointmentBooking",
   "CustomerSupport",
@@ -113,23 +118,42 @@ const ALL_BOTS: BotKey[] = [
   "SocialMedia",
 ];
 
-export default function Builder() {
-  const { currentBot, setCurrentBot } = useAdminStore();
-  const activeBot: BotKey = (currentBot as BotKey) ?? "LeadQualifier";
-  const mode = (getBotSettings(activeBot).mode || "basic") as
-    | "basic"
-    | "custom";
+/* -------------------------------- Component ------------------------------- */
 
+export default function Builder() {
+  // Store
+  const store = useAdminStore();
+  const currentBotFromStore = store?.currentBot as BotKey | undefined;
+  const setCurrentBotInStore = store?.setCurrentBot as
+    | ((k: BotKey) => void)
+    | undefined;
+
+  // Ensure we always have a bot selected
+  const initialBot =
+    currentBotFromStore || readCurrentBot() || ("Waitlist" as BotKey);
+
+  // If store didn’t have it, push to store & localStorage once
+  useEffect(() => {
+    setCurrentBotInStore?.(initialBot);
+    persistCurrentBot(initialBot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const currentBot =
+    (store?.currentBot as BotKey) || readCurrentBot() || initialBot;
+
+  const mode = (getBotSettings(currentBot).mode ||
+    "basic") as "basic" | "custom";
   const editorRef = useRef<HTMLDivElement>(null);
 
-  const tplKey = `${activeBot}_${mode}`;
+  const tplKey = `${currentBot}_${mode}`;
   const base = useMemo(
     () => (templates as any)[tplKey] as { nodes: RFNode[]; edges: Edge[] } | undefined,
     [tplKey]
   );
 
   const [overrides, setOv] = useState<Record<string, any>>(() =>
-    getOverrides(activeBot, mode)
+    getOverrides(currentBot, mode)
   );
 
   const buildNodes = useCallback(
@@ -141,14 +165,16 @@ export default function Builder() {
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(
-    base ? (buildNodes(base.nodes, overrides) as Node[]) : []
+    base ? buildNodes(base.nodes, overrides) : []
   );
-  const [edges, setEdges, onEdgesChange] = useEdgesState(base ? base.edges : []);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(
+    base ? base.edges : []
+  );
 
   // Refresh when bot/mode changes
   useEffect(() => {
-    const nextBase = (templates as any)[`${activeBot}_${mode}`];
-    const nextOv = getOverrides(activeBot, mode);
+    const nextBase = (templates as any)[`${currentBot}_${mode}`];
+    const nextOv = getOverrides(currentBot, mode);
     setOv(nextOv);
     if (nextBase) {
       setNodes(buildNodes(nextBase.nodes, nextOv) as Node[]);
@@ -157,7 +183,7 @@ export default function Builder() {
       setNodes([]);
       setEdges([]);
     }
-  }, [activeBot, mode, setNodes, setEdges, buildNodes]);
+  }, [currentBot, mode, setNodes, setEdges, buildNodes]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValues, setEditorValues] = useState<any>({});
@@ -168,10 +194,7 @@ export default function Builder() {
     setEditorValues(n?.data || {});
   }, [selectedId, nodes]);
 
-  const onNodeClick = useCallback(
-    (_: any, n: Node) => setSelectedId(n?.id || null),
-    []
-  );
+  const onNodeClick = useCallback((_: any, n: Node) => setSelectedId(n?.id || null), []);
   const onConnect = useCallback(
     (c: Connection) => setEdges((eds) => addEdge(c, eds)),
     [setEdges]
@@ -189,14 +212,29 @@ export default function Builder() {
     );
     const nextOv = { ...overrides, [selectedId]: { data: { ...editorValues } } };
     setOv(nextOv);
-    saveOverrides(activeBot, mode, nextOv);
-  }, [selectedId, editorValues, overrides, setNodes, activeBot, mode]);
+    saveOverrides(currentBot, mode, nextOv);
+  }, [selectedId, editorValues, overrides, setNodes, currentBot, mode]);
 
-  // ✅ FIX: remove capture-phase global blockers. Just stop bubbling so ReactFlow
-  // doesn't intercept keys, but let inputs keep receiving keystrokes.
-  const stopKeyBubble = (e: React.KeyboardEvent) => {
-    e.stopPropagation(); // do NOT preventDefault
-  };
+  // Block all events from bubbling up from the editor section (typing fix)
+  useEffect(() => {
+    const editorEl = editorRef.current;
+    if (!editorEl) return;
+
+    const blockEvent = (e: Event) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    ["keydown", "keyup", "keypress"].forEach((t) => {
+      editorEl.addEventListener(t, blockEvent, true);
+    });
+
+    return () => {
+      ["keydown", "keyup", "keypress"].forEach((t) => {
+        editorEl.removeEventListener(t, blockEvent, true);
+      });
+    };
+  }, []);
 
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
@@ -232,8 +270,6 @@ export default function Builder() {
               onChange={(e) => updateEditorValue("label", e.target.value)}
               placeholder="Enter label…"
               autoComplete="off"
-              onKeyDown={stopKeyBubble}
-              onKeyUp={stopKeyBubble}
             />
           </div>
           <div>
@@ -241,13 +277,9 @@ export default function Builder() {
             <input
               className={inputClass}
               value={editorValues.placeholder || ""}
-              onChange={(e) =>
-                updateEditorValue("placeholder", e.target.value)
-              }
+              onChange={(e) => updateEditorValue("placeholder", e.target.value)}
               placeholder="Enter placeholder…"
               autoComplete="off"
-              onKeyDown={stopKeyBubble}
-              onKeyUp={stopKeyBubble}
             />
           </div>
         </div>
@@ -266,8 +298,6 @@ export default function Builder() {
               onChange={(e) => updateEditorValue("label", e.target.value)}
               placeholder="Enter label…"
               autoComplete="off"
-              onKeyDown={stopKeyBubble}
-              onKeyUp={stopKeyBubble}
             />
           </div>
           <div>
@@ -287,8 +317,6 @@ export default function Builder() {
               }
               placeholder={"Option 1\nOption 2\nOption 3"}
               autoComplete="off"
-              onKeyDown={stopKeyBubble}
-              onKeyUp={stopKeyBubble}
             />
           </div>
         </div>
@@ -306,8 +334,6 @@ export default function Builder() {
               onChange={(e) => updateEditorValue("label", e.target.value)}
               placeholder="Enter label…"
               autoComplete="off"
-              onKeyDown={stopKeyBubble}
-              onKeyUp={stopKeyBubble}
             />
           </div>
           <div>
@@ -318,8 +344,6 @@ export default function Builder() {
               onChange={(e) => updateEditorValue("to", e.target.value)}
               placeholder="email@example.com"
               autoComplete="off"
-              onKeyDown={stopKeyBubble}
-              onKeyUp={stopKeyBubble}
             />
           </div>
         </div>
@@ -337,8 +361,6 @@ export default function Builder() {
             onChange={(e) => updateEditorValue("title", e.target.value)}
             placeholder="Enter title…"
             autoComplete="off"
-            onKeyDown={stopKeyBubble}
-            onKeyUp={stopKeyBubble}
           />
         </div>
         <div>
@@ -350,46 +372,42 @@ export default function Builder() {
             onChange={(e) => updateEditorValue("text", e.target.value)}
             placeholder="Enter message text…"
             autoComplete="off"
-            onKeyDown={stopKeyBubble}
-            onKeyUp={stopKeyBubble}
           />
         </div>
       </div>
     );
   };
 
+  // change bot handler (supports store and localStorage)
+  const changeBot = (value: string) => {
+    const k = value as BotKey;
+    setCurrentBotInStore?.(k);
+    persistCurrentBot(k);
+  };
+
   return (
     <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4">
-      {/* Top bar with Bots dropdown (arrow is the native select caret) */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <label className="text-xs font-bold uppercase text-purple-700">
-            Bot
-          </label>
-          <select
-            className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400"
-            value={activeBot}
-            onChange={(e) => {
-              const val = e.target.value as BotKey;
-              // update global store if available; otherwise persist locally
-              setCurrentBot?.(val);
-              if (!setCurrentBot) {
-                localStorage.setItem("currentBot", val);
-                // optional: refresh templates if your store relies on it
-                window.location.reload();
-              }
-            }}
-          >
-            {ALL_BOTS.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Header with BOT dropdown (not clipped) */}
+      <div className="rounded-2xl border bg-white shadow-sm px-4 py-3 overflow-visible relative">
+        <div className="flex items-center justify-between overflow-visible relative">
+          <div className="flex items-center gap-3 relative">
+            <span className="text-sm font-extrabold text-purple-700">BOT</span>
+            <select
+              className="rounded-lg border px-3 py-2 relative z-50"
+              value={currentBot}
+              onChange={(e) => changeBot(e.target.value)}
+            >
+              {BOT_OPTIONS.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="text-sm font-extrabold text-purple-900">
-          Mode: <span className="font-normal">{mode}</span>
+          <div className="text-sm font-extrabold">
+            <span className="text-purple-700">Mode:</span> {mode}
+          </div>
         </div>
       </div>
 
@@ -400,7 +418,7 @@ export default function Builder() {
           style={{
             width: "100%",
             minHeight: 480,
-            height: "60vh",
+            height: "70vh",
             background:
               "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
           }}
@@ -418,15 +436,10 @@ export default function Builder() {
             deleteKeyCode="Delete"
             selectionOnDrag={false}
             selectNodesOnDrag={false}
-            panOnDrag
-            zoomOnScroll
+            panOnDrag={true}
+            zoomOnScroll={true}
           >
-            <Background
-              gap={20}
-              size={1}
-              color="#e9d5ff"
-              style={{ opacity: 0.3 }}
-            />
+            <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
               showInteractive={false}
               className="bg-white/80 backdrop-blur-sm rounded-lg shadow-lg border border-purple-200"
@@ -435,12 +448,13 @@ export default function Builder() {
         </div>
       </div>
 
-      {/* Editor (pastel) */}
+      {/* Editor (pastel) - with event isolation */}
       <div
         ref={editorRef}
         className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg"
-        onKeyDown={stopKeyBubble}
-        onKeyUp={stopKeyBubble}
+        onKeyDown={(e) => e.stopPropagation()}
+        onKeyUp={(e) => e.stopPropagation()}
+        onKeyPress={(e) => e.stopPropagation()}
       >
         <div className="text-sm font-extrabold mb-3 text-purple-900">
           Edit Text <span className="font-normal text-purple-700">(per node)</span>
