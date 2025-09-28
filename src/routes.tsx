@@ -2,12 +2,10 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// Public
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import Widget from "@/pages/Widget";
 
-// Admin
 import AdminLayout from "@/pages/admin/AdminLayout";
 import Dashboard from "@/pages/admin/Dashboard";
 import Bots from "@/pages/admin/Bots";
@@ -18,9 +16,9 @@ import Integrations from "@/pages/admin/Integrations";
 import Clients from "@/pages/admin/Clients";
 import Nurture from "@/pages/admin/Nurture";
 import Settings from "@/pages/admin/Settings";
-import Knowledge from "@/pages/admin/Knowledge";   // <-- NEW
-import Preview from "@/pages/admin/Preview";       // <-- already created
-import Embed from "@/pages/admin/Embed";
+import Preview from "@/pages/admin/Preview";
+import Knowledge from "@/pages/admin/Knowledge"; // if you have it
+import Embed from "@/pages/admin/Embed";        // <-- NEW
 
 export default function AppRoutes() {
   return (
@@ -30,7 +28,7 @@ export default function AppRoutes() {
         <Route path="/" element={<Index />} />
         <Route path="/widget" element={<Widget />} />
 
-        {/* Admin shell */}
+        {/* Admin */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="clients" element={<Clients />} />
@@ -39,11 +37,11 @@ export default function AppRoutes() {
           <Route path="branding" element={<Branding />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="integrations" element={<Integrations />} />
-          <Route path="knowledge" element={<Knowledge />} /> {/* <-- NEW */}
+          <Route path="knowledge" element={<Knowledge />} />
           <Route path="nurture" element={<Nurture />} />
           <Route path="settings" element={<Settings />} />
           <Route path="preview" element={<Preview />} />
-          <Route path="embed" element={<Embed />} />
+          <Route path="embed" element={<Embed />} /> {/* <-- NEW */}
         </Route>
 
         {/* Legacy redirect (optional) */}
