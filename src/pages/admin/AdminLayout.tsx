@@ -7,18 +7,17 @@ import {
 } from "lucide-react";
 
 const links = [
-  { to: "/admin",       label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/clients", label: "Clients", icon: Users },
-  { to: "/admin/bots",    label: "Bots", icon: Bot },
+  { to: "/admin/bots", label: "Bots", icon: Bot },
   { to: "/admin/builder", label: "Builder", icon: Puzzle },
-  { to: "/admin/knowledge", label: "Knowledge", icon: Book },           // <-- shows up now
+  { to: "/admin/knowledge", label: "Knowledge", icon: Book },
   { to: "/admin/nurture", label: "Nurture", icon: Workflow },
   { to: "/admin/settings", label: "Settings", icon: Settings },
-  { to: "/admin/preview",  label: "Preview Widget", icon: Eye },               // <-- this is the label to rename
+  { to: "/admin/preview", label: "Preview", icon: Eye },
   { to: "/admin/analytics", label: "Analytics", icon: LineChart },
   { to: "/admin/integrations", label: "Integrations", icon: Plug },
-  { to: "/admin/embed", label: "Embed Code", icon: Code2 },
-
+  { to: "/admin/embed", label: "Embed Code", icon: Code2 }, // <-- exact match
 ];
 
 export default function AdminLayout() {
