@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getJSON, setJSON } from "@/lib/storage";
+import "../../styles/admin-shared.css";
 
 // If you already export BotKey somewhere, you can keep that import.
 // Keeping it local avoids type conflicts and unblocks you quickly.
