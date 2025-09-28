@@ -1,11 +1,5 @@
 // src/pages/admin/Builder.tsx
-import React, {
-  useMemo,
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-} from "react";
+import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -22,7 +16,8 @@ import "reactflow/dist/style.css";
 
 import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
-import { getBotSettings, BotKey } from "@/lib/botSettings";
+import { getBotSettings } from "@/lib/botSettings";
+import KnowledgePanel from "@/components/KnowledgePanel";
 
 /* ------------------------- Custom Node Components ------------------------- */
 
@@ -64,22 +59,16 @@ const InputNode = ({ data }: { data: any }) => (
   </div>
 );
 
-const nodeTypes = {
-  message: MessageNode,
-  choice: ChoiceNode,
-  action: ActionNode,
-  input: InputNode,
-};
+const nodeTypes = { message: MessageNode, choice: ChoiceNode, action: ActionNode, input: InputNode };
 
 /* --------------------------------- Helpers -------------------------------- */
 
 type RFNode = Node & {
-  type?: "default" | "input" | "output" | "group" | "message" | "choice" | "action" | "input";
+  type?: "default" | "input" | "output" | "group" | "message" | "choice" | "action";
   data?: any;
 };
 
-const OV_KEY = (bot: string, mode: "basic" | "custom") =>
-  `botOverrides:${bot}_${mode}`;
+const OV_KEY = (bot: string, mode: "basic" | "custom") => `botOverrides:${bot}_${mode}`;
 
 function getOverrides(bot: string, mode: "basic" | "custom") {
   try {
@@ -88,62 +77,15 @@ function getOverrides(bot: string, mode: "basic" | "custom") {
   } catch {}
   return {};
 }
-function saveOverrides(
-  bot: string,
-  mode: "basic" | "custom",
-  ov: Record<string, any>
-) {
+function saveOverrides(bot: string, mode: "basic" | "custom", ov: Record<string, any>) {
   localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(ov));
 }
-
-// fallback for selecting bot if store setter not available
-const persistCurrentBot = (bot: BotKey) => {
-  try {
-    localStorage.setItem("currentBot", bot);
-  } catch {}
-};
-const readCurrentBot = (): BotKey | null => {
-  try {
-    return (localStorage.getItem("currentBot") as BotKey) || null;
-  } catch {
-    return null;
-  }
-};
-
-const BOT_OPTIONS: BotKey[] = [
-  "LeadQualifier",
-  "AppointmentBooking",
-  "CustomerSupport",
-  "Waitlist",
-  "SocialMedia",
-];
 
 /* -------------------------------- Component ------------------------------- */
 
 export default function Builder() {
-  // Store
-  const store = useAdminStore();
-  const currentBotFromStore = store?.currentBot as BotKey | undefined;
-  const setCurrentBotInStore = store?.setCurrentBot as
-    | ((k: BotKey) => void)
-    | undefined;
-
-  // Ensure we always have a bot selected
-  const initialBot =
-    currentBotFromStore || readCurrentBot() || ("Waitlist" as BotKey);
-
-  // If store didn’t have it, push to store & localStorage once
-  useEffect(() => {
-    setCurrentBotInStore?.(initialBot);
-    persistCurrentBot(initialBot);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const currentBot =
-    (store?.currentBot as BotKey) || readCurrentBot() || initialBot;
-
-  const mode = (getBotSettings(currentBot).mode ||
-    "basic") as "basic" | "custom";
+  const { currentBot } = useAdminStore();
+  const mode = (getBotSettings(currentBot as any).mode || "basic") as "basic" | "custom";
   const editorRef = useRef<HTMLDivElement>(null);
 
   const tplKey = `${currentBot}_${mode}`;
@@ -152,24 +94,16 @@ export default function Builder() {
     [tplKey]
   );
 
-  const [overrides, setOv] = useState<Record<string, any>>(() =>
-    getOverrides(currentBot, mode)
-  );
+  const [overrides, setOv] = useState<Record<string, any>>(() => getOverrides(currentBot, mode));
 
   const buildNodes = useCallback(
     (src: RFNode[], ov: Record<string, any>) =>
-      src.map((n) =>
-        ov[n.id]?.data ? { ...n, data: { ...(n.data || {}), ...ov[n.id].data } } : n
-      ),
+      src.map((n) => (ov[n.id]?.data ? { ...n, data: { ...(n.data || {}), ...ov[n.id].data } } : n)),
     []
   );
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(
-    base ? buildNodes(base.nodes, overrides) : []
-  );
-  const [edges, setEdges, onEdgesChange] = useEdgesState(
-    base ? base.edges : []
-  );
+  const [nodes, setNodes, onNodesChange] = useNodesState(base ? buildNodes(base.nodes, overrides) : []);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(base ? base.edges : []);
 
   // Refresh when bot/mode changes
   useEffect(() => {
@@ -195,27 +129,19 @@ export default function Builder() {
   }, [selectedId, nodes]);
 
   const onNodeClick = useCallback((_: any, n: Node) => setSelectedId(n?.id || null), []);
-  const onConnect = useCallback(
-    (c: Connection) => setEdges((eds) => addEdge(c, eds)),
-    [setEdges]
-  );
+  const onConnect = useCallback((c: Connection) => setEdges((eds) => addEdge(c, eds)), [setEdges]);
 
-  const updateEditorValue = (k: string, v: any) =>
-    setEditorValues((p: any) => ({ ...p, [k]: v }));
+  const updateEditorValue = (k: string, v: any) => setEditorValues((p: any) => ({ ...p, [k]: v }));
 
   const saveChanges = useCallback(() => {
     if (!selectedId) return;
-    setNodes((prev) =>
-      prev.map((n) =>
-        n.id === selectedId ? { ...n, data: { ...editorValues } } : n
-      )
-    );
+    setNodes((prev) => prev.map((n) => (n.id === selectedId ? { ...n, data: { ...editorValues } } : n)));
     const nextOv = { ...overrides, [selectedId]: { data: { ...editorValues } } };
     setOv(nextOv);
     saveOverrides(currentBot, mode, nextOv);
   }, [selectedId, editorValues, overrides, setNodes, currentBot, mode]);
 
-  // Block all events from bubbling up from the editor section (typing fix)
+  // Block all events from bubbling up from the editor section
   useEffect(() => {
     const editorEl = editorRef.current;
     if (!editorEl) return;
@@ -225,13 +151,13 @@ export default function Builder() {
       e.stopImmediatePropagation();
     };
 
-    ["keydown", "keyup", "keypress"].forEach((t) => {
-      editorEl.addEventListener(t, blockEvent, true);
+    ["keydown", "keyup", "keypress"].forEach((eventType) => {
+      editorEl.addEventListener(eventType, blockEvent, true);
     });
 
     return () => {
-      ["keydown", "keyup", "keypress"].forEach((t) => {
-        editorEl.removeEventListener(t, blockEvent, true);
+      ["keydown", "keyup", "keypress"].forEach((eventType) => {
+        editorEl.removeEventListener(eventType, blockEvent, true);
       });
     };
   }, []);
@@ -245,18 +171,12 @@ export default function Builder() {
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
   const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-purple-700 mb-1">
-      {children}
-    </div>
+    <div className="text-xs font-bold uppercase text-purple-700 mb-1">{children}</div>
   );
 
   const Editor = () => {
     if (!selected) {
-      return (
-        <div className="text-sm text-purple-600">
-          Select a node above to edit its text and labels.
-        </div>
-      );
+      return <div className="text-sm text-purple-600">Select a node above to edit its text and labels.</div>;
     }
 
     if (selected.type === "input") {
@@ -378,39 +298,8 @@ export default function Builder() {
     );
   };
 
-  // change bot handler (supports store and localStorage)
-  const changeBot = (value: string) => {
-    const k = value as BotKey;
-    setCurrentBotInStore?.(k);
-    persistCurrentBot(k);
-  };
-
   return (
-    <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4">
-      {/* Header with BOT dropdown (not clipped) */}
-      <div className="rounded-2xl border bg-white shadow-sm px-4 py-3 overflow-visible relative">
-        <div className="flex items-center justify-between overflow-visible relative">
-          <div className="flex items-center gap-3 relative">
-            <span className="text-sm font-extrabold text-purple-700">BOT</span>
-            <select
-              className="rounded-lg border px-3 py-2 relative z-50"
-              value={currentBot}
-              onChange={(e) => changeBot(e.target.value)}
-            >
-              {BOT_OPTIONS.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="text-sm font-extrabold">
-            <span className="text-purple-700">Mode:</span> {mode}
-          </div>
-        </div>
-      </div>
-
+    <div className="w-full h-full grid grid-rows-[1fr_auto_auto] gap-6 p-0 md:p-0">
       {/* Canvas (pastel) */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
         <div
@@ -473,6 +362,11 @@ export default function Builder() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Knowledge panel for the currently selected bot */}
+      <div className="pb-6">
+        <KnowledgePanel bot={currentBot} title="Knowledge (This Bot)" />
       </div>
     </div>
   );
