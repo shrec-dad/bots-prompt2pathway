@@ -17,19 +17,17 @@ const links = [
   { to: "/admin/preview", label: "Preview", icon: Eye },
   { to: "/admin/analytics", label: "Analytics", icon: LineChart },
   { to: "/admin/integrations", label: "Integrations", icon: Plug },
-  { to: "/admin/embed", label: "Embed Code", icon: Code2 }, // <-- exact match
+  { to: "/admin/embed", label: "Embed Code", icon: Code2 }, // <-- EXACT MATCH
 ];
 
 export default function AdminLayout() {
   return (
     <div className="min-h-screen flex bg-muted/10">
-      {/* Sidebar */}
       <aside className="w-[320px] shrink-0 border-r bg-white">
         <div className="p-6 border-b bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100">
           <div className="text-2xl font-bold">Admin</div>
           <div className="text-sm text-muted-foreground">Multi-Bot Platform</div>
         </div>
-
         <nav className="p-4 space-y-3">
           {links.map(({ to, label, icon: Icon, end }) => (
             <NavLink
@@ -47,8 +45,6 @@ export default function AdminLayout() {
           ))}
         </nav>
       </aside>
-
-      {/* Content */}
       <main className="flex-1 min-w-0">
         <Outlet />
       </main>
