@@ -16,10 +16,11 @@ import Branding from "@/pages/admin/Branding";
 import Analytics from "@/pages/admin/Analytics";
 import Integrations from "@/pages/admin/Integrations";
 import Clients from "@/pages/admin/Clients";
-import Knowledge from "@/pages/admin/Knowledge";   // <-- ensure this exists and is exported
+import Knowledge from "@/pages/admin/Knowledge";
 import Nurture from "@/pages/admin/Nurture";
 import Settings from "@/pages/admin/Settings";
 import Preview from "@/pages/admin/Preview";
+import Embed from "@/pages/admin/Embed"; // <-- NEW: make sure this file exists
 
 export default function App() {
   return (
@@ -42,9 +43,10 @@ export default function App() {
           <Route path="nurture" element={<Nurture />} />
           <Route path="settings" element={<Settings />} />
           <Route path="preview" element={<Preview />} />
+          <Route path="embed" element={<Embed />} /> {/* <-- NEW route */}
         </Route>
 
-        {/* Legacy/redirects if needed */}
+        {/* Legacy redirect (optional) */}
         <Route path="/admin/preview/*" element={<Navigate to="/admin/preview" replace />} />
 
         {/* 404 */}
