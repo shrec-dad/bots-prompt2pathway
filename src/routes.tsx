@@ -20,6 +20,7 @@ import Nurture from "@/pages/admin/Nurture";
 import Settings from "@/pages/admin/Settings";
 import Knowledge from "@/pages/admin/Knowledge";   // <-- NEW
 import Preview from "@/pages/admin/Preview";       // <-- already created
+import Embed from "@/pages/admin/Embed";
 
 export default function AppRoutes() {
   return (
@@ -42,6 +43,7 @@ export default function AppRoutes() {
           <Route path="nurture" element={<Nurture />} />
           <Route path="settings" element={<Settings />} />
           <Route path="preview" element={<Preview />} />
+          <Route path="embed" element={<Embed />} />
         </Route>
 
         {/* Legacy redirect (optional) */}
