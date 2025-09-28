@@ -2,10 +2,12 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
+// Public pages
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import Widget from "@/pages/Widget";
 
+// Admin shell + pages
 import AdminLayout from "@/pages/admin/AdminLayout";
 import Dashboard from "@/pages/admin/Dashboard";
 import Bots from "@/pages/admin/Bots";
@@ -17,8 +19,8 @@ import Clients from "@/pages/admin/Clients";
 import Nurture from "@/pages/admin/Nurture";
 import Settings from "@/pages/admin/Settings";
 import Preview from "@/pages/admin/Preview";
-import Knowledge from "@/pages/admin/Knowledge"; // if you have it
-import Embed from "@/pages/admin/Embed";        // <-- NEW
+import Knowledge from "@/pages/admin/Knowledge";
+import Embed from "@/pages/admin/Embed"; // <-- new page
 
 export default function AppRoutes() {
   return (
@@ -41,10 +43,10 @@ export default function AppRoutes() {
           <Route path="nurture" element={<Nurture />} />
           <Route path="settings" element={<Settings />} />
           <Route path="preview" element={<Preview />} />
-          <Route path="embed" element={<Embed />} /> {/* <-- NEW */}
+          <Route path="embed" element={<Embed />} /> {/* <-- route exists */}
         </Route>
 
-        {/* Legacy redirect (optional) */}
+        {/* Redirects (optional) */}
         <Route path="/admin/preview/*" element={<Navigate to="/admin/preview" replace />} />
 
         {/* 404 */}
