@@ -1,252 +1,268 @@
 // src/pages/admin/Knowledge.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useAdminStore } from "@/lib/AdminStore"; // ok if this already exists; we fall back if not
-import { getBotSettings, BotKey } from "@/lib/botSettings"; // used only for types / mapping
+import { useAdminStore } from "@/lib/AdminStore";
+import { BotKey } from "@/lib/botSettings";
 
-type UploadItem = {
+/** -----------------------------------------------------------------------
+ *  Config
+ *  ---------------------------------------------------------------------*/
+type DocFile = {
   id: string;
   name: string;
-  size: number;
+  size: number; // bytes
   type: string;
-  addedAt: number;
-  dataUrl: string; // base64 preview (demo storage)
+  dataUrl: string; // for preview/download (simple local prototype)
+  uploadedAt: number;
 };
 
-// ---- Bot catalog (keys + human names) ----
-const BOT_OPTIONS: { key: BotKey; label: string }[] = [
-  { key: "LeadQualifier", label: "Lead Qualifier" },
+const BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
+  { key: "LeadQualifier",      label: "Lead Qualifier" },
   { key: "AppointmentBooking", label: "Appointment Booking" },
-  { key: "CustomerSupport", label: "Customer Support" },
-  { key: "Waitlist", label: "Waitlist" },
-  { key: "SocialMedia", label: "Social Media" },
+  { key: "CustomerSupport",    label: "Customer Support" },
+  { key: "Waitlist",           label: "Waitlist" },
+  { key: "SocialMedia",        label: "Social Media" },
 ];
 
-const lsKey = (bot: BotKey) => `knowledge:${bot}`;
+const ACCEPT =
+  ".pdf,.doc,.docx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain";
 
-// LocalStorage helpers
-function loadForBot(bot: BotKey): UploadItem[] {
+/** -----------------------------------------------------------------------
+ *  Small helpers for per-bot persistence
+ *  ---------------------------------------------------------------------*/
+const storeKey = (bot: BotKey) => `knowledge:${bot}`;
+
+function loadDocs(bot: BotKey): DocFile[] {
   try {
-    const raw = localStorage.getItem(lsKey(bot));
-    if (!raw) return [];
-    return JSON.parse(raw) as UploadItem[];
+    const raw = localStorage.getItem(storeKey(bot));
+    return raw ? (JSON.parse(raw) as DocFile[]) : [];
   } catch {
     return [];
   }
 }
-function saveForBot(bot: BotKey, items: UploadItem[]) {
-  localStorage.setItem(lsKey(bot), JSON.stringify(items));
+
+function saveDocs(bot: BotKey, docs: DocFile[]) {
+  localStorage.setItem(storeKey(bot), JSON.stringify(docs));
 }
 
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+
+function formatSize(bytes: number) {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+/** -----------------------------------------------------------------------
+ *  Page
+ *  ---------------------------------------------------------------------*/
 export default function Knowledge() {
-  // try to respect your global store if present
-  let storeBot: BotKey | undefined;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    storeBot = useAdminStore?.()!.currentBot as BotKey | undefined;
-  } catch {
-    /* ignore if store not wired */
-  }
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [bot, setBot] = useState<BotKey>(storeBot ?? "LeadQualifier");
-  const [items, setItems] = useState<UploadItem[]>(() => loadForBot(storeBot ?? "LeadQualifier"));
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const [isBusy, setBusy] = useState(false);
+  // Pull currentBot from your admin store; also allow switching here
+  const { currentBot, setCurrentBot } = useAdminStore() as {
+    currentBot: BotKey;
+    setCurrentBot?: (key: BotKey) => void;
+  };
 
-  // Reload when bot changes or store changes
-  useEffect(() => {
-    setItems(loadForBot(bot));
-  }, [bot]);
-
-  // If global store bot changes externally, follow it
-  useEffect(() => {
-    if (storeBot && storeBot !== bot) setBot(storeBot);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeBot]);
-
-  const botLabel = useMemo(
-    () => BOT_OPTIONS.find((b) => b.key === bot)?.label ?? bot,
-    [bot]
+  // Fallback if store lacks a setter or current value
+  const initialBot = useMemo<BotKey>(
+    () => currentBot || BOT_OPTIONS[0].key,
+    [currentBot]
   );
 
-  const onSelectFiles = async (evt: React.ChangeEvent<HTMLInputElement>) => {
-    const files = evt.target.files;
-    if (!files || files.length === 0) return;
+  const [bot, setBot] = useState<BotKey>(initialBot);
+  const [docs, setDocs] = useState<DocFile[]>(() => loadDocs(initialBot));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    setBusy(true);
-    const newItems: UploadItem[] = [];
+  // Keep store and local state in sync when the picker changes
+  useEffect(() => {
+    if (bot !== currentBot && setCurrentBot) setCurrentBot(bot);
+    setDocs(loadDocs(bot));
+  }, [bot]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Convert files -> base64 DataURL (demo-only storage)
-    for (const f of Array.from(files)) {
-      const dataUrl = await fileToDataURL(f);
-      newItems.push({
-        id: crypto.randomUUID(),
-        name: f.name,
-        size: f.size,
-        type: f.type || "application/octet-stream",
-        addedAt: Date.now(),
-        dataUrl,
-      });
+  // If the store changes externally, refresh
+  useEffect(() => {
+    if (currentBot && currentBot !== bot) {
+      setBot(currentBot);
+      setDocs(loadDocs(currentBot));
     }
+  }, [currentBot]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const merged = [...items, ...newItems];
-    setItems(merged);
-    saveForBot(bot, merged);
+  async function triggerUpload() {
+    setError(null);
+    fileInputRef.current?.click();
+  }
 
-    // reset input so the same file can be picked again later
-    if (fileRef.current) fileRef.current.value = "";
-    setBusy(false);
-  };
+  async function onFilesChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    setError(null);
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
-  const removeItem = (id: string) => {
-    const next = items.filter((i) => i.id !== id);
-    setItems(next);
-    saveForBot(bot, next);
-  };
+    try {
+      setBusy(true);
+      const additions: DocFile[] = [];
+      for (const f of files) {
+        // Simple 10 MB guard to avoid blowing up localStorage
+        if (f.size > 10 * 1024 * 1024) {
+          setError(`"${f.name}" is larger than 10 MB. Please upload a smaller file.`);
+          continue;
+        }
+        const dataUrl = await readFileAsDataURL(f);
+        additions.push({
+          id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          name: f.name,
+          size: f.size,
+          type: f.type || "application/octet-stream",
+          dataUrl,
+          uploadedAt: Date.now(),
+        });
+      }
 
-  const clearAll = () => {
-    if (!confirm(`Remove all documents for "${botLabel}"?`)) return;
-    setItems([]);
-    saveForBot(bot, []);
-  };
+      if (additions.length) {
+        const next = [...docs, ...additions];
+        setDocs(next);
+        saveDocs(bot, next);
+      }
+    } catch (err) {
+      setError("Upload failed. Please try again.");
+    } finally {
+      setBusy(false);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
-  const manageSources = () => {
-    alert("Coming soon: connect Google Drive / Notion / URLs as external sources.");
-  };
-
-  const triggerUpload = () => fileRef.current?.click();
+  function removeDoc(id: string) {
+    const next = docs.filter((d) => d.id !== id);
+    setDocs(next);
+    saveDocs(bot, next);
+  }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="rounded-2xl border bg-card p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="text-2xl font-extrabold">Knowledge</div>
-          <div className="text-sm text-muted-foreground">
-            Attach documents the bot can use to answer questions.
-          </div>
-        </div>
-
-        {/* Bot picker */}
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold">Bot:</span>
-          <select
-            className="rounded-xl border bg-card px-3 py-2 text-sm font-bold shadow-sm"
-            value={bot}
-            onChange={(e) => setBot(e.target.value as BotKey)}
-          >
-            {BOT_OPTIONS.map((b) => (
-              <option key={b.key} value={b.key}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Upload row */}
-      <section className="rounded-2xl border p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="space-y-6">
+      {/* Header / Bot picker */}
+      <div className="rounded-2xl border bg-white shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
           <div>
-            <h3 className="text-xl font-extrabold">Upload Documents</h3>
-            <p className="text-sm text-muted-foreground">
-              PDF, Word, Excel, or text. Stored locally for demo; backend wiring later.
+            <h1 className="text-2xl font-extrabold tracking-tight">Knowledge</h1>
+            <p className="text-sm text-foreground/70">
+              Upload product guides, pricing, policies, FAQs — your bot will use these to answer customer questions.
             </p>
           </div>
 
-          <div className="flex gap-3">
-            <button
-              onClick={triggerUpload}
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/70 transition"
-              disabled={isBusy}
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-bold uppercase text-foreground/70">Bot</label>
+            <select
+              className="rounded-lg border px-3 py-2 font-semibold bg-white"
+              value={bot}
+              onChange={(e) => setBot(e.target.value as BotKey)}
             >
-              {isBusy ? "Uploading…" : "+ Upload"}
-            </button>
-            <button
-              onClick={manageSources}
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/70 transition"
-            >
-              Manage Sources
-            </button>
+              {BOT_OPTIONS.map((b) => (
+                <option key={b.key} value={b.key}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* hidden input */}
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
-          multiple
-          hidden
-          onChange={onSelectFiles}
-        />
-      </section>
+        {/* Upload row */}
+        <div className="p-5 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <div className="text-xl font-extrabold">Upload Documents</div>
+              <div className="text-sm text-foreground/70">
+                PDF, Word, Excel, or plain text. Files are stored locally per bot for this prototype.
+              </div>
+            </div>
 
-      {/* List */}
-      <section className="rounded-2xl border p-5 bg-card">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-extrabold">Uploaded Documents — {botLabel}</h3>
-          {items.length > 0 && (
-            <button
-              onClick={clearAll}
-              className="rounded-xl px-3 py-2 text-sm font-bold ring-1 ring-border bg-white hover:bg-muted/70 transition"
-              title="Remove all documents for this bot"
-            >
-              Clear All
-            </button>
+            <div className="flex items-center gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPT}
+                multiple
+                hidden
+                onChange={onFilesChosen}
+              />
+              <button
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/15 to-emerald-500/15 hover:from-indigo-500/25 hover:to-emerald-500/25 disabled:opacity-60"
+                onClick={triggerUpload}
+                disabled={busy}
+              >
+                + Upload
+              </button>
+              <button
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border hover:bg-muted/40"
+                onClick={() => alert("Source management UI coming soon.")}
+              >
+                Manage Sources
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
           )}
         </div>
+      </div>
 
-        {items.length === 0 ? (
-          <div className="mt-4 rounded-xl border bg-muted/40 p-6 text-sm text-muted-foreground">
-            No documents yet. Click <span className="font-semibold">+ Upload</span> to add files for{" "}
-            <span className="font-semibold">{botLabel}</span>.
+      {/* Uploaded list */}
+      <div className="rounded-2xl border bg-white shadow-sm">
+        <div className="p-5 border-b bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl">
+          <div className="text-xl font-extrabold">Uploaded Documents</div>
+          <div className="text-sm text-foreground/70">
+            Stored for <span className="font-semibold">{BOT_OPTIONS.find((b) => b.key === bot)?.label}</span>.
           </div>
-        ) : (
-          <ul className="mt-4 space-y-3">
-            {items.map((f) => (
-              <li
-                key={f.id}
-                className="rounded-xl border bg-white p-4 flex items-center justify-between gap-4"
-              >
-                <div className="min-w-0">
-                  <div className="font-bold truncate">{f.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {(f.size / 1024).toFixed(0)} KB • {new Date(f.addedAt).toLocaleString()}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {/* Download/preview (opens DataURL) */}
+        </div>
+
+        <div className="p-5">
+          {docs.length === 0 ? (
+            <div className="rounded-xl border bg-muted/10 px-4 py-6 text-sm text-foreground/70">
+              No documents yet. Use <span className="font-semibold">+ Upload</span> to add PDF/Word/Excel.
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {docs.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3 bg-white hover:bg-muted/20"
+                >
                   <a
-                    href={f.dataUrl}
-                    download={f.name}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-xl px-3 py-2 text-sm font-bold ring-1 ring-border bg-white hover:bg-muted/70 transition"
+                    className="min-w-0 flex-1 truncate font-semibold hover:underline"
+                    href={d.dataUrl}
+                    download={d.name}
+                    title="Click to download"
                   >
-                    Preview
+                    {d.name}
+                    <span className="ml-2 text-xs font-normal text-foreground/60">
+                      • {formatSize(d.size)}
+                    </span>
                   </a>
+
                   <button
-                    onClick={() => removeItem(f.id)}
-                    className="rounded-xl px-3 py-2 text-sm font-bold ring-1 ring-border bg-white hover:bg-rose-50 transition"
+                    className="rounded-lg px-3 py-1.5 font-bold ring-1 ring-border hover:bg-muted/40"
+                    onClick={() => removeDoc(d.id)}
+                    aria-label={`Remove ${d.name}`}
                   >
                     Remove
                   </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
-}
-
-// Utility: file -> DataURL
-function fileToDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error);
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
 }
