@@ -3,7 +3,7 @@ import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard, Users, Bot, Puzzle, Book, Workflow,
-  Settings,Embed Code, Eye, LineChart, Plug
+  Settings,SettingsIcon, Eye, LineChart, Plug
 } from "lucide-react";
 
 const links = [
@@ -17,7 +17,7 @@ const links = [
   { to: "/admin/preview",  label: "Preview Widget", icon: Eye },               // <-- this is the label to rename
   { to: "/admin/analytics", label: "Analytics", icon: LineChart },
   { to: "/admin/integrations", label: "Integrations", icon: Plug },
-  { to: "/admin/embed", label: "Embed Code", icon: Embed Code },
+  { to: "/admin/embed", label: "Embed Code", icon: SettingsIcon },
 
 ];
 
