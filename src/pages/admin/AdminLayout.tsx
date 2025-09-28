@@ -17,6 +17,8 @@ const links = [
   { to: "/admin/preview",  label: "Preview Widget", icon: Eye },               // <-- this is the label to rename
   { to: "/admin/analytics", label: "Analytics", icon: LineChart },
   { to: "/admin/integrations", label: "Integrations", icon: Plug },
+  { to: "/admin/embed", label: "Embed Code", icon: "🧩" },
+
 ];
 
 export default function AdminLayout() {
