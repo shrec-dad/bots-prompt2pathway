@@ -1,12 +1,9 @@
 // src/pages/admin/Embed.tsx
 import React, { useMemo, useState } from "react";
 
-/**
- * Simple helper to copy text to clipboard and give quick feedback.
- */
+/** Copy helper with quick feedback */
 function CopyButton({ getText }: { getText: () => string }) {
   const [label, setLabel] = useState("Copy");
-
   async function onCopy() {
     try {
       await navigator.clipboard.writeText(getText());
@@ -17,7 +14,6 @@ function CopyButton({ getText }: { getText: () => string }) {
       setTimeout(() => setLabel("Copy"), 1500);
     }
   }
-
   return (
     <button
       onClick={onCopy}
@@ -29,23 +25,23 @@ function CopyButton({ getText }: { getText: () => string }) {
 }
 
 export default function Embed() {
+  // NEW: Instance-aware (overrides botId when present)
   const [instId, setInstId] = useState("");
 
+  // Basic controls
   const [botId, setBotId] = useState("waitlist-bot");
   const [mode, setMode] = useState<"popup" | "inline" | "sidebar">("popup");
   const [position, setPosition] = useState<"bottom-right" | "bottom-left">("bottom-right");
   const [size, setSize] = useState(64);
   const [color, setColor] = useState("#8b5cf6");
-  const [image, setImage] = useState<string>("");
+  const [image, setImage] = useState<string>(""); // optional bubble image URL
 
+  // Build the /widget URL with query params
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const embedUrl = useMemo(() => {
     const params = new URLSearchParams();
-    if (instId.trim()) {
-      params.set("inst", instId.trim());
-    } else {
-      params.set("bot", botId);
-    }
+    if (instId.trim()) params.set("inst", instId.trim());
+    else params.set("bot", botId);
     params.set("mode", mode);
     params.set("position", position);
     params.set("size", String(size));
@@ -54,6 +50,7 @@ export default function Embed() {
     return `${origin}/widget?${params.toString()}`;
   }, [origin, instId, botId, mode, position, size, color, image]);
 
+  // Snippets
   const iframeSnippet = useMemo(
     () =>
 `<!-- Paste this near </body> -->
@@ -70,9 +67,10 @@ export default function Embed() {
     [embedUrl, size, mode, position]
   );
 
+  // For React apps using your local component (use iframe for specific instance)
   const reactSnippet = useMemo(
     () =>
-`// Example usage inside a React app
+`// Example inside a React app (template-based)
 import ChatWidget from "@/widgets/ChatWidget";
 
 export default function App() {
@@ -89,18 +87,17 @@ export default function App() {
     </div>
   );
 }
-// To target a specific instance, use the iframe snippet (?inst=…)`,
+// To embed a specific *instance*, use the iframe snippet (?inst=…)`,
     [mode, botId, color, size, position, image]
   );
 
-  const headerCard =
-    "rounded-2xl border bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-6";
+  // UI classes
+  const headerCard = "rounded-2xl border bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-6";
   const sectionCard = "rounded-2xl border bg-white/90 p-4 md:p-5 shadow-sm";
   const labelCls = "text-sm font-bold uppercase text-purple-700";
   const inputCls =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
-  const codeBox =
-    "mt-3 rounded-lg border bg-neutral-900 text-neutral-50 text-sm p-3 overflow-auto";
+  const codeBox = "mt-3 rounded-lg border bg-neutral-900 text-neutral-50 text-sm p-3 overflow-auto";
 
   return (
     <div className="p-6 space-y-6">
@@ -108,8 +105,8 @@ export default function App() {
       <div className={headerCard}>
         <h1 className="text-3xl font-extrabold">Embed Code</h1>
         <p className="mt-2 text-muted-foreground">
-          Choose your bot or instance and style options. Copy one of the snippets below and paste it
-          into your website. <strong>Iframe</strong> works everywhere; <strong>React</strong> is for React apps.
+          Choose your bot or a saved instance and style options. Copy a snippet and paste it into your site.
+          <strong> Iframe</strong> works everywhere. <strong>React</strong> is for your own React apps.
         </p>
       </div>
 
@@ -125,7 +122,7 @@ export default function App() {
               placeholder="inst_abc123…"
             />
             <div className="text-xs text-muted-foreground mt-1">
-              Overrides Bot ID when provided.
+              If provided, this overrides Bot ID and embeds that specific duplicated bot.
             </div>
           </div>
 
@@ -135,17 +132,18 @@ export default function App() {
               className={inputCls}
               value={botId}
               onChange={(e) => setBotId(e.target.value)}
-              disabled={!!instId.trim()}
               placeholder="waitlist-bot"
+              disabled={!!instId.trim()}
+              title={instId.trim() ? "Instance is set; Bot ID ignored" : ""}
             />
           </div>
 
           <div>
             <div className={labelCls}>Mode</div>
             <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value as any)}>
-              <option value="popup">popup</option>
-              <option value="inline">inline</option>
-              <option value="sidebar">sidebar</option>
+              <option value="popup">popup (floating bubble)</option>
+              <option value="inline">inline (place in page)</option>
+              <option value="sidebar">sidebar (full height)</option>
             </select>
           </div>
 
@@ -156,6 +154,7 @@ export default function App() {
               value={position}
               onChange={(e) => setPosition(e.target.value as any)}
               disabled={mode === "inline"}
+              title={mode === "inline" ? "Position is not used for inline mode" : ""}
             >
               <option value="bottom-right">bottom-right</option>
               <option value="bottom-left">bottom-left</option>
@@ -166,12 +165,14 @@ export default function App() {
             <div className={labelCls}>Size (px)</div>
             <input
               type="number"
+              min={40}
+              max={160}
+              step={2}
               className={inputCls}
               value={size}
               onChange={(e) => setSize(Number(e.target.value || 64))}
               disabled={mode === "sidebar"}
-              min={40}
-              max={160}
+              title={mode === "sidebar" ? "Size is not used for sidebar mode" : ""}
             />
           </div>
 
@@ -191,10 +192,11 @@ export default function App() {
               className={inputCls}
               value={image}
               onChange={(e) => setImage(e.target.value)}
-              placeholder="https://example.com/icon.png"
+              placeholder="https://example.com/logo.png"
             />
           </div>
 
+          {/* Preview URL + Open button */}
           <div className="md:col-span-2 flex items-center gap-2">
             <div className="flex-1">
               <div className={labelCls}>Preview URL</div>
@@ -217,15 +219,22 @@ export default function App() {
           <CopyButton getText={() => iframeSnippet} />
         </div>
         <pre className={codeBox}><code>{iframeSnippet}</code></pre>
+        <p className="text-xs text-muted-foreground mt-2">
+          Uses <code>/widget</code> with your selected options. If <strong>Instance ID</strong> is set, it uses
+          <code> ?inst=…</code>; otherwise it uses <code>?bot=…</code>.
+        </p>
       </div>
 
       {/* React snippet */}
       <div className={sectionCard}>
         <div className="flex items-center justify-between gap-3">
-          <div className="text-lg font-bold">React Snippet</div>
+          <div className="text-lg font-bold">React Snippet (local component)</div>
           <CopyButton getText={() => reactSnippet} />
         </div>
         <pre className={codeBox}><code>{reactSnippet}</code></pre>
+        <p className="text-xs text-muted-foreground mt-2">
+          For targeting a specific <strong>instance</strong>, prefer the iframe snippet above.
+        </p>
       </div>
     </div>
   );
