@@ -17,6 +17,7 @@ import ReactFlow, {
   Node,
   Handle,
   Position,
+  useReactFlow,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -110,7 +111,7 @@ const nodeTypes = {
 };
 
 /* =========================================================================
-   2)  Helpers: per-bot+mode overrides in localStorage
+   2)  Helpers: per-bot+mode (or instance+mode) overrides in localStorage
    ========================================================================= */
 
 type RFNode = Node & {
@@ -330,6 +331,70 @@ export default function Builder() {
     [nodes, selectedId]
   );
 
+  // ==== Add Node UI state ====
+  const [addOpen, setAddOpen] = useState(false);
+  const rf = useReactFlow<RFNode, Edge>();
+
+  // helper to create unique id
+  const nextId = () => `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
+  // compute a good drop position (center of viewport) or below selected
+  const getNewNodePosition = () => {
+    const viewport = rf.getViewport();
+    const { x, y, zoom } = viewport;
+    // center of visible area in flow coords
+    const width = (rf as any).domNode?.clientWidth ?? 1200;
+    const height = (rf as any).domNode?.clientHeight ?? 600;
+    const centerX = (width / 2 - x) / zoom;
+    const centerY = (height / 2 - y) / zoom;
+
+    if (selected) {
+      // place slightly below selected node
+      return {
+        x: (selected.position?.x ?? centerX) + 0,
+        y: (selected.position?.y ?? centerY) + 120,
+      };
+    }
+    return { x: centerX, y: centerY };
+  };
+
+  type NewType = "message" | "choice" | "input" | "action";
+  const defaultDataFor = (t: NewType) =>
+    t === "message"
+      ? { title: "New Message", text: "Edit me…" }
+      : t === "choice"
+      ? { label: "Choose one", options: ["Option A", "Option B"] }
+      : t === "input"
+      ? { label: "Your input", placeholder: "Type here…" }
+      : { label: "Action", to: "mailto:example@domain.com" };
+
+  const addNode = (type: NewType) => {
+    const id = nextId();
+    const pos = getNewNodePosition();
+    const data = defaultDataFor(type);
+
+    // 1) add to canvas
+    const newNode: RFNode = { id, type, position: pos, data };
+    setNodes((prev) => [...prev, newNode]);
+
+    // 2) auto-connect from selected (if any)
+    if (selected) {
+      setEdges((prev) => [
+        ...prev,
+        { id: `e_${selected.id}_${id}`, source: selected.id, target: id, type: "smoothstep" },
+      ]);
+    }
+
+    // 3) persist override for new node immediately so it survives refresh
+    const nextOv = { ...overrides, [id]: { data } };
+    setOv(nextOv);
+    saveOverrides(bot, mode, nextOv, instId);
+
+    // 4) select the new node and close menu
+    setSelectedId(id);
+    setAddOpen(false);
+  };
+
   // UI helpers
   const inputClass =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
@@ -532,6 +597,35 @@ export default function Builder() {
                 </button>
               </div>
             </div>
+
+            {/* ===== Add Node Button + tiny menu (no restyle of header) ===== */}
+            <div className="relative">
+              <button
+                onClick={() => setAddOpen((v) => !v)}
+                className="rounded-md px-3 py-2 text-xs font-extrabold ring-1 ring-border bg-white hover:bg-gray-50"
+                aria-expanded={addOpen}
+                aria-haspopup="menu"
+              >
+                + Add Node
+              </button>
+              {addOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-40 rounded-lg border-2 border-black bg-white shadow-xl z-20"
+                >
+                  {(["message", "choice", "input", "action"] as const).map((t) => (
+                    <button
+                      key={t}
+                      role="menuitem"
+                      onClick={() => addNode(t)}
+                      className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+                    >
+                      {t[0].toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -547,6 +641,7 @@ export default function Builder() {
             background:
               "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
           }}
+          onClick={() => setAddOpen(false)}
         >
           <ReactFlow
             nodes={nodes}
