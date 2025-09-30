@@ -8,23 +8,21 @@ type Shape = "circle" | "rounded" | "square" | "oval" | "chat";
 type Fit = "cover" | "contain";
 
 export default function Preview() {
-  // simple demo state (not tied to builder data yet)
   const [botId, setBotId] = useState("waitlist-bot");
-
-  // Optional instance id (when set, /widget will use it instead of botId)
   const [instId, setInstId] = useState<string>("");
 
   const [mode, setMode] = useState<Mode>("popup");
-  const [pos, setPos] = useState<Pos>("bottom-left"); // bubble bottom-left so it doesn't overlap the modal
-  const [size, setSize] = useState(56);
-  const [color, setColor] = useState<string>("");
+  const [pos, setPos] = useState<Pos>("bottom-left");
+  const [size, setSize] = useState(64);
+  const [color, setColor] = useState<string>("#7aa8ff");
   const [img, setImg] = useState<string>("");
 
-  // NEW: bubble shape + image fit
-  const [shape, setShape] = useState<Shape>("circle");
+  // NEW
+  const [shape, setShape] = useState<Shape>("rounded");
   const [imageFit, setImageFit] = useState<Fit>("cover");
+  const [label, setLabel] = useState<string>("Chat");
+  const [labelColor, setLabelColor] = useState<string>("#ffffff");
 
-  // modal demo flow
   const [open, setOpen] = useState(true);
   const [step, setStep] = useState(0);
 
@@ -36,32 +34,27 @@ export default function Preview() {
 
   const title = useMemo(() => {
     switch (step) {
-      case 0:
-        return "Welcome to the Waitlist";
-      case 1:
-        return "Your email";
-      case 2:
-        return "Interest level";
-      default:
-        return "All set!";
+      case 0: return "Welcome to the Waitlist";
+      case 1: return "Your email";
+      case 2: return "Interest level";
+      default: return "All set!";
     }
   }, [step]);
 
-  // Instance-aware widget URL for embedding (includes shape & imageFit)
   const widgetSrc = useMemo(() => {
     const qp = new URLSearchParams();
     if (instId.trim()) qp.set("inst", instId.trim());
     else qp.set("bot", botId);
-
     qp.set("position", pos);
     qp.set("size", String(size));
     qp.set("shape", shape);
     qp.set("imageFit", imageFit);
+    qp.set("label", label);
+    qp.set("labelColor", labelColor);
     if (color.trim()) qp.set("color", color.trim());
     if (img.trim()) qp.set("image", img.trim());
-
     return `/widget?${qp.toString()}`;
-  }, [instId, botId, pos, size, color, img, shape, imageFit]);
+  }, [instId, botId, pos, size, color, img, shape, imageFit, label, labelColor]);
 
   const embedIframe = `<iframe
   src="${widgetSrc}"
@@ -80,7 +73,6 @@ export default function Preview() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-          {/* Instance first (optional) */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Instance ID (optional)</label>
             <input
@@ -180,13 +172,34 @@ export default function Preview() {
             </select>
           </div>
 
-          <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-semibold">Accent Color (optional)</label>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Accent Color (bubble)</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
               placeholder="#7aa8ff"
               value={color}
               onChange={(e) => setColor(e.target.value)}
+            />
+          </div>
+
+          {/* NEW: Label & Label Color */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Bubble Label</label>
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="Chat"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Label Color</label>
+            <input
+              type="color"
+              className="h-10 w-full rounded-lg border"
+              value={labelColor}
+              onChange={(e) => setLabelColor(e.target.value)}
             />
           </div>
 
@@ -198,7 +211,6 @@ export default function Preview() {
               Open Preview Modal
             </button>
 
-            {/* Copy-friendly embed right inside the controls card, no layout change */}
             <div className="ml-auto text-sm font-semibold">Embed URL:</div>
             <input
               readOnly
@@ -209,23 +221,26 @@ export default function Preview() {
             />
           </div>
 
-          {/* Full iframe code (toggle inline) */}
           <div className="md:col-span-2">
             <label className="text-sm font-semibold">Embed (iframe)</label>
             <textarea
               readOnly
               className="w-full rounded-lg border px-3 py-2 text-xs font-mono"
               rows={4}
-              value={embedIframe}
+              value={`<iframe
+  src="${widgetSrc}"
+  style="border:0;width:100%;height:560px"
+  loading="lazy"
+  referrerpolicy="no-referrer-when-downgrade"
+></iframe>`}
               onFocus={(e) => e.currentTarget.select()}
             />
           </div>
         </div>
       </div>
 
-      {/* Live UI area (no gray box; modal is vertical & centered) */}
+      {/* Live area */}
       <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
-        {/* Floating bubble for popup mode (unchanged) */}
         {mode === "popup" && (
           <ChatWidget
             mode="popup"
@@ -234,22 +249,16 @@ export default function Preview() {
             size={size}
             color={color || undefined}
             image={img || undefined}
-            // Pass through shape & imageFit (safe even if ChatWidget ignores them)
-            shape={shape as any}
-            imageFit={imageFit as any}
+            shape={shape}
+            imageFit={imageFit}
+            label={label}
+            labelColor={labelColor}
           />
         )}
 
-        {/* Modal */}
         {open && (
-          <div
-            className="absolute inset-0 grid place-items-center"
-            style={{ pointerEvents: "none" }}
-          >
-            <div
-              className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto"
-              style={{ transform: "translateY(0)" }}
-            >
+          <div className="absolute inset-0 grid place-items-center" style={{ pointerEvents: "none" }}>
+            <div className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto">
               <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
                 <div className="text-lg font-extrabold">
                   {botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
@@ -258,45 +267,8 @@ export default function Preview() {
 
               <div className="p-6 space-y-6">
                 <div className="grid place-items-center text-5xl">👋</div>
-
                 <div className="text-center">
                   <h2 className="text-2xl font-extrabold">{title}</h2>
-
-                  {step === 0 && (
-                    <p className="mt-2 text-muted-foreground">
-                      I’ll ask a few quick questions to help our team help you.
-                      <br />
-                      Press <span className="font-bold">Continue</span> to proceed.
-                    </p>
-                  )}
-
-                  {step === 1 && (
-                    <div className="mt-4">
-                      <input
-                        className="w-full rounded-lg border px-3 py-2"
-                        placeholder="you@domain.com"
-                      />
-                    </div>
-                  )}
-
-                  {step === 2 && (
-                    <div className="mt-4 grid gap-2">
-                      {["Curious", "Very interested", "VIP"].map((o) => (
-                        <button
-                          key={o}
-                          className="rounded-lg border px-3 py-2 hover:bg-muted/50"
-                        >
-                          {o}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {step === 3 && (
-                    <p className="mt-2 text-muted-foreground">
-                      Thanks! You’re on the list — we’ll be in touch.
-                    </p>
-                  )}
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -308,10 +280,7 @@ export default function Preview() {
                   </button>
                   <div className="flex gap-2">
                     {step > 0 && step < 3 && (
-                      <button
-                        className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-                        onClick={back}
-                      >
+                      <button className="rounded-xl px-4 py-2 font-bold ring-1 ring-border" onClick={back}>
                         Back
                       </button>
                     )}
