@@ -95,7 +95,7 @@ export default function Bots() {
   }, []);
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full pb-24">
       {/* Header + Create button */}
       <div className="flex items-center justify-between mb-4">
         <div className="text-xl font-extrabold">Bots</div>
@@ -130,7 +130,7 @@ export default function Bots() {
               </div>
             </div>
 
-            {/* Actions row: wrap-safe so nothing overflows */}
+            {/* Actions row */}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <div className="text-sm font-semibold text-foreground/80">Plan:</div>
 
@@ -155,15 +155,11 @@ export default function Bots() {
                 Open Builder
               </button>
 
-              {/* Duplicate button — nowrap + fixed padding to avoid overflow */}
               <button
                 className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-gray-50 whitespace-nowrap"
                 onClick={() => {
                   const inst = duplicateBot(keyToId(b.key));
                   setLastDupId(inst.id);
-                  // Simple console confirmation for now
-                  console.log("✅ Duplicated bot:", inst);
-                  // Optionally scroll to "My Bots"
                   const myBotsEl = document.getElementById("my-bots-section");
                   if (myBotsEl) myBotsEl.scrollIntoView({ behavior: "smooth", block: "start" });
                 }}
@@ -200,11 +196,10 @@ export default function Bots() {
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {/* Future: open instance in Builder (disabled for now) */}
+                      {/* Now opens the instance in Builder */}
                       <button
-                        disabled
-                        title="Coming soon"
-                        className="rounded-xl px-3 py-1.5 font-bold ring-1 ring-border bg-white disabled:opacity-70 whitespace-nowrap"
+                        className="rounded-xl px-3 py-1.5 font-bold ring-1 ring-border bg-white hover:bg-gray-50 whitespace-nowrap"
+                        onClick={() => (window.location.href = `/admin/builder?inst=${ub.id}`)}
                       >
                         Open
                       </button>
