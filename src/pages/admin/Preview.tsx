@@ -8,8 +8,12 @@ type Pos = "bottom-right" | "bottom-left";
 export default function Preview() {
   // simple demo state (not tied to builder data yet)
   const [botId, setBotId] = useState("waitlist-bot");
+
+  // NEW: optional instance id (when set, /widget will use it instead of botId)
+  const [instId, setInstId] = useState<string>("");
+
   const [mode, setMode] = useState<Mode>("popup");
-  const [pos, setPos] = useState<Pos>("bottom-left"); // <-- bubble bottom-left so it doesn't overlap the modal
+  const [pos, setPos] = useState<Pos>("bottom-left"); // bubble bottom-left so it doesn't overlap the modal
   const [size, setSize] = useState(56);
   const [color, setColor] = useState<string>("");
   const [img, setImg] = useState<string>("");
@@ -37,6 +41,27 @@ export default function Preview() {
     }
   }, [step]);
 
+  // Instance-aware widget URL for embedding
+  const widgetSrc = useMemo(() => {
+    const qp = new URLSearchParams();
+    if (instId.trim()) qp.set("inst", instId.trim());
+    else qp.set("bot", botId);
+
+    qp.set("position", pos);
+    qp.set("size", String(size));
+    if (color.trim()) qp.set("color", color.trim());
+    if (img.trim()) qp.set("image", img.trim());
+
+    return `/widget?${qp.toString()}`;
+  }, [instId, botId, pos, size, color, img]);
+
+  const embedIframe = `<iframe
+  src="${widgetSrc}"
+  style="border:0;width:100%;height:560px"
+  loading="lazy"
+  referrerpolicy="no-referrer-when-downgrade"
+></iframe>`;
+
   return (
     <div className="p-6 space-y-6">
       {/* Controls */}
@@ -47,12 +72,28 @@ export default function Preview() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+          {/* Instance first (optional) */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Instance ID (optional)</label>
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="inst_abc123…"
+              value={instId}
+              onChange={(e) => setInstId(e.target.value)}
+            />
+            <div className="text-xs text-muted-foreground">
+              If provided, the instance overrides the Bot ID.
+            </div>
+          </div>
+
           <div className="space-y-2">
             <label className="text-sm font-semibold">Bot ID</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
               value={botId}
               onChange={(e) => setBotId(e.target.value)}
+              disabled={!!instId.trim()}
+              title={instId.trim() ? "Instance is set; Bot ID ignored" : "Enter a bot id"}
             />
           </div>
 
@@ -113,20 +154,42 @@ export default function Preview() {
             />
           </div>
 
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 flex items-center gap-3">
             <button
               className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
               onClick={() => setOpen(true)}
             >
               Open Preview Modal
             </button>
+
+            {/* Copy-friendly embed right inside the controls card, no layout change */}
+            <div className="ml-auto text-sm font-semibold">Embed URL:</div>
+            <input
+              readOnly
+              value={widgetSrc}
+              className="w-[380px] max-w-full rounded-lg border px-3 py-2 text-xs font-mono"
+              onFocus={(e) => e.currentTarget.select()}
+              aria-label="Embed URL"
+            />
+          </div>
+
+          {/* Full iframe code (toggle inline) */}
+          <div className="md:col-span-2">
+            <label className="text-sm font-semibold">Embed (iframe)</label>
+            <textarea
+              readOnly
+              className="w-full rounded-lg border px-3 py-2 text-xs font-mono"
+              rows={4}
+              value={embedIframe}
+              onFocus={(e) => e.currentTarget.select()}
+            />
           </div>
         </div>
       </div>
 
       {/* Live UI area (no gray box; modal is vertical & centered) */}
       <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
-        {/* Floating bubble for popup mode */}
+        {/* Floating bubble for popup mode (unchanged) */}
         {mode === "popup" && (
           <ChatWidget
             mode="popup"
@@ -149,7 +212,9 @@ export default function Preview() {
               style={{ transform: "translateY(0)" }}
             >
               <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
-                <div className="text-lg font-extrabold">{botId.replace(/-/g, " ").replace(/\b\w/g, s => s.toUpperCase())}</div>
+                <div className="text-lg font-extrabold">
+                  {botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
+                </div>
               </div>
 
               <div className="p-6 space-y-6">
