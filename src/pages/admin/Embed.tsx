@@ -29,44 +29,34 @@ function CopyButton({ getText }: { getText: () => string }) {
 }
 
 export default function Embed() {
-  // NEW: optional Instance ID (when present, embed code uses ?inst=... instead of ?bot=...)
   const [instId, setInstId] = useState("");
 
-  // Basic controls the user can tweak
   const [botId, setBotId] = useState("waitlist-bot");
   const [mode, setMode] = useState<"popup" | "inline" | "sidebar">("popup");
   const [position, setPosition] = useState<"bottom-right" | "bottom-left">("bottom-right");
   const [size, setSize] = useState(64);
-  const [color, setColor] = useState("#8b5cf6"); // purple-ish
-  const [image, setImage] = useState<string>(""); // optional bubble image URL
+  const [color, setColor] = useState("#8b5cf6");
+  const [image, setImage] = useState<string>("");
 
-  // Make an embed URL to your local widget route.
-  // Works in dev and on Lovable preview because it uses the current origin.
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const embedUrl = useMemo(() => {
     const params = new URLSearchParams();
-
-    // Instance-aware selector
     if (instId.trim()) {
       params.set("inst", instId.trim());
     } else {
       params.set("bot", botId);
     }
-
-    // Common widget display params (Widget supports these via URL overrides)
     params.set("mode", mode);
     params.set("position", position);
     params.set("size", String(size));
     params.set("color", color);
     if (image.trim()) params.set("image", image.trim());
-
     return `${origin}/widget?${params.toString()}`;
   }, [origin, instId, botId, mode, position, size, color, image]);
 
-  // ---- Snippets ------------------------------------------------------------
   const iframeSnippet = useMemo(
     () =>
-`<!-- Paste this where you want the chat to appear (usually right before </body>) -->
+`<!-- Paste this near </body> -->
 <iframe
   src="${embedUrl}"
   title="Bot Widget"
@@ -80,18 +70,14 @@ export default function Embed() {
     [embedUrl, size, mode, position]
   );
 
-  // React snippet (uses local ChatWidget component; template-based only).
-  // NOTE: If you're targeting a specific instance, prefer the iframe snippet above,
-  // which already carries ?inst=... in its URL.
   const reactSnippet = useMemo(
     () =>
-`// Example usage inside a React app (using your local component)
+`// Example usage inside a React app
 import ChatWidget from "@/widgets/ChatWidget";
 
 export default function App() {
   return (
     <div>
-      {/* ...your app... */}
       <ChatWidget
         mode="${mode}"
         botId="${botId}"
@@ -103,11 +89,9 @@ export default function App() {
     </div>
   );
 }
-// If you need to embed a specific *instance*, use the iframe snippet with ?inst=...`,
+// To target a specific instance, use the iframe snippet (?inst=…)`,
     [mode, botId, color, size, position, image]
   );
-
-  // --------------------------------------------------------------------------
 
   const headerCard =
     "rounded-2xl border bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-6";
@@ -124,9 +108,8 @@ export default function App() {
       <div className={headerCard}>
         <h1 className="text-3xl font-extrabold">Embed Code</h1>
         <p className="mt-2 text-muted-foreground">
-          Choose your bot or a saved instance and style options. Copy one of the snippets below and paste it
-          into your website. The <strong>iframe</strong> snippet works everywhere.
-          The <strong>React</strong> snippet is best for React projects using your local components.
+          Choose your bot or instance and style options. Copy one of the snippets below and paste it
+          into your website. <strong>Iframe</strong> works everywhere; <strong>React</strong> is for React apps.
         </p>
       </div>
 
@@ -142,7 +125,7 @@ export default function App() {
               placeholder="inst_abc123…"
             />
             <div className="text-xs text-muted-foreground mt-1">
-              If provided, this overrides Bot ID and embeds that specific duplicated bot.
+              Overrides Bot ID when provided.
             </div>
           </div>
 
@@ -152,22 +135,17 @@ export default function App() {
               className={inputCls}
               value={botId}
               onChange={(e) => setBotId(e.target.value)}
-              placeholder="waitlist-bot"
               disabled={!!instId.trim()}
-              title={instId.trim() ? "Instance is set; Bot ID ignored" : ""}
+              placeholder="waitlist-bot"
             />
           </div>
 
           <div>
             <div className={labelCls}>Mode</div>
-            <select
-              className={inputCls}
-              value={mode}
-              onChange={(e) => setMode(e.target.value as any)}
-            >
-              <option value="popup">popup (floating bubble)</option>
-              <option value="inline">inline (place in page)</option>
-              <option value="sidebar">sidebar (full height)</option>
+            <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value as any)}>
+              <option value="popup">popup</option>
+              <option value="inline">inline</option>
+              <option value="sidebar">sidebar</option>
             </select>
           </div>
 
@@ -178,7 +156,6 @@ export default function App() {
               value={position}
               onChange={(e) => setPosition(e.target.value as any)}
               disabled={mode === "inline"}
-              title={mode === "inline" ? "Position is not used for inline mode" : ""}
             >
               <option value="bottom-right">bottom-right</option>
               <option value="bottom-left">bottom-left</option>
@@ -189,14 +166,12 @@ export default function App() {
             <div className={labelCls}>Size (px)</div>
             <input
               type="number"
-              min={40}
-              max={160}
-              step={2}
               className={inputCls}
               value={size}
               onChange={(e) => setSize(Number(e.target.value || 64))}
               disabled={mode === "sidebar"}
-              title={mode === "sidebar" ? "Size is not used for sidebar mode" : ""}
+              min={40}
+              max={160}
             />
           </div>
 
@@ -216,13 +191,21 @@ export default function App() {
               className={inputCls}
               value={image}
               onChange={(e) => setImage(e.target.value)}
-              placeholder="https://example.com/logo.png"
+              placeholder="https://example.com/icon.png"
             />
           </div>
 
-          <div className="md:col-span-2">
-            <div className={labelCls}>Preview URL</div>
-            <input className={inputCls} value={embedUrl} readOnly />
+          <div className="md:col-span-2 flex items-center gap-2">
+            <div className="flex-1">
+              <div className={labelCls}>Preview URL</div>
+              <input className={inputCls} value={embedUrl} readOnly />
+            </div>
+            <button
+              onClick={() => window.open(embedUrl, "_blank")}
+              className="px-3 py-2 rounded-md border bg-white hover:bg-muted/40 text-sm font-semibold mt-6"
+            >
+              Open
+            </button>
           </div>
         </div>
       </div>
@@ -233,31 +216,16 @@ export default function App() {
           <div className="text-lg font-bold">Universal Snippet (iframe)</div>
           <CopyButton getText={() => iframeSnippet} />
         </div>
-        <pre className={codeBox}>
-          <code>{iframeSnippet}</code>
-        </pre>
-        <p className="text-xs text-muted-foreground mt-2">
-          Paste this near the end of your <code>&lt;body&gt;</code>. The iframe points to{" "}
-          <code>/widget</code> and carries your selected options as query params. If an{" "}
-          <code>Instance ID</code> is provided, it uses <code>?inst=…</code>; otherwise it uses{" "}
-          <code>?bot=…</code>.
-        </p>
+        <pre className={codeBox}><code>{iframeSnippet}</code></pre>
       </div>
 
       {/* React snippet */}
       <div className={sectionCard}>
         <div className="flex items-center justify-between gap-3">
-          <div className="text-lg font-bold">React Snippet (uses your local component)</div>
+          <div className="text-lg font-bold">React Snippet</div>
           <CopyButton getText={() => reactSnippet} />
         </div>
-        <pre className={codeBox}>
-          <code>{reactSnippet}</code>
-        </pre>
-        <p className="text-xs text-muted-foreground mt-2">
-          This uses your existing <code>src/widgets/ChatWidget.tsx</code> component and a{" "}
-          <code>botId</code>. To embed a specific <strong>instance</strong>, prefer the iframe snippet
-          above (it already includes <code>?inst=…</code> in the URL).
-        </p>
+        <pre className={codeBox}><code>{reactSnippet}</code></pre>
       </div>
     </div>
   );
