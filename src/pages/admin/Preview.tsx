@@ -4,17 +4,27 @@ import ChatWidget from "@/widgets/ChatWidget";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
+type Shape = "circle" | "rounded" | "square" | "oval" | "chat";
+type Fit = "cover" | "contain";
 
 export default function Preview() {
+  // simple demo state (not tied to builder data yet)
   const [botId, setBotId] = useState("waitlist-bot");
+
+  // Optional instance id (when set, /widget will use it instead of botId)
   const [instId, setInstId] = useState<string>("");
 
   const [mode, setMode] = useState<Mode>("popup");
-  const [pos, setPos] = useState<Pos>("bottom-left");
+  const [pos, setPos] = useState<Pos>("bottom-left"); // bubble bottom-left so it doesn't overlap the modal
   const [size, setSize] = useState(56);
   const [color, setColor] = useState<string>("");
   const [img, setImg] = useState<string>("");
 
+  // NEW: bubble shape + image fit
+  const [shape, setShape] = useState<Shape>("circle");
+  const [imageFit, setImageFit] = useState<Fit>("cover");
+
+  // modal demo flow
   const [open, setOpen] = useState(true);
   const [step, setStep] = useState(0);
 
@@ -37,7 +47,7 @@ export default function Preview() {
     }
   }, [step]);
 
-  // Instance-aware widget URL
+  // Instance-aware widget URL for embedding (includes shape & imageFit)
   const widgetSrc = useMemo(() => {
     const qp = new URLSearchParams();
     if (instId.trim()) qp.set("inst", instId.trim());
@@ -45,11 +55,13 @@ export default function Preview() {
 
     qp.set("position", pos);
     qp.set("size", String(size));
+    qp.set("shape", shape);
+    qp.set("imageFit", imageFit);
     if (color.trim()) qp.set("color", color.trim());
     if (img.trim()) qp.set("image", img.trim());
 
     return `/widget?${qp.toString()}`;
-  }, [instId, botId, pos, size, color, img]);
+  }, [instId, botId, pos, size, color, img, shape, imageFit]);
 
   const embedIframe = `<iframe
   src="${widgetSrc}"
@@ -64,13 +76,11 @@ export default function Preview() {
       <div className="rounded-2xl border bg-white shadow-sm">
         <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
           <div className="text-xl font-extrabold">Widget Preview</div>
-          <div className="text-sm opacity-90">
-            Tune the customer-facing widget style.
-          </div>
+          <div className="text-sm opacity-90">Tune the customer-facing widget style.</div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-          {/* Instance ID */}
+          {/* Instance first (optional) */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Instance ID (optional)</label>
             <input
@@ -84,7 +94,6 @@ export default function Preview() {
             </div>
           </div>
 
-          {/* Bot ID */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Bot ID</label>
             <input
@@ -96,7 +105,6 @@ export default function Preview() {
             />
           </div>
 
-          {/* Mode */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Mode</label>
             <select
@@ -110,7 +118,6 @@ export default function Preview() {
             </select>
           </div>
 
-          {/* Position */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Position</label>
             <select
@@ -123,7 +130,6 @@ export default function Preview() {
             </select>
           </div>
 
-          {/* Size */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Size (px)</label>
             <input
@@ -136,8 +142,22 @@ export default function Preview() {
             />
           </div>
 
-          {/* Image */}
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Bubble Shape</label>
+            <select
+              className="w-full rounded-lg border px-3 py-2"
+              value={shape}
+              onChange={(e) => setShape(e.target.value as Shape)}
+            >
+              <option value="circle">circle</option>
+              <option value="rounded">rounded</option>
+              <option value="square">square</option>
+              <option value="oval">oval</option>
+              <option value="chat">chat (speech bubble)</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
             <label className="text-sm font-semibold">Bubble Image URL (optional)</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
@@ -147,7 +167,19 @@ export default function Preview() {
             />
           </div>
 
-          {/* Color */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Image Fit</label>
+            <select
+              className="w-full rounded-lg border px-3 py-2"
+              value={imageFit}
+              onChange={(e) => setImageFit(e.target.value as Fit)}
+              title="How the image scales inside the bubble"
+            >
+              <option value="cover">cover (fill bubble)</option>
+              <option value="contain">contain (fit entirely)</option>
+            </select>
+          </div>
+
           <div className="space-y-2 md:col-span-2">
             <label className="text-sm font-semibold">Accent Color (optional)</label>
             <input
@@ -158,7 +190,6 @@ export default function Preview() {
             />
           </div>
 
-          {/* Actions */}
           <div className="md:col-span-2 flex items-center gap-3">
             <button
               className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
@@ -167,27 +198,18 @@ export default function Preview() {
               Open Preview Modal
             </button>
 
-            {/* 🔹 New Button */}
-            <a
-              href={widgetSrc}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
-            >
-              Open in New Tab
-            </a>
-
+            {/* Copy-friendly embed right inside the controls card, no layout change */}
             <div className="ml-auto text-sm font-semibold">Embed URL:</div>
             <input
               readOnly
               value={widgetSrc}
-              className="w-[280px] max-w-full rounded-lg border px-3 py-2 text-xs font-mono"
+              className="w-[380px] max-w-full rounded-lg border px-3 py-2 text-xs font-mono"
               onFocus={(e) => e.currentTarget.select()}
               aria-label="Embed URL"
             />
           </div>
 
-          {/* Full iframe code */}
+          {/* Full iframe code (toggle inline) */}
           <div className="md:col-span-2">
             <label className="text-sm font-semibold">Embed (iframe)</label>
             <textarea
@@ -201,8 +223,9 @@ export default function Preview() {
         </div>
       </div>
 
-      {/* Live UI area */}
+      {/* Live UI area (no gray box; modal is vertical & centered) */}
       <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
+        {/* Floating bubble for popup mode (unchanged) */}
         {mode === "popup" && (
           <ChatWidget
             mode="popup"
@@ -211,15 +234,22 @@ export default function Preview() {
             size={size}
             color={color || undefined}
             image={img || undefined}
+            // Pass through shape & imageFit (safe even if ChatWidget ignores them)
+            shape={shape as any}
+            imageFit={imageFit as any}
           />
         )}
 
+        {/* Modal */}
         {open && (
           <div
             className="absolute inset-0 grid place-items-center"
             style={{ pointerEvents: "none" }}
           >
-            <div className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto">
+            <div
+              className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto"
+              style={{ transform: "translateY(0)" }}
+            >
               <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
                 <div className="text-lg font-extrabold">
                   {botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
