@@ -1,7 +1,7 @@
 // src/pages/admin/Embed.tsx
 import React, { useMemo, useState } from "react";
 
-/** Copy helper with quick feedback */
+/** Copy helper */
 function CopyButton({ getText }: { getText: () => string }) {
   const [label, setLabel] = useState("Copy");
   async function onCopy() {
@@ -24,19 +24,24 @@ function CopyButton({ getText }: { getText: () => string }) {
   );
 }
 
+type Mode = "popup" | "inline" | "sidebar";
+
 export default function Embed() {
-  // NEW: Instance-aware (overrides botId when present)
+  // Instance-aware
   const [instId, setInstId] = useState("");
 
-  // Basic controls
+  // Core controls
   const [botId, setBotId] = useState("waitlist-bot");
-  const [mode, setMode] = useState<"popup" | "inline" | "sidebar">("popup");
+  const [mode, setMode] = useState<Mode>("popup");
   const [position, setPosition] = useState<"bottom-right" | "bottom-left">("bottom-right");
   const [size, setSize] = useState(64);
   const [color, setColor] = useState("#8b5cf6");
-  const [image, setImage] = useState<string>(""); // optional bubble image URL
+  const [image, setImage] = useState<string>("");
 
-  // Build the /widget URL with query params
+  // NEW: shape + imageFit
+  const [shape, setShape] = useState<"circle" | "rounded" | "square" | "oval" | "chat">("circle");
+  const [imageFit, setImageFit] = useState<"cover" | "contain">("cover");
+
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const embedUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -46,31 +51,31 @@ export default function Embed() {
     params.set("position", position);
     params.set("size", String(size));
     params.set("color", color);
+    params.set("shape", shape);
+    params.set("imageFit", imageFit);
     if (image.trim()) params.set("image", image.trim());
     return `${origin}/widget?${params.toString()}`;
-  }, [origin, instId, botId, mode, position, size, color, image]);
+  }, [origin, instId, botId, mode, position, size, color, shape, imageFit, image]);
 
-  // Snippets
   const iframeSnippet = useMemo(
     () =>
-`<!-- Paste this near </body> -->
+`<!-- Paste near </body> -->
 <iframe
   src="${embedUrl}"
   title="Bot Widget"
   style="position: fixed; bottom: 24px; ${position === "bottom-right" ? "right" : "left"}: 24px;
          width: ${mode === "sidebar" ? "360px" : `${size}px`};
          height: ${mode === "sidebar" ? "100vh" : `${size}px`};
-         border: 0; border-radius: ${mode === "sidebar" ? "0" : "50%"}; z-index: 999999; overflow: hidden;"
+         border: 0; border-radius: ${mode === "sidebar" ? "0" : (shape === "square" ? "0" : "50%")}; z-index: 999999; overflow: hidden;"
   loading="lazy"
   allow="clipboard-read; clipboard-write"
 ></iframe>`,
-    [embedUrl, size, mode, position]
+    [embedUrl, size, mode, position, shape]
   );
 
-  // For React apps using your local component (use iframe for specific instance)
   const reactSnippet = useMemo(
     () =>
-`// Example inside a React app (template-based)
+`// Example inside React (local component). For specific instances, prefer the iframe (?inst=…)
 import ChatWidget from "@/widgets/ChatWidget";
 
 export default function App() {
@@ -82,16 +87,15 @@ export default function App() {
         color="${color}"
         size={${size}}
         position="${position}"
+        shape="${shape}"
         ${image ? `image="${image}"` : ""}
       />
     </div>
   );
-}
-// To embed a specific *instance*, use the iframe snippet (?inst=…)`,
-    [mode, botId, color, size, position, image]
+}`,
+    [mode, botId, color, size, position, shape, image]
   );
 
-  // UI classes
   const headerCard = "rounded-2xl border bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-6";
   const sectionCard = "rounded-2xl border bg-white/90 p-4 md:p-5 shadow-sm";
   const labelCls = "text-sm font-bold uppercase text-purple-700";
@@ -105,8 +109,8 @@ export default function App() {
       <div className={headerCard}>
         <h1 className="text-3xl font-extrabold">Embed Code</h1>
         <p className="mt-2 text-muted-foreground">
-          Choose your bot or a saved instance and style options. Copy a snippet and paste it into your site.
-          <strong> Iframe</strong> works everywhere. <strong>React</strong> is for your own React apps.
+          Choose bot/instance and style options. Copy a snippet and paste into your site.
+          <strong> Iframe</strong> works everywhere; <strong>React</strong> is for your own React apps.
         </p>
       </div>
 
@@ -122,7 +126,7 @@ export default function App() {
               placeholder="inst_abc123…"
             />
             <div className="text-xs text-muted-foreground mt-1">
-              If provided, this overrides Bot ID and embeds that specific duplicated bot.
+              If provided, overrides Bot ID.
             </div>
           </div>
 
@@ -140,10 +144,10 @@ export default function App() {
 
           <div>
             <div className={labelCls}>Mode</div>
-            <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value as any)}>
-              <option value="popup">popup (floating bubble)</option>
-              <option value="inline">inline (place in page)</option>
-              <option value="sidebar">sidebar (full height)</option>
+            <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
+              <option value="popup">popup</option>
+              <option value="inline">inline</option>
+              <option value="sidebar">sidebar</option>
             </select>
           </div>
 
@@ -154,7 +158,6 @@ export default function App() {
               value={position}
               onChange={(e) => setPosition(e.target.value as any)}
               disabled={mode === "inline"}
-              title={mode === "inline" ? "Position is not used for inline mode" : ""}
             >
               <option value="bottom-right">bottom-right</option>
               <option value="bottom-left">bottom-left</option>
@@ -177,13 +180,24 @@ export default function App() {
           </div>
 
           <div>
-            <div className={labelCls}>Color</div>
+            <div className={labelCls}>Accent Color</div>
             <input
               type="color"
               className="h-10 w-full rounded-lg border border-purple-200"
               value={color}
               onChange={(e) => setColor(e.target.value)}
             />
+          </div>
+
+          <div>
+            <div className={labelCls}>Bubble Shape</div>
+            <select className={inputCls} value={shape} onChange={(e) => setShape(e.target.value as any)}>
+              <option value="circle">circle</option>
+              <option value="rounded">rounded</option>
+              <option value="square">square</option>
+              <option value="oval">oval</option>
+              <option value="chat">chat (speech bubble)</option>
+            </select>
           </div>
 
           <div>
@@ -196,7 +210,15 @@ export default function App() {
             />
           </div>
 
-          {/* Preview URL + Open button */}
+          <div>
+            <div className={labelCls}>Image Fit</div>
+            <select className={inputCls} value={imageFit} onChange={(e) => setImageFit(e.target.value as any)}>
+              <option value="cover">cover</option>
+              <option value="contain">contain</option>
+            </select>
+          </div>
+
+          {/* Preview URL + Open */}
           <div className="md:col-span-2 flex items-center gap-2">
             <div className="flex-1">
               <div className={labelCls}>Preview URL</div>
@@ -220,8 +242,7 @@ export default function App() {
         </div>
         <pre className={codeBox}><code>{iframeSnippet}</code></pre>
         <p className="text-xs text-muted-foreground mt-2">
-          Uses <code>/widget</code> with your selected options. If <strong>Instance ID</strong> is set, it uses
-          <code> ?inst=…</code>; otherwise it uses <code>?bot=…</code>.
+          Uses <code>/widget</code> with your options. Supports <code>?shape=</code> and <code>?imageFit=</code>.
         </p>
       </div>
 
@@ -233,7 +254,7 @@ export default function App() {
         </div>
         <pre className={codeBox}><code>{reactSnippet}</code></pre>
         <p className="text-xs text-muted-foreground mt-2">
-          For targeting a specific <strong>instance</strong>, prefer the iframe snippet above.
+          For a specific <strong>instance</strong>, prefer the iframe with <code>?inst=</code>.
         </p>
       </div>
     </div>
