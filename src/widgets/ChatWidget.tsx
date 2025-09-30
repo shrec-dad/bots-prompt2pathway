@@ -10,82 +10,80 @@ export type ChatWidgetProps = {
   mode: Mode;
   botId: string;
 
-  // popup options
   position?: Pos;
-  size?: number;              // bubble size (px); for oval we widen automatically
-  color?: string;             // bubble color (fallback when no image)
-  image?: string;             // optional bubble image
-  imageFit?: Fit;             // "cover" | "contain"
-  shape?: Shape;              // "circle" | "rounded" | "square" | "oval" | "chat"
+  size?: number;
+  color?: string;
+  image?: string;
+  imageFit?: Fit;
+  shape?: Shape;
 
-  // label options (new)
-  label?: string;             // default "Chat"
-  labelColor?: string;        // default "#fff"
+  label?: string;
+  labelColor?: string;
 };
 
-export default function ChatWidget(props: ChatWidgetProps) {
-  const {
-    mode,
-    botId,
-    position = "bottom-right",
-    size = 64,
-    color = "#7aa8ff",
-    image,
-    imageFit = "cover",
-    shape = "circle",
-    label = "Chat",
-    labelColor = "#ffffff",
-  } = props;
-
+export default function ChatWidget({
+  mode,
+  botId,
+  position = "bottom-right",
+  size = 64,
+  color = "#7aa8ff",
+  image,
+  imageFit = "cover",
+  shape = "circle",
+  label = "Chat",
+  labelColor = "#ffffff",
+}: ChatWidgetProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: "bot" | "user"; text: string }[]>([
-    { role: "bot", text: `Hi! You’re chatting with ${botId.replace(/-/g, " ")}.` },
+    { role: "bot", text: `Hi! You’re chatting with ${toTitle(botId)}.` },
   ]);
   const [input, setInput] = useState("");
 
-  const bubbleSidePos = position === "bottom-left"
-    ? { left: 16 as const, right: "auto" as const }
-    : { right: 16 as const, left: "auto" as const };
+  const bubbleSidePos =
+    position === "bottom-left"
+      ? { left: 16 as const, right: "auto" as const }
+      : { right: 16 as const, left: "auto" as const };
 
-  // ==== bubble geometry & visuals ===========================================
-  // for "oval" we widen the bubble; everything else is square at `size`
-  const bubbleDims = useMemo(() => {
-    if (shape === "oval") return { w: Math.round(size * 1.5), h: size };
+  // ---- bubble geometry
+  const dims = useMemo(() => {
+    if (shape === "oval") return { w: Math.round(size * 1.6), h: size };
     return { w: size, h: size };
   }, [size, shape]);
 
   const borderRadius = useMemo(() => {
     switch (shape) {
-      case "circle":  return "50%";
-      case "rounded": return 16;
-      case "square":  return 0;
-      case "oval":    return bubbleDims.h / 2; // pill/oval
-      case "chat":    return "50%";            // circular base; tail added below
-      default:        return "50%";
+      case "circle":
+        return "50%";
+      case "rounded":
+        return 18;
+      case "square":
+        return 0;
+      case "oval":
+        return dims.h / 2;
+      case "chat":
+        return 18; // classic chat bubble is rounded, not a full circle
+      default:
+        return "50%";
     }
-  }, [shape, bubbleDims.h]);
+  }, [shape, dims.h]);
 
-  const bubbleBackground = image
+  const background = image
     ? `${color} url(${image}) center/${imageFit} no-repeat`
     : color;
 
-  // Send helper
+  // ---- actions
   const send = () => {
-    const text = input.trim();
-    if (!text) return;
-    setMessages((m) => [
-      ...m,
-      { role: "user", text },
-      { role: "bot", text: "Thanks! We’ll be in touch shortly." },
-    ]);
+    const t = input.trim();
+    if (!t) return;
+    setMessages((m) => [...m, { role: "user", text: t }, { role: "bot", text: "Thanks! We’ll be in touch shortly." }]);
     setInput("");
   };
 
-  // ==== RENDER ===============================================================
-  if (mode === "inline") {
-    // Inline mode: show the full chat panel wherever placed
+  // ======================= RENDER ===========================================
+  if (mode === "inline" || mode === "sidebar") {
     return (
       <ChatPanel
+        variant={mode}
         color={color}
         botId={botId}
         messages={messages}
@@ -93,23 +91,6 @@ export default function ChatWidget(props: ChatWidgetProps) {
         input={input}
         setInput={setInput}
         onSend={send}
-        variant="inline"
-      />
-    );
-  }
-
-  if (mode === "sidebar") {
-    // Sidebar: right-side drawer (for now always visible in preview context)
-    return (
-      <ChatPanel
-        color={color}
-        botId={botId}
-        messages={messages}
-        setMessages={setMessages}
-        input={input}
-        setInput={setInput}
-        onSend={send}
-        variant="sidebar"
       />
     );
   }
@@ -117,69 +98,95 @@ export default function ChatWidget(props: ChatWidgetProps) {
   // Popup: bubble + anchored panel
   return (
     <>
-      {/* Floating bubble */}
       {!open && (
-        <button
-          aria-label="Open chat"
-          onClick={() => setOpen(true)}
+        <div
           style={{
             position: "fixed",
             bottom: 16,
             ...bubbleSidePos,
-            width: bubbleDims.w,
-            height: bubbleDims.h,
-            borderRadius,
-            background: bubbleBackground,
-            border: "2px solid #000",
-            boxShadow: "4px 4px 0 #000",
-            display: "grid",
-            placeItems: "center",
-            fontWeight: 900,
-            cursor: "pointer",
-            overflow: "hidden",
+            width: dims.w,
+            height: dims.h,
+            zIndex: 999999,
           }}
         >
-          {/* optional tail for "chat" shape */}
-          {shape === "chat" && (
-            <span
-              aria-hidden
-              style={{
-                content: "''",
-                position: "absolute",
-                bottom: -2,
-                // Tail goes toward the side opposite our border positioning so it points inward.
-                [position === "bottom-right" ? "right" : "left"]: bubbleDims.w / 4,
-                width: 14,
-                height: 14,
-                background: color,
-                border: "2px solid #000",
-                transform: "rotate(45deg)",
-                boxShadow: "2px 2px 0 #000",
-              } as React.CSSProperties}
-            />
-          )}
-          {/* Label always visible (sits on top of image if provided) */}
-          <span
+          {/* Bubble body */}
+          <button
+            aria-label="Open chat"
+            onClick={() => setOpen(true)}
             style={{
-              color: labelColor,
-              textShadow: "0 1px 0 rgba(0,0,0,0.35)",
-              fontSize: 14,
-              lineHeight: 1,
-              padding: "0 6px",
-              userSelect: "none",
+              position: "relative",
+              width: "100%",
+              height: "100%",
+              borderRadius,
+              background,
+              border: "2px solid #000",
+              boxShadow: "4px 4px 0 #000",
+              display: "grid",
+              placeItems: "center",
+              overflow: "hidden",
+              cursor: "pointer",
             }}
           >
-            {label}
-          </span>
-        </button>
+            {/* Label */}
+            <span
+              style={{
+                color: labelColor,
+                textShadow: "0 1px 0 rgba(0,0,0,0.35)",
+                fontWeight: 900,
+                fontSize: 14,
+                lineHeight: 1,
+                padding: "0 8px",
+                userSelect: "none",
+              }}
+            >
+              {label}
+            </span>
+
+            {/* Tail (only for chat shape) */}
+            {shape === "chat" && (
+              <>
+                {/* Outer tail = black outline */}
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    bottom: -2, // sit on the outline
+                    ...(position === "bottom-right" ? { right: 12 } : { left: 12 }),
+                    width: 20,
+                    height: 20,
+                    clipPath: "polygon(0% 0%, 100% 0%, 0% 100%)",
+                    background: "#000",
+                    transform:
+                      position === "bottom-right" ? "rotate(135deg)" : "rotate(-135deg)",
+                    boxShadow: "0 0 0 0 #000",
+                  }}
+                />
+                {/* Inner tail = filled color, inset so you see the outline */}
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    ...(position === "bottom-right" ? { right: 14 } : { left: 14 }),
+                    width: 16,
+                    height: 16,
+                    clipPath: "polygon(0% 0%, 100% 0%, 0% 100%)",
+                    background: color,
+                    transform:
+                      position === "bottom-right" ? "rotate(135deg)" : "rotate(-135deg)",
+                  }}
+                />
+              </>
+            )}
+          </button>
+        </div>
       )}
 
-      {/* Chat window when open */}
       {open && (
         <div
           style={{
             position: "fixed",
-            bottom: bubbleDims.h + 24, // lift panel above bubble
+            bottom: dims.h + 24,
             ...bubbleSidePos,
             width: 360,
             height: 520,
@@ -204,9 +211,7 @@ export default function ChatWidget(props: ChatWidgetProps) {
               borderBottom: "2px solid #000",
             }}
           >
-            <div style={{ fontWeight: 900, color: "#000" }}>
-              {botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
-            </div>
+            <div style={{ fontWeight: 900, color: "#000" }}>{toTitle(botId)}</div>
             <button
               onClick={() => setOpen(false)}
               style={{
@@ -277,20 +282,20 @@ export default function ChatWidget(props: ChatWidgetProps) {
   );
 }
 
-/** Internal panel used by inline & sidebar modes */
+/** Inline/Sidebar shared chat panel */
 function ChatPanel(props: {
+  variant: "inline" | "sidebar";
   color: string;
   botId: string;
-  variant: "inline" | "sidebar";
   messages: { role: "bot" | "user"; text: string }[];
   setMessages: React.Dispatch<React.SetStateAction<{ role: "bot" | "user"; text: string }[]>>;
   input: string;
   setInput: (v: string) => void;
   onSend: () => void;
 }) {
-  const { color, botId, variant, messages, setMessages, input, setInput, onSend } = props;
+  const { variant, color, botId, messages, input, setInput, onSend } = props;
 
-  const containerStyle: React.CSSProperties =
+  const style: React.CSSProperties =
     variant === "sidebar"
       ? {
           position: "fixed",
@@ -319,7 +324,7 @@ function ChatPanel(props: {
         };
 
   return (
-    <div style={containerStyle}>
+    <div style={style}>
       <div
         style={{
           display: "flex",
@@ -330,9 +335,7 @@ function ChatPanel(props: {
           borderBottom: "2px solid #000",
         }}
       >
-        <div style={{ fontWeight: 900, color: "#000" }}>
-          {botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
-        </div>
+        <div style={{ fontWeight: 900, color: "#000" }}>{toTitle(botId)}</div>
       </div>
 
       <div style={{ padding: 12, gap: 8, display: "flex", flexDirection: "column", flex: 1, overflow: "auto" }}>
@@ -382,4 +385,8 @@ function ChatPanel(props: {
       </div>
     </div>
   );
+}
+
+function toTitle(id: string) {
+  return id.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase());
 }
