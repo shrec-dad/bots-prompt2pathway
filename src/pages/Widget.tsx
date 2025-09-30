@@ -1,5 +1,6 @@
 // src/pages/Widget.tsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 // Reuse your existing branding storage key/shape
 type Branding = {
@@ -31,7 +32,30 @@ function getBranding(): Branding {
   };
 }
 
+// Instance meta reader (created by /lib/instances + Builder)
+type InstMeta = { baseKey?: string; mode?: "basic" | "custom"; name?: string } | null;
+function readInstMeta(instId: string): InstMeta {
+  try {
+    const raw = localStorage.getItem(`botSettingsInst:${instId}`);
+    if (raw) return JSON.parse(raw) as InstMeta;
+  } catch {}
+  return null;
+}
+
 export default function Widget() {
+  const [sp] = useSearchParams();
+
+  // URL overrides
+  const qInst = sp.get("inst") || ""; // if present, we treat this as the active bot instance
+  const qPos = (sp.get("position") as "bottom-right" | "bottom-left" | null) || null;
+  const qColor = sp.get("color");
+  const qSize = sp.get("size");
+  const qImg = sp.get("image");
+
+  // resolve instance and header label (safe: widget still works without it)
+  const instMeta = qInst ? readInstMeta(qInst) : null;
+  const headerTitle = (instMeta?.name && instMeta.name.trim()) || "Chat";
+
   const [open, setOpen] = useState(false);
   const b = useMemo(getBranding, []);
   const [messages, setMessages] = useState<{ role: "bot" | "user"; text: string }[]>([
@@ -51,8 +75,14 @@ export default function Widget() {
     setInput("");
   };
 
+  // visual overrides: URL > branding default
+  const bubblePosition = qPos || b.chatBubblePosition || "bottom-right";
+  const bubbleColor = (qColor && qColor.trim()) || b.chatBubbleColor || "#7aa8ff";
+  const bubbleSize = Math.max(40, Math.min(120, qSize ? Number(qSize) : b.chatBubbleSize || 64));
+  const bubbleImage = (qImg && qImg.trim()) || b.chatBubbleImage || "";
+
   const posStyle =
-    b.chatBubblePosition === "bottom-left"
+    bubblePosition === "bottom-left"
       ? { left: 16, right: "auto" as const }
       : { right: 16, left: "auto" as const };
 
@@ -73,12 +103,12 @@ export default function Widget() {
             position: "fixed",
             bottom: 16,
             ...posStyle,
-            width: b.chatBubbleSize,
-            height: b.chatBubbleSize,
+            width: bubbleSize,
+            height: bubbleSize,
             borderRadius: "50%",
-            background: b.chatBubbleImage
-              ? `url(${b.chatBubbleImage}) center/cover no-repeat, ${b.chatBubbleColor}`
-              : b.chatBubbleColor,
+            background: bubbleImage
+              ? `url(${bubbleImage}) center/cover no-repeat, ${bubbleColor}`
+              : bubbleColor,
             border: "2px solid #000",
             boxShadow: "4px 4px 0 #000",
           }}
@@ -123,7 +153,7 @@ export default function Widget() {
             ) : (
               <div style={{ width: 28, height: 28, background: "#fff", borderRadius: 6, border: "1px solid #000" }} />
             )}
-            <div style={{ fontWeight: 900, color: "#000" }}>Chat</div>
+            <div style={{ fontWeight: 900, color: "#000" }}>{headerTitle}</div>
             <button
               onClick={() => setOpen(false)}
               style={{
@@ -165,7 +195,17 @@ export default function Widget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") send();
+                if (e.key === "Enter") {
+                  const t = (e.target as HTMLInputElement)?.value || "";
+                  if (t.trim()) {
+                    setMessages((m) => [
+                      ...m,
+                      { role: "user", text: t.trim() },
+                      { role: "bot", text: "Thanks! I’ll get back to you shortly." },
+                    ]);
+                    setInput("");
+                  }
+                }
               }}
               placeholder="Type a message…"
               style={{
@@ -176,7 +216,16 @@ export default function Widget() {
               }}
             />
             <button
-              onClick={send}
+              onClick={() => {
+                const t = input.trim();
+                if (!t) return;
+                setMessages((m) => [
+                  ...m,
+                  { role: "user", text: t },
+                  { role: "bot", text: "Thanks! I’ll get back to you shortly." },
+                ]);
+                setInput("");
+              }}
               style={{
                 padding: "10px 14px",
                 fontWeight: 800,
