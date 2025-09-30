@@ -1,27 +1,34 @@
 // src/pages/Widget.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 
-// Reuse your existing branding storage key/shape
+/** Bubble appearance options */
+type BubbleShape = "circle" | "rounded" | "square" | "oval" | "chat";
+type BubblePos = "bottom-right" | "bottom-left";
+type ImageFit = "cover" | "contain";
+
+/** Branding saved locally (fallbacks) */
 type Branding = {
   logoDataUrl?: string;
   primaryColor: string;
   secondaryColor: string;
   fontFamily: string;
-  chatBubbleImage?: string;
+  chatBubbleImage?: string; // data URL or URL
   chatBubbleColor: string;
-  chatBubbleSize: number;   // px
-  chatBubblePosition: "bottom-right" | "bottom-left";
+  chatBubbleSize: number; // px (base size)
+  chatBubblePosition: BubblePos;
+  // optional future fields:
+  chatBubbleShape?: BubbleShape;
+  chatBubbleImageFit?: ImageFit;
 };
 
 const BRAND_KEY = "brandingSettings";
 
+/** Local branding fallback */
 function getBranding(): Branding {
   try {
     const raw = localStorage.getItem(BRAND_KEY);
     if (raw) return JSON.parse(raw);
   } catch {}
-  // defaults aligned with your Branding page defaults
   return {
     primaryColor: "#7aa8ff",
     secondaryColor: "#76c19a",
@@ -29,44 +36,82 @@ function getBranding(): Branding {
     chatBubbleColor: "#7aa8ff",
     chatBubbleSize: 64,
     chatBubblePosition: "bottom-right",
+    chatBubbleShape: "circle",
+    chatBubbleImageFit: "cover",
   };
 }
 
-// Instance meta reader (created by /lib/instances + Builder)
-type InstMeta = { baseKey?: string; mode?: "basic" | "custom"; name?: string } | null;
-function readInstMeta(instId: string): InstMeta {
-  try {
-    const raw = localStorage.getItem(`botSettingsInst:${instId}`);
-    if (raw) return JSON.parse(raw) as InstMeta;
-  } catch {}
-  return null;
+/** Read query params from /widget?... */
+function getQueryParams() {
+  const sp = new URLSearchParams(window.location.search);
+  const num = (v: string | null, d: number) => {
+    const n = Number(v ?? "");
+    return Number.isFinite(n) && n > 0 ? n : d;
+  };
+  const pick = <T extends string>(v: string | null, allowed: readonly T[], d: T): T =>
+    allowed.includes((v as T) || ("" as T)) ? (v as T) : d;
+
+  return {
+    inst: sp.get("inst") || undefined,
+    bot: sp.get("bot") || undefined,
+    position: pick<BubblePos>(sp.get("position"), ["bottom-left", "bottom-right"] as const, "bottom-right"),
+    size: num(sp.get("size"), 64),
+    color: sp.get("color") || undefined,
+    image: sp.get("image") || undefined,
+    shape: pick<BubbleShape>(
+      sp.get("shape"),
+      ["circle", "rounded", "square", "oval", "chat"] as const,
+      "circle"
+    ),
+    imageFit: pick<ImageFit>(sp.get("imageFit"), ["cover", "contain"] as const, "cover"),
+  };
 }
 
 export default function Widget() {
-  const [sp] = useSearchParams();
+  const b = useMemo(getBranding, []);
+  const qp = useMemo(getQueryParams, []);
 
-  // URL overrides
-  const qInst = sp.get("inst") || ""; // if present, we treat this as the active bot instance
-  const qPos = (sp.get("position") as "bottom-right" | "bottom-left" | null) || null;
-  const qColor = sp.get("color");
-  const qSize = sp.get("size");
-  const qImg = sp.get("image");
-
-  // resolve instance and header label (safe: widget still works without it)
-  const instMeta = qInst ? readInstMeta(qInst) : null;
-  const headerTitle = (instMeta?.name && instMeta.name.trim()) || "Chat";
+  // Merge: query params override branding (so Embed/Preview controls work everywhere)
+  const bubblePos: BubblePos = qp.position || b.chatBubblePosition || "bottom-right";
+  const bubbleSize = qp.size || b.chatBubbleSize || 64;
+  const bubbleColor = qp.color || b.chatBubbleColor || "#7aa8ff";
+  const bubbleImage = qp.image || b.chatBubbleImage || b.logoDataUrl || undefined;
+  const bubbleShape: BubbleShape = (qp.shape || b.chatBubbleShape || "circle") as BubbleShape;
+  const imageFit: ImageFit = (qp.imageFit || b.chatBubbleImageFit || "cover") as ImageFit;
 
   const [open, setOpen] = useState(false);
-  const b = useMemo(getBranding, []);
   const [messages, setMessages] = useState<{ role: "bot" | "user"; text: string }[]>([
     { role: "bot", text: "Hi! How can I help you today?" },
   ]);
   const [input, setInput] = useState("");
 
-  // Apply typography from branding
+  // Apply typography
   useEffect(() => {
     document.body.style.fontFamily = b.fontFamily;
   }, [b.fontFamily]);
+
+  // Compose sizes by shape
+  const dims = useMemo(() => {
+    switch (bubbleShape) {
+      case "oval":
+        return { w: Math.round(bubbleSize * 1.5), h: Math.round(bubbleSize * 0.9), br: 9999 };
+      case "square":
+        return { w: bubbleSize, h: bubbleSize, br: 0 };
+      case "rounded":
+        return { w: bubbleSize, h: bubbleSize, br: 16 };
+      case "chat":
+        // base is circle with tail; looks nice for avatars or solid color
+        return { w: bubbleSize, h: bubbleSize, br: "50%" as const };
+      case "circle":
+      default:
+        return { w: bubbleSize, h: bubbleSize, br: "50%" as const };
+    }
+  }, [bubbleSize, bubbleShape]);
+
+  const posStyle =
+    bubblePos === "bottom-left"
+      ? { left: 16, right: "auto" as const }
+      : { right: 16, left: "auto" as const };
 
   const send = () => {
     const text = input.trim();
@@ -75,26 +120,15 @@ export default function Widget() {
     setInput("");
   };
 
-  // visual overrides: URL > branding default
-  const bubblePosition = qPos || b.chatBubblePosition || "bottom-right";
-  const bubbleColor = (qColor && qColor.trim()) || b.chatBubbleColor || "#7aa8ff";
-  const bubbleSize = Math.max(40, Math.min(120, qSize ? Number(qSize) : b.chatBubbleSize || 64));
-  const bubbleImage = (qImg && qImg.trim()) || b.chatBubbleImage || "";
-
-  const posStyle =
-    bubblePosition === "bottom-left"
-      ? { left: 16, right: "auto" as const }
-      : { right: 16, left: "auto" as const };
-
   return (
     <div
       style={{
-        // Full-bleed safe background for iframe
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
+        background:
+          "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
       }}
     >
-      {/* Floating bubble */}
+      {/* Bubble (closed state) */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
@@ -103,19 +137,67 @@ export default function Widget() {
             position: "fixed",
             bottom: 16,
             ...posStyle,
-            width: bubbleSize,
-            height: bubbleSize,
-            borderRadius: "50%",
-            background: bubbleImage
-              ? `url(${bubbleImage}) center/cover no-repeat, ${bubbleColor}`
-              : bubbleColor,
+            width: dims.w,
+            height: dims.h,
+            borderRadius: dims.br,
+            background: bubbleColor,
             border: "2px solid #000",
             boxShadow: "4px 4px 0 #000",
-          }}
-        />
+            overflow: "hidden",
+            positionAnchor: "bottom",
+          } as React.CSSProperties}
+        >
+          {/* Optional image fills the bubble */}
+          {bubbleImage && (
+            <img
+              src={bubbleImage}
+              alt="Chat bubble"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: imageFit,
+                borderRadius: dims.br,
+                display: "block",
+                pointerEvents: "none",
+              }}
+            />
+          )}
+
+          {/* Chat-tail for `shape="chat"` when no image (keeps the speech look) */}
+          {bubbleShape === "chat" && !bubbleImage && (
+            <>
+              {/* outline square */}
+              <span
+                style={{
+                  position: "absolute",
+                  bottom: -6,
+                  ...(bubblePos === "bottom-right" ? { right: 10 } : { left: 10 }),
+                  width: 14,
+                  height: 14,
+                  background: "#000",
+                  transform: "rotate(45deg)",
+                  borderRadius: 2,
+                }}
+              />
+              {/* fill square (slightly smaller) */}
+              <span
+                style={{
+                  position: "absolute",
+                  bottom: -4,
+                  ...(bubblePos === "bottom-right" ? { right: 12 } : { left: 12 }),
+                  width: 10,
+                  height: 10,
+                  background: bubbleColor,
+                  transform: "rotate(45deg)",
+                  borderRadius: 2,
+                }}
+              />
+            </>
+          )}
+        </button>
       )}
 
-      {/* Chat window */}
+      {/* Chat window (open state) */}
       {open && (
         <div
           style={{
@@ -153,7 +235,7 @@ export default function Widget() {
             ) : (
               <div style={{ width: 28, height: 28, background: "#fff", borderRadius: 6, border: "1px solid #000" }} />
             )}
-            <div style={{ fontWeight: 900, color: "#000" }}>{headerTitle}</div>
+            <div style={{ fontWeight: 900, color: "#000" }}>Chat</div>
             <button
               onClick={() => setOpen(false)}
               style={{
@@ -195,17 +277,7 @@ export default function Widget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const t = (e.target as HTMLInputElement)?.value || "";
-                  if (t.trim()) {
-                    setMessages((m) => [
-                      ...m,
-                      { role: "user", text: t.trim() },
-                      { role: "bot", text: "Thanks! I’ll get back to you shortly." },
-                    ]);
-                    setInput("");
-                  }
-                }
+                if (e.key === "Enter") send();
               }}
               placeholder="Type a message…"
               style={{
@@ -216,16 +288,7 @@ export default function Widget() {
               }}
             />
             <button
-              onClick={() => {
-                const t = input.trim();
-                if (!t) return;
-                setMessages((m) => [
-                  ...m,
-                  { role: "user", text: t },
-                  { role: "bot", text: "Thanks! I’ll get back to you shortly." },
-                ]);
-                setInput("");
-              }}
+              onClick={send}
               style={{
                 padding: "10px 14px",
                 fontWeight: 800,
