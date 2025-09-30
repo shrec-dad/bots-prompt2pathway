@@ -20,9 +20,45 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
+import { useSearchParams } from "react-router-dom";
 import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings, setBotSettings, BotKey } from "@/lib/botSettings";
+
+/* =========================================================================
+   0)  Instance support (duplicated bots)
+   -------------------------------------------------------------------------
+   - If URL has ?inst=<id>, we load:
+       * instance meta from   botSettingsInst:<id>  (expects { baseKey, mode })
+       * overrides from       botOverridesInst:<id>_<mode>
+   - Otherwise we use base bot + mode (existing behavior).
+   ========================================================================= */
+
+type InstMeta = { baseKey: BotKey; mode: "basic" | "custom" } | null;
+
+function readInstMeta(instId: string): InstMeta {
+  try {
+    const raw = localStorage.getItem(`botSettingsInst:${instId}`);
+    if (raw) return JSON.parse(raw) as InstMeta;
+  } catch {}
+  return null;
+}
+
+function readInstOverrides(instId: string, mode: "basic" | "custom") {
+  try {
+    const raw = localStorage.getItem(`botOverridesInst:${instId}_${mode}`);
+    if (raw) return JSON.parse(raw) as Record<string, any>;
+  } catch {}
+  return {};
+}
+
+function writeInstOverrides(instId: string, mode: "basic" | "custom", ov: Record<string, any>) {
+  localStorage.setItem(`botOverridesInst:${instId}_${mode}`, JSON.stringify(ov || {}));
+}
+
+function writeInstMeta(instId: string, meta: InstMeta) {
+  localStorage.setItem(`botSettingsInst:${instId}`, JSON.stringify(meta ?? {}));
+}
 
 /* =========================================================================
    1)  Custom Node components (same visual style you liked)
@@ -92,7 +128,8 @@ type RFNode = Node & {
 const OV_KEY = (bot: BotKey, mode: "basic" | "custom") =>
   `botOverrides:${bot}_${mode}`;
 
-function getOverrides(bot: BotKey, mode: "basic" | "custom") {
+function getOverrides(bot: BotKey, mode: "basic" | "custom", instId?: string) {
+  if (instId) return readInstOverrides(instId, mode);
   try {
     const raw = localStorage.getItem(OV_KEY(bot, mode));
     if (raw) return JSON.parse(raw) as Record<string, any>;
@@ -103,8 +140,13 @@ function getOverrides(bot: BotKey, mode: "basic" | "custom") {
 function saveOverrides(
   bot: BotKey,
   mode: "basic" | "custom",
-  ov: Record<string, any>
+  ov: Record<string, any>,
+  instId?: string
 ) {
+  if (instId) {
+    writeInstOverrides(instId, mode, ov);
+    return;
+  }
   localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(ov));
 }
 
@@ -125,34 +167,54 @@ const BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
    ========================================================================= */
 
 export default function Builder() {
+  const [search] = useSearchParams();
+  const instId = search.get("inst") || undefined; // duplicated instance id (optional)
+  const urlBot = search.get("bot") as BotKey | null; // base bot via URL (optional)
+
   const { currentBot, setCurrentBot } = useAdminStore() as {
-    currentBot: BotKey | null | undefined;
-    setCurrentBot?: (key: BotKey) => void;
+    currentBot: any;
+    setCurrentBot?: (key: any) => void;
   };
 
-  // Choose active bot & mode; fall back if store empty
-  const activeBot: BotKey =
-    (currentBot as BotKey) || BOT_OPTIONS[0].key;
+  // If instance: read baseKey+mode from instance meta
+  const instMeta = instId ? readInstMeta(instId) : null;
 
-  const [bot, setBot] = useState<BotKey>(activeBot);
+  // Choose active bot (instance > url param > store > default)
+  const initialBot: BotKey =
+    (instMeta?.baseKey as BotKey) ||
+    (urlBot as BotKey) ||
+    ((BOT_OPTIONS[0].key as unknown) as BotKey);
 
-  // Persisted mode (from your botSettings util). Default to "custom".
-  const [mode, setMode] = useState<"basic" | "custom">(
-    (getBotSettings(bot).mode as "basic" | "custom") || "custom"
-  );
+  const [bot, setBot] = useState<BotKey>(initialBot);
 
-  // When bot changes: sync with global store and pull its saved mode
+  // Persisted mode: instance-mode first, else base botSettings, default custom
+  const initialMode: "basic" | "custom" =
+    (instMeta?.mode as "basic" | "custom") ||
+    (getBotSettings(bot).mode as "basic" | "custom") ||
+    "custom";
+
+  const [mode, setMode] = useState<"basic" | "custom">(initialMode);
+
+  // When switching bot (only allowed for base editing; instance is locked to baseKey)
   useEffect(() => {
-    if (setCurrentBot && bot !== currentBot) setCurrentBot(bot);
-    const nextMode =
-      (getBotSettings(bot).mode as "basic" | "custom") || "custom";
-    setMode(nextMode);
-  }, [bot]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!instId) {
+      if (setCurrentBot && bot !== currentBot) setCurrentBot(bot as any);
+      const nextMode =
+        (getBotSettings(bot).mode as "basic" | "custom") || "custom";
+      setMode(nextMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bot]);
 
-  // Allow user to toggle mode (if you want)
+  // Allow user to toggle mode
   function onModeChange(next: "basic" | "custom") {
     setMode(next);
-    setBotSettings(bot, { mode: next });
+    if (instId) {
+      // keep instance meta in sync
+      writeInstMeta(instId, { baseKey: bot, mode: next });
+    } else {
+      setBotSettings(bot, { mode: next });
+    }
   }
 
   const tplKey = `${bot}_${mode}`;
@@ -165,7 +227,7 @@ export default function Builder() {
   );
 
   const [overrides, setOv] = useState<Record<string, any>>(() =>
-    getOverrides(bot, mode)
+    getOverrides(bot, mode, instId)
   );
 
   const mergeOverrides = useCallback(
@@ -185,25 +247,24 @@ export default function Builder() {
     base ? base.edges : []
   );
 
-  // Refresh graph whenever bot/mode changes
+  // Refresh graph whenever bot/mode/instance changes
   useEffect(() => {
     const found =
       (templates as any)[`${bot}_${mode}`] as
         | { nodes: RFNode[]; edges: Edge[] }
         | undefined;
 
-    const nextOv = getOverrides(bot, mode);
+    const nextOv = getOverrides(bot, mode, instId);
     setOv(nextOv);
 
     if (found) {
       setNodes(mergeOverrides(found.nodes, nextOv) as Node[]);
       setEdges(found.edges as Edge[]);
     } else {
-      // Friendly fallback so the canvas isn't blank without explanation
       setNodes([]);
       setEdges([]);
     }
-  }, [bot, mode, setNodes, setEdges, mergeOverrides]);
+  }, [bot, mode, instId, setNodes, setEdges, mergeOverrides]);
 
   // Node selection + right editor
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -240,8 +301,8 @@ export default function Builder() {
       [selectedId]: { data: { ...editorValues } },
     };
     setOv(nextOv);
-    saveOverrides(bot, mode, nextOv);
-  }, [selectedId, editorValues, overrides, setNodes, bot, mode]);
+    saveOverrides(bot, mode, nextOv, instId);
+  }, [selectedId, editorValues, overrides, setNodes, bot, mode, instId]);
 
   // Prevent ReactFlow from swallowing typing in the editor (the “one-letter” bug)
   const editorRef = useRef<HTMLDivElement>(null);
@@ -407,6 +468,9 @@ export default function Builder() {
     );
   };
 
+  // Lock bot selector when editing an instance (so we don’t desync)
+  const botSelectDisabled = Boolean(instId);
+
   return (
     <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4">
       {/* ===== Header: bot picker + mode ===== */}
@@ -414,11 +478,10 @@ export default function Builder() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight">
-              Builder
+              Builder {instId ? "· Instance" : ""}
             </h1>
             <p className="text-sm text-foreground/70">
-              Drag-and-drop flow editor. Pick a bot and edit the copy of each
-              node below.
+              Drag-and-drop flow editor. {instId ? "Editing a duplicated bot instance." : "Pick a bot and edit the copy of each node below."}
             </p>
           </div>
 
@@ -431,6 +494,8 @@ export default function Builder() {
                 className="rounded-lg border px-3 py-2 font-semibold bg-white"
                 value={bot}
                 onChange={(e) => setBot(e.target.value as BotKey)}
+                disabled={botSelectDisabled}
+                title={botSelectDisabled ? "Bot is fixed for this instance" : "Change bot"}
               >
                 {BOT_OPTIONS.map((b) => (
                   <option key={b.key} value={b.key}>
