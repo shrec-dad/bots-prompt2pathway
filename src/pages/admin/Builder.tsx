@@ -18,6 +18,7 @@ import ReactFlow, {
   Handle,
   Position,
   useReactFlow,
+  ReactFlowProvider,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -28,11 +29,6 @@ import { getBotSettings, setBotSettings, BotKey } from "@/lib/botSettings";
 
 /* =========================================================================
    0)  Instance support (duplicated bots)
-   -------------------------------------------------------------------------
-   - If URL has ?inst=<id>, we load:
-       * instance meta from   botSettingsInst:<id>  (expects { baseKey, mode })
-       * overrides from       botOverridesInst:<id>_<mode>
-   - Otherwise we use base bot + mode (existing behavior).
    ========================================================================= */
 
 type InstMeta = { baseKey: BotKey; mode: "basic" | "custom" } | null;
@@ -53,8 +49,15 @@ function readInstOverrides(instId: string, mode: "basic" | "custom") {
   return {};
 }
 
-function writeInstOverrides(instId: string, mode: "basic" | "custom", ov: Record<string, any>) {
-  localStorage.setItem(`botOverridesInst:${instId}_${mode}`, JSON.stringify(ov || {}));
+function writeInstOverrides(
+  instId: string,
+  mode: "basic" | "custom",
+  ov: Record<string, any>
+) {
+  localStorage.setItem(
+    `botOverridesInst:${instId}_${mode}`,
+    JSON.stringify(ov || {})
+  );
 }
 
 function writeInstMeta(instId: string, meta: InstMeta) {
@@ -129,7 +132,11 @@ type RFNode = Node & {
 const OV_KEY = (bot: BotKey, mode: "basic" | "custom") =>
   `botOverrides:${bot}_${mode}`;
 
-function getOverrides(bot: BotKey, mode: "basic" | "custom", instId?: string) {
+function getOverrides(
+  bot: BotKey,
+  mode: "basic" | "custom",
+  instId?: string
+) {
   if (instId) return readInstOverrides(instId, mode);
   try {
     const raw = localStorage.getItem(OV_KEY(bot, mode));
@@ -164,23 +171,21 @@ const BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
 ];
 
 /* =========================================================================
-   4)  Builder Page
+   4)  The actual Builder body (inside ReactFlowProvider)
    ========================================================================= */
 
-export default function Builder() {
+function BuilderInner() {
   const [search] = useSearchParams();
-  const instId = search.get("inst") || undefined; // duplicated instance id (optional)
-  const urlBot = search.get("bot") as BotKey | null; // base bot via URL (optional)
+  const instId = search.get("inst") || undefined; // duplicated instance id
+  const urlBot = search.get("bot") as BotKey | null; // base bot via URL
 
   const { currentBot, setCurrentBot } = useAdminStore() as {
     currentBot: any;
     setCurrentBot?: (key: any) => void;
   };
 
-  // If instance: read baseKey+mode from instance meta
   const instMeta = instId ? readInstMeta(instId) : null;
 
-  // Choose active bot (instance > url param > store > default)
   const initialBot: BotKey =
     (instMeta?.baseKey as BotKey) ||
     (urlBot as BotKey) ||
@@ -188,7 +193,6 @@ export default function Builder() {
 
   const [bot, setBot] = useState<BotKey>(initialBot);
 
-  // Persisted mode: instance-mode first, else base botSettings, default custom
   const initialMode: "basic" | "custom" =
     (instMeta?.mode as "basic" | "custom") ||
     (getBotSettings(bot).mode as "basic" | "custom") ||
@@ -196,7 +200,6 @@ export default function Builder() {
 
   const [mode, setMode] = useState<"basic" | "custom">(initialMode);
 
-  // When switching bot (only allowed for base editing; instance is locked to baseKey)
   useEffect(() => {
     if (!instId) {
       if (setCurrentBot && bot !== currentBot) setCurrentBot(bot as any);
@@ -207,11 +210,9 @@ export default function Builder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bot]);
 
-  // Allow user to toggle mode
   function onModeChange(next: "basic" | "custom") {
     setMode(next);
     if (instId) {
-      // keep instance meta in sync
       writeInstMeta(instId, { baseKey: bot, mode: next });
     } else {
       setBotSettings(bot, { mode: next });
@@ -248,7 +249,6 @@ export default function Builder() {
     base ? base.edges : []
   );
 
-  // Refresh graph whenever bot/mode/instance changes
   useEffect(() => {
     const found =
       (templates as any)[`${bot}_${mode}`] as
@@ -267,7 +267,7 @@ export default function Builder() {
     }
   }, [bot, mode, instId, setNodes, setEdges, mergeOverrides]);
 
-  // Node selection + right editor
+  // selection + editor
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValues, setEditorValues] = useState<any>({});
 
@@ -305,7 +305,91 @@ export default function Builder() {
     saveOverrides(bot, mode, nextOv, instId);
   }, [selectedId, editorValues, overrides, setNodes, bot, mode, instId]);
 
-  // Prevent ReactFlow from swallowing typing in the editor (the “one-letter” bug)
+  // ====== NEW: Add/Place/Delete Node ======
+  const rf = useReactFlow<RFNode, Edge>();
+  const [pendingType, setPendingType] = useState<
+    null | "message" | "choice" | "input" | "action"
+  >(null);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+
+  const nextId = () =>
+    `node_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 6)}`;
+
+  const defaultDataFor = (t: Exclude<typeof pendingType, null>) =>
+    t === "message"
+      ? { title: "New Message", text: "Edit me…" }
+      : t === "choice"
+      ? { label: "Choose one", options: ["Option A", "Option B"] }
+      : t === "input"
+      ? { label: "Your input", placeholder: "Type here…" }
+      : { label: "Action", to: "mailto:example@domain.com" };
+
+  // Place on canvas click
+  const onPaneClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!pendingType) return;
+      const flowPos = rf.screenToFlowPosition({
+        x: e.clientX,
+        y: e.clientY,
+      });
+
+      const id = nextId();
+      const data = defaultDataFor(pendingType);
+
+      const newNode: RFNode = {
+        id,
+        type: pendingType,
+        position: flowPos,
+        data,
+      };
+
+      setNodes((prev) => [...prev, newNode]);
+
+      // If a node is selected, auto-connect it to the new one
+      if (selectedId) {
+        setEdges((prev) => [
+          ...prev,
+          {
+            id: `e_${selectedId}_${id}`,
+            source: selectedId,
+            target: id,
+            type: "smoothstep",
+          },
+        ]);
+      }
+
+      // persist overrides immediately
+      const nextOv = { ...overrides, [id]: { data } };
+      setOv(nextOv);
+      saveOverrides(bot, mode, nextOv, instId);
+
+      setSelectedId(id);
+      setPendingType(null);
+      setAddMenuOpen(false);
+    },
+    [pendingType, rf, selectedId, overrides, bot, mode, instId, setEdges, setNodes]
+  );
+
+  // Delete selected node + connected edges + override
+  const deleteSelected = () => {
+    if (!selectedId) return;
+
+    setNodes((prev) => prev.filter((n) => n.id !== selectedId));
+    setEdges((prev) =>
+      prev.filter((e) => e.source !== selectedId && e.target !== selectedId)
+    );
+
+    const nextOv = { ...overrides };
+    delete nextOv[selectedId];
+    setOv(nextOv);
+    saveOverrides(bot, mode, nextOv, instId);
+
+    setSelectedId(null);
+  };
+
+  // Prevent ReactFlow from swallowing typing in the editor
   const editorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = editorRef.current;
@@ -330,70 +414,6 @@ export default function Builder() {
     () => nodes.find((n) => n.id === selectedId) as RFNode | undefined,
     [nodes, selectedId]
   );
-
-  // ==== Add Node UI state ====
-  const [addOpen, setAddOpen] = useState(false);
-  const rf = useReactFlow<RFNode, Edge>();
-
-  // helper to create unique id
-  const nextId = () => `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-
-  // compute a good drop position (center of viewport) or below selected
-  const getNewNodePosition = () => {
-    const viewport = rf.getViewport();
-    const { x, y, zoom } = viewport;
-    // center of visible area in flow coords
-    const width = (rf as any).domNode?.clientWidth ?? 1200;
-    const height = (rf as any).domNode?.clientHeight ?? 600;
-    const centerX = (width / 2 - x) / zoom;
-    const centerY = (height / 2 - y) / zoom;
-
-    if (selected) {
-      // place slightly below selected node
-      return {
-        x: (selected.position?.x ?? centerX) + 0,
-        y: (selected.position?.y ?? centerY) + 120,
-      };
-    }
-    return { x: centerX, y: centerY };
-  };
-
-  type NewType = "message" | "choice" | "input" | "action";
-  const defaultDataFor = (t: NewType) =>
-    t === "message"
-      ? { title: "New Message", text: "Edit me…" }
-      : t === "choice"
-      ? { label: "Choose one", options: ["Option A", "Option B"] }
-      : t === "input"
-      ? { label: "Your input", placeholder: "Type here…" }
-      : { label: "Action", to: "mailto:example@domain.com" };
-
-  const addNode = (type: NewType) => {
-    const id = nextId();
-    const pos = getNewNodePosition();
-    const data = defaultDataFor(type);
-
-    // 1) add to canvas
-    const newNode: RFNode = { id, type, position: pos, data };
-    setNodes((prev) => [...prev, newNode]);
-
-    // 2) auto-connect from selected (if any)
-    if (selected) {
-      setEdges((prev) => [
-        ...prev,
-        { id: `e_${selected.id}_${id}`, source: selected.id, target: id, type: "smoothstep" },
-      ]);
-    }
-
-    // 3) persist override for new node immediately so it survives refresh
-    const nextOv = { ...overrides, [id]: { data } };
-    setOv(nextOv);
-    saveOverrides(bot, mode, nextOv, instId);
-
-    // 4) select the new node and close menu
-    setSelectedId(id);
-    setAddOpen(false);
-  };
 
   // UI helpers
   const inputClass =
@@ -533,12 +553,11 @@ export default function Builder() {
     );
   };
 
-  // Lock bot selector when editing an instance (so we don’t desync)
   const botSelectDisabled = Boolean(instId);
 
   return (
     <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4">
-      {/* ===== Header: bot picker + mode ===== */}
+      {/* ===== Header ===== */}
       <div className="rounded-2xl border bg-white shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
           <div>
@@ -546,7 +565,10 @@ export default function Builder() {
               Builder {instId ? "· Instance" : ""}
             </h1>
             <p className="text-sm text-foreground/70">
-              Drag-and-drop flow editor. {instId ? "Editing a duplicated bot instance." : "Pick a bot and edit the copy of each node below."}
+              Drag-and-drop flow editor.{" "}
+              {instId
+                ? "Editing a duplicated bot instance."
+                : "Pick a bot and edit the copy of each node below."}
             </p>
           </div>
 
@@ -560,7 +582,9 @@ export default function Builder() {
                 value={bot}
                 onChange={(e) => setBot(e.target.value as BotKey)}
                 disabled={botSelectDisabled}
-                title={botSelectDisabled ? "Bot is fixed for this instance" : "Change bot"}
+                title={
+                  botSelectDisabled ? "Bot is fixed for this instance" : "Change bot"
+                }
               >
                 {BOT_OPTIONS.map((b) => (
                   <option key={b.key} value={b.key}>
@@ -577,9 +601,7 @@ export default function Builder() {
               <div className="flex items-center gap-2">
                 <button
                   className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                    mode === "basic"
-                      ? "bg-indigo-100"
-                      : "hover:bg-muted/40 bg-white"
+                    mode === "basic" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
                   }`}
                   onClick={() => onModeChange("basic")}
                 >
@@ -587,9 +609,7 @@ export default function Builder() {
                 </button>
                 <button
                   className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                    mode === "custom"
-                      ? "bg-indigo-100"
-                      : "hover:bg-muted/40 bg-white"
+                    mode === "custom" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
                   }`}
                   onClick={() => onModeChange("custom")}
                 >
@@ -598,17 +618,17 @@ export default function Builder() {
               </div>
             </div>
 
-            {/* ===== Add Node Button + tiny menu (no restyle of header) ===== */}
+            {/* Add Node */}
             <div className="relative">
               <button
-                onClick={() => setAddOpen((v) => !v)}
+                onClick={() => setAddMenuOpen((v) => !v)}
                 className="rounded-md px-3 py-2 text-xs font-extrabold ring-1 ring-border bg-white hover:bg-gray-50"
-                aria-expanded={addOpen}
+                aria-expanded={addMenuOpen}
                 aria-haspopup="menu"
               >
                 + Add Node
               </button>
-              {addOpen && (
+              {addMenuOpen && (
                 <div
                   role="menu"
                   className="absolute right-0 mt-2 w-40 rounded-lg border-2 border-black bg-white shadow-xl z-20"
@@ -617,10 +637,13 @@ export default function Builder() {
                     <button
                       key={t}
                       role="menuitem"
-                      onClick={() => addNode(t)}
+                      onClick={() => {
+                        setPendingType(t);
+                        setAddMenuOpen(false);
+                      }}
                       className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
                     >
-                      {t[0].toUpperCase() + t.slice(1)}
+                      {t[0].toUpperCase() + t.slice(1)} (click to place)
                     </button>
                   ))}
                 </div>
@@ -641,7 +664,6 @@ export default function Builder() {
             background:
               "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
           }}
-          onClick={() => setAddOpen(false)}
         >
           <ReactFlow
             nodes={nodes}
@@ -650,6 +672,7 @@ export default function Builder() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onPaneClick={onPaneClick} // place node exactly where you click
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
@@ -659,12 +682,7 @@ export default function Builder() {
             panOnDrag={true}
             zoomOnScroll={true}
           >
-            <Background
-              gap={20}
-              size={1}
-              color="#e9d5ff"
-              style={{ opacity: 0.3 }}
-            />
+            <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
               showInteractive={false}
               className="bg-white/80 backdrop-blur-sm rounded-lg shadow-lg border border-purple-200"
@@ -679,6 +697,13 @@ export default function Builder() {
             export includes a key named exactly <b>{tplKey}</b>.
           </div>
         )}
+
+        {pendingType && (
+          <div className="mt-2 text-xs font-bold text-purple-700">
+            Click on the canvas to place your new{" "}
+            {pendingType[0].toUpperCase() + pendingType.slice(1)} node.
+          </div>
+        )}
       </div>
 
       {/* ===== Editor ===== */}
@@ -691,19 +716,38 @@ export default function Builder() {
         </div>
         <Editor />
         {selected && (
-          <div className="mt-4 space-y-2">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               onClick={saveChanges}
-              className="w-full py-2 px-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-semibold text-sm"
+              className="py-2 px-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-semibold text-sm"
             >
               Save Changes
             </button>
-            <div className="text-xs text-purple-600 text-center">
+            <button
+              onClick={deleteSelected}
+              className="py-2 px-4 bg-white border-2 border-black rounded-lg hover:bg-rose-50 font-semibold text-sm"
+              title="Delete selected node and its connections"
+            >
+              Delete Node
+            </button>
+            <div className="col-span-full text-xs text-purple-600 text-center">
               Changes are saved when you click the Save button
             </div>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+/* =========================================================================
+   5)  Export with Provider wrapper to satisfy useReactFlow()
+   ========================================================================= */
+
+export default function Builder() {
+  return (
+    <ReactFlowProvider>
+      <BuilderInner />
+    </ReactFlowProvider>
   );
 }
