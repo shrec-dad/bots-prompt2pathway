@@ -4,59 +4,50 @@ import ChatWidget from "@/widgets/ChatWidget";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
-type Shape = "circle" | "rounded" | "square" | "oval" | "chat";
-type Fit = "cover" | "contain";
 
 export default function Preview() {
   const [botId, setBotId] = useState("waitlist-bot");
-  const [instId, setInstId] = useState<string>("");
+  const [instId, setInstId] = useState("");
 
   const [mode, setMode] = useState<Mode>("popup");
-  const [pos, setPos] = useState<Pos>("bottom-left");
+  const [pos, setPos] = useState<Pos>("bottom-right");
   const [size, setSize] = useState(64);
-  const [color, setColor] = useState<string>("#7aa8ff");
-  const [img, setImg] = useState<string>("");
+  const [color, setColor] = useState("#7aa8ff");
+  const [img, setImg] = useState("");
+  const [shape, setShape] = useState<"circle" | "rounded" | "square" | "oval" | "chat">("circle");
+  const [imageFit, setImageFit] = useState<"cover" | "contain" | "fill">("cover");
+  const [labelText, setLabelText] = useState("Chat");
+  const [labelColor, setLabelColor] = useState("#ffffff");
 
-  // NEW
-  const [shape, setShape] = useState<Shape>("rounded");
-  const [imageFit, setImageFit] = useState<Fit>("cover");
-  const [label, setLabel] = useState<string>("Chat");
-  const [labelColor, setLabelColor] = useState<string>("#ffffff");
-
-  const [open, setOpen] = useState(true);
-  const [step, setStep] = useState(0);
-
-  const gradientHeader =
-    "bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white";
-
-  const next = () => setStep((s) => Math.min(s + 1, 3));
-  const back = () => setStep((s) => Math.max(s - 1, 0));
-
-  const title = useMemo(() => {
-    switch (step) {
-      case 0: return "Welcome to the Waitlist";
-      case 1: return "Your email";
-      case 2: return "Interest level";
-      default: return "All set!";
-    }
-  }, [step]);
+  const [messageStyle, setMessageStyle] = useState<
+    "roundedCard" | "speechClassic" | "speechOval" | "pill" | "glass" | "outlined"
+  >("roundedCard");
+  const [avatarImage, setAvatarImage] = useState("");
 
   const widgetSrc = useMemo(() => {
     const qp = new URLSearchParams();
     if (instId.trim()) qp.set("inst", instId.trim());
     else qp.set("bot", botId);
+
+    qp.set("mode", mode);
     qp.set("position", pos);
     qp.set("size", String(size));
+    qp.set("color", color);
+    if (img.trim()) qp.set("image", img.trim());
     qp.set("shape", shape);
     qp.set("imageFit", imageFit);
-    qp.set("label", label);
+    qp.set("label", labelText);
     qp.set("labelColor", labelColor);
-    if (color.trim()) qp.set("color", color.trim());
-    if (img.trim()) qp.set("image", img.trim());
-    return `/widget?${qp.toString()}`;
-  }, [instId, botId, pos, size, color, img, shape, imageFit, label, labelColor]);
+    qp.set("messageStyle", messageStyle);
+    if (avatarImage.trim()) qp.set("avatar", avatarImage.trim());
 
-  const embedIframe = `<iframe
+    return `/widget?${qp.toString()}`;
+  }, [instId, botId, mode, pos, size, color, img, shape, imageFit, labelText, labelColor, messageStyle, avatarImage]);
+
+  const gradientHeader =
+    "bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white";
+
+  const iframeSnippet = `<iframe
   src="${widgetSrc}"
   style="border:0;width:100%;height:560px"
   loading="lazy"
@@ -73,7 +64,7 @@ export default function Preview() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-          <div className="space-y-2">
+          <div>
             <label className="text-sm font-semibold">Instance ID (optional)</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
@@ -81,12 +72,8 @@ export default function Preview() {
               value={instId}
               onChange={(e) => setInstId(e.target.value)}
             />
-            <div className="text-xs text-muted-foreground">
-              If provided, the instance overrides the Bot ID.
-            </div>
           </div>
-
-          <div className="space-y-2">
+          <div>
             <label className="text-sm font-semibold">Bot ID</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
@@ -97,7 +84,7 @@ export default function Preview() {
             />
           </div>
 
-          <div className="space-y-2">
+          <div>
             <label className="text-sm font-semibold">Mode</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
@@ -110,7 +97,7 @@ export default function Preview() {
             </select>
           </div>
 
-          <div className="space-y-2">
+          <div>
             <label className="text-sm font-semibold">Position</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
@@ -122,34 +109,30 @@ export default function Preview() {
             </select>
           </div>
 
-          <div className="space-y-2">
+          <div>
             <label className="text-sm font-semibold">Size (px)</label>
             <input
               type="number"
               min={40}
-              max={120}
+              max={160}
+              step={2}
               className="w-full rounded-lg border px-3 py-2"
               value={size}
-              onChange={(e) => setSize(Number(e.target.value))}
+              onChange={(e) => setSize(Number(e.target.value || 64))}
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Bubble Shape</label>
-            <select
-              className="w-full rounded-lg border px-3 py-2"
-              value={shape}
-              onChange={(e) => setShape(e.target.value as Shape)}
-            >
-              <option value="circle">circle</option>
-              <option value="rounded">rounded</option>
-              <option value="square">square</option>
-              <option value="oval">oval</option>
-              <option value="chat">chat (speech bubble)</option>
-            </select>
+          <div>
+            <label className="text-sm font-semibold">Accent Color</label>
+            <input
+              type="color"
+              className="h-10 w-full rounded-lg border"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+            />
           </div>
 
-          <div className="space-y-2">
+          <div>
             <label className="text-sm font-semibold">Bubble Image URL (optional)</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
@@ -159,42 +142,45 @@ export default function Preview() {
             />
           </div>
 
-          <div className="space-y-2">
+          <div>
+            <label className="text-sm font-semibold">Bubble Shape</label>
+            <select
+              className="w-full rounded-lg border px-3 py-2"
+              value={shape}
+              onChange={(e) => setShape(e.target.value as any)}
+            >
+              <option value="circle">circle</option>
+              <option value="rounded">rounded</option>
+              <option value="square">square</option>
+              <option value="oval">oval</option>
+              <option value="chat">chat (speech bubble)</option>
+            </select>
+          </div>
+
+          <div>
             <label className="text-sm font-semibold">Image Fit</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
               value={imageFit}
-              onChange={(e) => setImageFit(e.target.value as Fit)}
-              title="How the image scales inside the bubble"
+              onChange={(e) => setImageFit(e.target.value as any)}
             >
               <option value="cover">cover (fill bubble)</option>
-              <option value="contain">contain (fit entirely)</option>
+              <option value="contain">contain (fit inside)</option>
+              <option value="fill">fill (stretch)</option>
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Accent Color (bubble)</label>
-            <input
-              className="w-full rounded-lg border px-3 py-2"
-              placeholder="#7aa8ff"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-            />
-          </div>
-
-          {/* NEW: Label & Label Color */}
-          <div className="space-y-2">
+          <div>
             <label className="text-sm font-semibold">Bubble Label</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
-              placeholder="Chat"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
+              value={labelText}
+              onChange={(e) => setLabelText(e.target.value)}
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Label Color</label>
+          <div>
+            <label className="text-sm font-semibold">Bubble Label Color</label>
             <input
               type="color"
               className="h-10 w-full rounded-lg border"
@@ -203,36 +189,47 @@ export default function Preview() {
             />
           </div>
 
-          <div className="md:col-span-2 flex items-center gap-3">
-            <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
-              onClick={() => setOpen(true)}
+          <div>
+            <label className="text-sm font-semibold">Message Style</label>
+            <select
+              className="w-full rounded-lg border px-3 py-2"
+              value={messageStyle}
+              onChange={(e) => setMessageStyle(e.target.value as any)}
             >
-              Open Preview Modal
-            </button>
+              <option value="roundedCard">roundedCard (clean)</option>
+              <option value="speechClassic">speechClassic (cartoon tail)</option>
+              <option value="speechOval">speechOval (oval tail)</option>
+              <option value="pill">pill (fully rounded)</option>
+              <option value="glass">glass (translucent)</option>
+              <option value="outlined">outlined (white + black outline)</option>
+            </select>
+          </div>
 
-            <div className="ml-auto text-sm font-semibold">Embed URL:</div>
+          <div>
+            <label className="text-sm font-semibold">Avatar Image (optional)</label>
             <input
-              readOnly
-              value={widgetSrc}
-              className="w-[380px] max-w-full rounded-lg border px-3 py-2 text-xs font-mono"
-              onFocus={(e) => e.currentTarget.select()}
-              aria-label="Embed URL"
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="https://example.com/photo.jpg"
+              value={avatarImage}
+              onChange={(e) => setAvatarImage(e.target.value)}
             />
           </div>
 
-          <div className="md:col-span-2">
-            <label className="text-sm font-semibold">Embed (iframe)</label>
+          <div className="md:col-span-2 grid gap-2">
+            <label className="text-sm font-semibold">Embed URL</label>
+            <input
+              readOnly
+              value={widgetSrc}
+              className="w-full rounded-lg border px-3 py-2 text-xs font-mono"
+              onFocus={(e) => e.currentTarget.select()}
+              aria-label="Embed URL"
+            />
+            <label className="text-sm font-semibold">Iframe Embed</label>
             <textarea
               readOnly
               className="w-full rounded-lg border px-3 py-2 text-xs font-mono"
               rows={4}
-              value={`<iframe
-  src="${widgetSrc}"
-  style="border:0;width:100%;height:560px"
-  loading="lazy"
-  referrerpolicy="no-referrer-when-downgrade"
-></iframe>`}
+              value={`<iframe src="${widgetSrc}" style="border:0;width:100%;height:560px" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`}
               onFocus={(e) => e.currentTarget.select()}
             />
           </div>
@@ -241,70 +238,20 @@ export default function Preview() {
 
       {/* Live area */}
       <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
-        {mode === "popup" && (
-          <ChatWidget
-            mode="popup"
-            botId={botId}
-            position={pos}
-            size={size}
-            color={color || undefined}
-            image={img || undefined}
-            shape={shape}
-            imageFit={imageFit}
-            label={label}
-            labelColor={labelColor}
-          />
-        )}
-
-        {open && (
-          <div className="absolute inset-0 grid place-items-center" style={{ pointerEvents: "none" }}>
-            <div className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto">
-              <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
-                <div className="text-lg font-extrabold">
-                  {botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
-                </div>
-              </div>
-
-              <div className="p-6 space-y-6">
-                <div className="grid place-items-center text-5xl">👋</div>
-                <div className="text-center">
-                  <h2 className="text-2xl font-extrabold">{title}</h2>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <button
-                    className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-                    onClick={() => setOpen(false)}
-                  >
-                    Close
-                  </button>
-                  <div className="flex gap-2">
-                    {step > 0 && step < 3 && (
-                      <button className="rounded-xl px-4 py-2 font-bold ring-1 ring-border" onClick={back}>
-                        Back
-                      </button>
-                    )}
-                    {step < 3 ? (
-                      <button
-                        className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                        onClick={next}
-                      >
-                        Continue
-                      </button>
-                    ) : (
-                      <button
-                        className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                        onClick={() => setOpen(false)}
-                      >
-                        Done
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <ChatWidget
+          mode={mode}
+          botId={instId.trim() ? undefined : botId}
+          position={pos}
+          size={size}
+          color={color}
+          image={img || undefined}
+          shape={shape}
+          imageFit={imageFit}
+          labelText={labelText}
+          labelColor={labelColor}
+          messageStyle={messageStyle}
+          avatarImage={avatarImage || undefined}
+        />
       </div>
     </div>
   );
