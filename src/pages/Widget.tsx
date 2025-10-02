@@ -1,294 +1,390 @@
 // src/pages/Widget.tsx
 import React, { useEffect, useMemo, useState } from "react";
 
-/** ------------------------------------------------------------------------
- * 1) Query helpers + types
- * ----------------------------------------------------------------------- */
+/**
+ * The public widget page your clients embed via <iframe src="/widget?...">.
+ * Reads query params and renders:
+ *  - floating chat bubble (popup) OR right sidebar (sidebar mode)
+ *  - fully customizable bubble (shape, image, label, labelColor, imageFit)
+ *  - simple conversation panel with optional header avatar
+ *
+ * No backend yet—messages are local state until you wire APIs.
+ */
+
+/* ----------------------------- Types & helpers ---------------------------- */
+
 type Pos = "bottom-right" | "bottom-left";
 type Shape = "circle" | "rounded" | "square" | "oval";
 type Fit = "cover" | "contain" | "fill" | "center" | "none";
+type Mode = "popup" | "sidebar" | "inline";
 
-type Branding = {
-  logoDataUrl?: string;
-  primaryColor: string;
-  secondaryColor: string;
-  fontFamily: string;
-  chatBubbleImage?: string;
-  chatBubbleColor: string;
-  chatBubbleSize: number; // px
-  chatBubblePosition: Pos;
+type QueryConfig = {
+  // identity
+  inst?: string;
+  bot?: string;
+
+  // placement
+  mode: Mode;
+  position: Pos;
+  size: number;
+
+  // visuals
+  color?: string; // bubble background
+  image?: string; // bubble image URL
+  imageFit?: Fit;
+  label?: string;
+  labelColor?: string;
+  shape: Shape;
+  avatar?: string; // header avatar in panel
 };
 
-const BRAND_KEY = "brandingSettings";
+function parseQuery(): QueryConfig {
+  const q = new URLSearchParams(window.location.search);
+  const asNumber = (s: string | null, fallback: number) =>
+    s && !Number.isNaN(Number(s)) ? Number(s) : fallback;
 
-function readBranding(): Branding {
-  try {
-    const raw = localStorage.getItem(BRAND_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return {
-    primaryColor: "#7aa8ff",
-    secondaryColor: "#76c19a",
-    fontFamily: "Inter, system-ui, Arial, sans-serif",
-    chatBubbleColor: "#7aa8ff",
-    chatBubbleSize: 64,
-    chatBubblePosition: "bottom-right",
+  const cfg: QueryConfig = {
+    inst: q.get("inst") || undefined,
+    bot: q.get("bot") || undefined,
+
+    mode: (q.get("mode") as Mode) || "popup",
+    position: ((q.get("position") as Pos) || "bottom-right"),
+    size: asNumber(q.get("size"), 64),
+
+    color: q.get("color") || undefined,
+    image: q.get("image") || undefined,
+    imageFit: ((q.get("imageFit") as Fit) || "cover"),
+    label: q.get("label") ?? "Chat",
+    labelColor: q.get("labelColor") ?? "#ffffff",
+    shape: (q.get("shape") as Shape) || "circle",
+    avatar: q.get("avatar") || undefined,
   };
+
+  // Basic guards
+  if (cfg.size < 40) cfg.size = 40;
+  if (cfg.size > 160 && cfg.mode !== "sidebar") cfg.size = 160;
+
+  return cfg;
 }
 
-// tiny utility for query params with fallback
-function qp<T = string>(name: string, fallback?: T): T {
-  const sp = new URLSearchParams(window.location.search);
-  return ((sp.get(name) as any) ?? fallback) as T;
-}
-function qpNum(name: string, fallback: number) {
-  const v = Number(new URLSearchParams(window.location.search).get(name));
-  return Number.isFinite(v) && v > 0 ? v : fallback;
-}
-function qpBool(name: string, fallback = false) {
-  const v = new URLSearchParams(window.location.search).get(name);
-  if (v === null) return fallback;
-  return ["1", "true", "yes", "open"].includes(v.toLowerCase());
+function borderRadiusForShape(shape: Shape): string {
+  switch (shape) {
+    case "circle":
+      return "50%";
+    case "rounded":
+      return "16px";
+    case "square":
+      return "8px";
+    case "oval":
+      // very large radius yields a capsule/oval when width > height
+      return "9999px";
+    default:
+      return "50%";
+  }
 }
 
-/** ------------------------------------------------------------------------
- * 2) Widget root
- * ----------------------------------------------------------------------- */
+/* ------------------------------- Main Widget ------------------------------ */
+
 export default function Widget() {
-  // a) source of truth (URL + branding defaults)
-  const branding = useMemo(readBranding, []);
-  const [open, setOpen] = useState<boolean>(() => qpBool("open", false));
+  const cfg = useMemo(parseQuery, []);
+  const [open, setOpen] = useState(false);
 
-  // identify bot/instance (so the preview/embed can pass it through)
-  const botId = qp("bot", "waitlist-bot");
-  const instId = qp("inst", ""); // optional instance override
-
-  // bubble appearance (all overridable via ?query)
-  const bubbleSize = qpNum("size", branding.chatBubbleSize);
-  const bubblePos: Pos = qp("position", branding.chatBubblePosition);
-  const bubbleColor = qp("color", branding.chatBubbleColor);
-  const bubbleImage = qp("image", branding.chatBubbleImage || "");
-  const bubbleShape: Shape = qp("shape", "circle");
-  const imageFit: Fit = qp("imageFit", "cover");
-  const bubbleLabel = qp("label", "Chat");
-  const bubbleLabelColor = qp("labelColor", "#ffffff"); // NEW
-
-  // chat header avatar (optional)
-  const avatarUrl = qp("avatar", branding.logoDataUrl || "");
-  const headerTitle = useMemo(() => {
-    const base = instId?.trim() ? instId.trim() : botId;
-    return base.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase());
-  }, [botId, instId]);
-
-  // apply brand font
-  useEffect(() => {
-    document.body.style.fontFamily = branding.fontFamily;
-  }, [branding.fontFamily]);
-
-  /** ----------------------------------------------------------------------
-   * 3) Simple demo chat state (no backend yet)
-   * --------------------------------------------------------------------- */
-  const [messages, setMessages] = useState<
-    { role: "bot" | "user"; text: string }[]
-  >([{ role: "bot", text: `Hi! You’re chatting with ${headerTitle}.` }]);
+  // local, temporary transcript (until API)
+  const [messages, setMessages] = useState<{ role: "bot" | "user"; text: string }[]>([
+    { role: "bot", text: "Hi! How can I help you today?" },
+  ]);
   const [input, setInput] = useState("");
 
+  // Optional: apply a clean, readable font by default
+  useEffect(() => {
+    document.body.style.fontFamily = "Inter, system-ui, Arial, sans-serif";
+    document.body.style.background =
+      "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)";
+    document.body.style.minHeight = "100vh";
+  }, []);
+
+  // send a message in demo mode
   const send = () => {
     const text = input.trim();
     if (!text) return;
     setMessages((m) => [
       ...m,
       { role: "user", text },
-      { role: "bot", text: "Thanks! I’ll get back to you shortly." },
+      { role: "bot", text: "Thanks! We’ll be in touch shortly." },
     ]);
     setInput("");
   };
 
-  /** ----------------------------------------------------------------------
-   * 4) Visual helpers
-   * --------------------------------------------------------------------- */
-  const posStyle =
-    bubblePos === "bottom-left"
-      ? ({ left: 16, right: "auto" } as const)
-      : ({ right: 16, left: "auto" } as const);
+  // position style for floating elements
+  const posStyle: React.CSSProperties =
+    cfg.position === "bottom-left"
+      ? { left: 16, right: "auto" }
+      : { right: 16, left: "auto" };
 
-  // map shape to border radius (oval uses a very high radius to elongate)
-  function shapeStyle(shape: Shape): React.CSSProperties {
-    switch (shape) {
-      case "square":
-        return { borderRadius: 8 };
-      case "rounded":
-        return { borderRadius: 16 };
-      case "oval":
-        // keep user’s width/height but make it look oval with very high radius
-        return { borderRadius: 9999 / 2 };
-      case "circle":
-      default:
-        return { borderRadius: "50%" };
-    }
-  }
+  // bubble dimensions: if "oval", make it visually oval (wider than tall)
+  const bubbleWidth = cfg.shape === "oval" ? Math.round(cfg.size * 1.6) : cfg.size;
+  const bubbleHeight = cfg.size;
 
-  // map image fit to CSS
-  function bgForFit(img: string, fit: Fit) {
-    if (!img) return {};
-    const base: React.CSSProperties = {
-      backgroundImage: `url(${img})`,
-      backgroundRepeat: "no-repeat",
-      backgroundPosition: "center",
-    };
-    switch (fit) {
-      case "contain":
-        return { ...base, backgroundSize: "contain" };
-      case "fill":
-        return { ...base, backgroundSize: "100% 100%" };
-      case "center":
-        return { ...base, backgroundSize: "auto" };
-      case "none":
-        return { ...base, backgroundSize: "auto", backgroundPosition: "center" };
-      case "cover":
-      default:
-        return { ...base, backgroundSize: "cover" };
-    }
-  }
+  // bubble background for images
+  const backgroundForImage: React.CSSProperties =
+    cfg.image
+      ? {
+          backgroundImage: `url("${cfg.image}")`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition:
+            cfg.imageFit === "center" ? "center" : cfg.imageFit === "none" ? "left top" : "center",
+          backgroundSize:
+            cfg.imageFit === "cover"
+              ? "cover"
+              : cfg.imageFit === "contain"
+              ? "contain"
+              : cfg.imageFit === "fill"
+              ? "100% 100%"
+              : cfg.imageFit === "center"
+              ? "auto"
+              : "auto",
+        }
+      : {};
 
-  /** ----------------------------------------------------------------------
-   * 5) Render
-   * --------------------------------------------------------------------- */
+  // shared header (colored) for panel
+  const headerStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "12px 14px",
+    background: cfg.color || "#7aa8ff",
+    borderBottom: "2px solid #000",
+  };
+
+  /* -------------------------------- Render -------------------------------- */
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
-      }}
-    >
-      {/* ===== Floating Bubble (opens chat) ===== */}
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          aria-label="Open chat"
-          style={{
-            position: "fixed",
-            bottom: 16,
-            ...posStyle,
-            width: bubbleSize,
-            height: bubbleSize,
-            display: "grid",
-            placeItems: "center",
-            border: "2px solid #000",
-            boxShadow: "6px 6px 0 #000",
-            background: bubbleImage ? bubbleColor : bubbleColor,
-            color: bubbleLabelColor,
-            cursor: "pointer",
-            zIndex: 2147483647, // always on top
-            ...shapeStyle(bubbleShape),
-            ...(bubbleImage ? bgForFit(bubbleImage, imageFit) : {}),
-          }}
-        >
-          {/* Only show label if we’re not fully covering with an image */}
-          {!bubbleImage && (
-            <span
+    <div style={{ minHeight: "100vh" }}>
+      {/* ============ POPUP MODE (floating bubble + card) ============ */}
+      {cfg.mode !== "sidebar" && (
+        <>
+          {/* Bubble */}
+          {!open && (
+            <button
+              onClick={() => setOpen(true)}
+              aria-label="Open chat"
               style={{
-                fontWeight: 800,
-                textShadow:
-                  bubbleLabelColor.toLowerCase() === "#ffffff" ||
-                  bubbleLabelColor.toLowerCase() === "white"
-                    ? "0 1px 0 rgba(0,0,0,.2)"
-                    : "none",
+                position: "fixed",
+                bottom: 16,
+                ...posStyle,
+                width: bubbleWidth,
+                height: bubbleHeight,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                borderRadius: borderRadiusForShape(cfg.shape),
+                background: cfg.image ? (cfg.color || "#7aa8ff") : (cfg.color || "#7aa8ff"),
+                border: "2px solid #000",
+                boxShadow: "4px 4px 0 #000",
+                padding: "0 12px",
+                overflow: "hidden",
+                ...backgroundForImage,
               }}
             >
-              {bubbleLabel}
-            </span>
+              {/* Overlay label (always visible even with an image) */}
+              <span
+                style={{
+                  color: cfg.labelColor || "#fff",
+                  fontWeight: 900,
+                  textShadow: "0 1px 0 rgba(0,0,0,0.15)",
+                  background: cfg.image ? "rgba(0,0,0,0.18)" : "transparent",
+                  padding: cfg.image ? "2px 6px" : 0,
+                  borderRadius: cfg.image ? "8px" : 0,
+                  mixBlendMode: cfg.image ? "normal" : "unset",
+                  maxWidth: "85%",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {cfg.label ?? "Chat"}
+              </span>
+            </button>
           )}
-        </button>
+
+          {/* Panel (popup card) */}
+          {open && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: "fixed",
+                bottom: 16,
+                ...posStyle,
+                width: 380,
+                height: 540,
+                borderRadius: 16,
+                border: "2px solid #000",
+                boxShadow: "8px 8px 0 #000",
+                background: "#fff",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }}
+            >
+              {/* Header */}
+              <div style={headerStyle}>
+                {cfg.avatar ? (
+                  <img
+                    src={cfg.avatar}
+                    alt="Avatar"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      objectFit: "cover",
+                      background: "#fff",
+                      borderRadius: 6,
+                      border: "1px solid #000",
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      background: "#fff",
+                      borderRadius: 6,
+                      border: "1px solid #000",
+                    }}
+                  />
+                )}
+                <div style={{ fontWeight: 900, color: "#000" }}>
+                  {(cfg.inst || cfg.bot || "Bot").toString().replace(/-/g, " ")}
+                </div>
+                <button
+                  onClick={() => setOpen(false)}
+                  style={{
+                    marginLeft: "auto",
+                    padding: "4px 8px",
+                    fontWeight: 700,
+                    border: "2px solid #000",
+                    borderRadius: 8,
+                    background: "#fff",
+                    cursor: "pointer",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Messages */}
+              <div
+                style={{
+                  padding: 12,
+                  gap: 8,
+                  display: "flex",
+                  flexDirection: "column",
+                  flex: 1,
+                  overflow: "auto",
+                }}
+              >
+                {messages.map((m, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                      background: m.role === "user" ? "#e9d5ff" /* light purple */ : "#f1f5f9",
+                      color: "#000",
+                      border: "2px solid #000",
+                      borderRadius: 12,
+                      padding: "8px 10px",
+                      maxWidth: "75%",
+                    }}
+                  >
+                    {m.text}
+                  </div>
+                ))}
+              </div>
+
+              {/* Input */}
+              <div style={{ display: "flex", borderTop: "2px solid #000" }}>
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") send();
+                  }}
+                  placeholder="Type a message…"
+                  style={{
+                    flex: 1,
+                    padding: "10px 12px",
+                    fontWeight: 600,
+                    outline: "none",
+                    border: 0,
+                  }}
+                />
+                <button
+                  onClick={send}
+                  style={{
+                    padding: "10px 14px",
+                    fontWeight: 800,
+                    borderLeft: "2px solid #000",
+                    background: cfg.color || "#7aa8ff",
+                    cursor: "pointer",
+                  }}
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* ===== Chat Window ===== */}
-      {open && (
+      {/* ============ SIDEBAR MODE (full height drawer on the right) ============ */}
+      {cfg.mode === "sidebar" && (
         <div
+          role="dialog"
+          aria-modal="true"
           style={{
             position: "fixed",
-            bottom: 16,
-            ...posStyle,
+            top: 0,
+            right: 0,
+            height: "100vh",
             width: 380,
-            height: 560,
-            borderRadius: 18,
-            border: "3px solid #000",
-            boxShadow: "10px 10px 0 #000",
+            borderLeft: "2px solid #000",
+            boxShadow: "-8px 0 0 #000",
             background: "#fff",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            zIndex: 2147483647,
           }}
         >
           {/* Header */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "10px 12px",
-              background: branding.primaryColor,
-              borderBottom: "3px solid #000",
-            }}
-          >
-            {avatarUrl ? (
+          <div style={headerStyle}>
+            {cfg.avatar ? (
               <img
-                src={avatarUrl}
+                src={cfg.avatar}
                 alt="Avatar"
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
+                  width: 28,
+                  height: 28,
                   objectFit: "cover",
                   background: "#fff",
-                  border: "2px solid #000",
+                  borderRadius: 6,
+                  border: "1px solid #000",
                 }}
               />
             ) : (
               <div
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
+                  width: 28,
+                  height: 28,
                   background: "#fff",
-                  border: "2px solid #000",
+                  borderRadius: 6,
+                  border: "1px solid #000",
                 }}
               />
             )}
-
-            <div
-              style={{
-                fontWeight: 900,
-                color: "#000",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                maxWidth: 220,
-              }}
-              title={headerTitle}
-            >
-              {headerTitle}
+            <div style={{ fontWeight: 900, color: "#000" }}>
+              {(cfg.inst || cfg.bot || "Bot").toString().replace(/-/g, " ")}
             </div>
-
-            <button
-              onClick={() => setOpen(false)}
-              style={{
-                marginLeft: "auto",
-                padding: "4px 10px",
-                fontWeight: 800,
-                border: "2px solid #000",
-                borderRadius: 8,
-                background: "#fff",
-                boxShadow: "2px 2px 0 #000",
-                cursor: "pointer",
-              }}
-              aria-label="Close chat"
-              title="Close"
-            >
-              ×
-            </button>
           </div>
 
           {/* Messages */}
@@ -300,21 +396,19 @@ export default function Widget() {
               flexDirection: "column",
               flex: 1,
               overflow: "auto",
-              background: "#fff",
             }}
           >
             {messages.map((m, i) => (
               <div
                 key={i}
                 style={{
-                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                  background: m.role === "user" ? branding.secondaryColor : "#f1f5f9",
-                  color: "#000",
-                  border: "2px solid #000",
-                  borderRadius: 14,
-                  padding: "10px 12px",
-                  maxWidth: "75%",
-                  lineHeight: 1.25,
+                    alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                    background: m.role === "user" ? "#e9d5ff" : "#f1f5f9",
+                    color: "#000",
+                    border: "2px solid #000",
+                    borderRadius: 12,
+                    padding: "8px 10px",
+                    maxWidth: "75%",
                 }}
               >
                 {m.text}
@@ -323,7 +417,7 @@ export default function Widget() {
           </div>
 
           {/* Input */}
-          <div style={{ display: "flex", borderTop: "3px solid #000" }}>
+          <div style={{ display: "flex", borderTop: "2px solid #000" }}>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -333,23 +427,21 @@ export default function Widget() {
               placeholder="Type a message…"
               style={{
                 flex: 1,
-                padding: "12px 12px",
+                padding: "10px 12px",
                 fontWeight: 600,
                 outline: "none",
+                border: 0,
               }}
-              aria-label="Message"
             />
             <button
               onClick={send}
               style={{
-                padding: "10px 16px",
-                fontWeight: 900,
-                borderLeft: "3px solid #000",
-                background: branding.primaryColor,
+                padding: "10px 14px",
+                fontWeight: 800,
+                borderLeft: "2px solid #000",
+                background: cfg.color || "#7aa8ff",
                 cursor: "pointer",
               }}
-              aria-label="Send"
-              title="Send"
             >
               Send
             </button>
