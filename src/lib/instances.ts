@@ -1,80 +1,164 @@
 // src/lib/instances.ts
-// Minimal "instances" layer persisted in localStorage.
-// Lets you clone what you have locally (like nurture schedules) into a named instance
-// and get back an instanceId to use in the Embed page (?inst=...).
+// Lightweight “instances” persistence in localStorage.
+// Each Instance = { meta, data } with an index for quick listing.
 
-import { getJSON, setJSON } from "./storage";
+export type BotKey =
+  | "LeadQualifier"
+  | "AppointmentBooking"
+  | "CustomerSupport"
+  | "Waitlist"
+  | "SocialMedia";
 
-// Keys
-const LIST_KEY = "botInstances:list";           // string[] of ids
-const ITEM_KEY = (id: string) => `botInstance:${id}`;
+export type Mode = "basic" | "custom";
 
-// Types that match how you'll use Instance IDs in Embed/Widget
-export type InstanceSummary = {
-  id: string;
-  name: string;
-  createdAt: string;
-  botId: string;            // e.g. "waitlist-bot"
-  mode: "basic" | "custom";
+export type InstanceMeta = {
+  id: string;             // inst_*
+  name: string;           // e.g. "Waitlist (Copy)"
+  bot: BotKey;
+  mode: Mode;
+  createdAt: number;
+  updatedAt: number;
 };
 
-export type NurtureStep = {
-  enabled: boolean;
-  subject: string;
-  message: string;
+export type InstanceData = {
+  // A place to store per-node text overrides, etc.
+  overrides: Record<string, any>;
+  // A place to store UI/settings you want to carry over
+  settings: Record<string, any>;
+  // Simple placeholder for uploaded knowledge docs
+  knowledge: Array<any>;
 };
 
-export type InstancePayload = InstanceSummary & {
-  nurture?: NurtureStep[];  // copied from Nurture page
-  // room to grow later: overrides, knowledge, theme, etc.
-};
+const INDEX_KEY = "botInstances:index";
+const DATA_KEY = (id: string) => `botInstances:data:${id}`;
 
-// Utilities
-export function listInstanceIds(): string[] {
-  return getJSON<string[]>(LIST_KEY, []);
+// These keys mirror how your Builder / Settings already store data:
+const OV_KEY = (bot: BotKey, mode: Mode) => `botOverrides:${bot}_${mode}`;
+const BOT_SETTINGS_KEY = (bot: BotKey) => `botSettings:${bot}`;
+const BOT_KNOWLEDGE_KEY = (bot: BotKey) => `botKnowledge:${bot}`;
+
+/** -------- helpers -------- */
+function readJSON<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
-export function listInstances(): InstanceSummary[] {
-  const ids = listInstanceIds();
-  return ids
-    .map((id) => getJSON<InstancePayload>(ITEM_KEY(id), null as any))
-    .filter(Boolean)
-    .map(({ id, name, createdAt, botId, mode }) => ({
-      id,
-      name,
-      createdAt,
-      botId,
-      mode,
-    }));
+function writeJSON<T>(key: string, value: T) {
+  localStorage.setItem(key, JSON.stringify(value));
 }
 
-export function getInstance(id: string): InstancePayload | null {
-  return getJSON<InstancePayload>(ITEM_KEY(id), null as any);
+function newId() {
+  return `inst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Core: create a new instance with supplied payload chunks
-export function createInstance(input: {
-  name: string;
-  botId: string;                  // "waitlist-bot", "lead-qualifier", etc.
-  mode: "basic" | "custom";
-  nurture?: NurtureStep[];
-}): InstancePayload {
-  const id = `inst_${Date.now()}`;
-  const createdAt = new Date().toISOString();
+/** -------- public API -------- */
 
-  const payload: InstancePayload = {
+export function listInstances(): InstanceMeta[] {
+  return readJSON<InstanceMeta[]>(INDEX_KEY, []);
+}
+
+export function getInstance(id: string): { meta: InstanceMeta; data: InstanceData } | null {
+  const meta = listInstances().find((m) => m.id === id);
+  if (!meta) return null;
+  const data = readJSON<InstanceData>(DATA_KEY(id), {
+    overrides: {},
+    settings: {},
+    knowledge: [],
+  });
+  return { meta, data };
+}
+
+export function saveInstance(id: string, patch: Partial<InstanceData>) {
+  const now = Date.now();
+  const index = listInstances();
+  const meta = index.find((m) => m.id === id);
+  if (!meta) return;
+
+  const current = readJSON<InstanceData>(DATA_KEY(id), {
+    overrides: {},
+    settings: {},
+    knowledge: [],
+  });
+
+  writeJSON(DATA_KEY(id), {
+    ...current,
+    ...patch,
+  });
+
+  // bump updatedAt
+  const updated: InstanceMeta[] = index.map((m) =>
+    m.id === id ? { ...m, updatedAt: now } : m
+  );
+  writeJSON(INDEX_KEY, updated);
+}
+
+export function removeInstance(id: string) {
+  const index = listInstances().filter((m) => m.id !== id);
+  writeJSON(INDEX_KEY, index);
+  localStorage.removeItem(DATA_KEY(id));
+}
+
+/**
+ * Create a brand-new instance by duplicating the CURRENT template context:
+ * - carries over per-bot+mode overrides (botOverrides:Bot_Mode)
+ * - carries over bot settings (botSettings:Bot)
+ * - carries over any bot knowledge list (botKnowledge:Bot) if present
+ *
+ * Return the freshly created InstanceMeta.
+ */
+export function duplicateInstanceFromTemplate(
+  bot: BotKey,
+  mode: Mode,
+  friendlyName?: string
+): InstanceMeta {
+  const id = newId();
+  const now = Date.now();
+
+  // Pull existing per-bot+mode overrides/settings/knowledge (if any)
+  const overrides = readJSON<Record<string, any>>(OV_KEY(bot, mode), {});
+  const settings = readJSON<Record<string, any>>(BOT_SETTINGS_KEY(bot), { mode });
+  const knowledge = readJSON<any[]>(BOT_KNOWLEDGE_KEY(bot), []);
+
+  const meta: InstanceMeta = {
     id,
-    name: input.name || "My Bot",
-    createdAt,
-    botId: input.botId,
-    mode: input.mode,
-    nurture: input.nurture || [],
+    name: friendlyName || `${botToLabel(bot)} (Copy)`,
+    bot,
+    mode,
+    createdAt: now,
+    updatedAt: now,
   };
 
-  // persist
-  const ids = listInstanceIds();
-  setJSON(LIST_KEY, [...ids, id]);
-  setJSON(ITEM_KEY(id), payload);
+  // Save data
+  const data: InstanceData = { overrides, settings, knowledge };
+  writeJSON(DATA_KEY(id), data);
 
-  return payload;
+  // Update index
+  const index = listInstances();
+  index.push(meta);
+  writeJSON(INDEX_KEY, index);
+
+  return meta;
+}
+
+/** Optional: label for UI defaults */
+function botToLabel(bot: BotKey): string {
+  switch (bot) {
+    case "LeadQualifier":
+      return "Lead Qualifier";
+    case "AppointmentBooking":
+      return "Appointment Booking";
+    case "CustomerSupport":
+      return "Customer Support";
+    case "Waitlist":
+      return "Waitlist";
+    case "SocialMedia":
+      return "Social Media";
+    default:
+      return bot;
+  }
 }
