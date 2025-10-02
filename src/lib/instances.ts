@@ -1,113 +1,80 @@
 // src/lib/instances.ts
-// LocalStorage CRUD for user-created bot instances.
-// Works with Builder's instance format:
-//   - botSettingsInst:<id>  => { baseKey: BotKey, mode: "basic" | "custom", name?: string }
-//   - botOverridesInst:<id>_<mode> => { [nodeId]: { data: ... } }
-//   - botInstances:index => string[]  // list of instance ids we show under "My Bots"
+// Minimal "instances" layer persisted in localStorage.
+// Lets you clone what you have locally (like nurture schedules) into a named instance
+// and get back an instanceId to use in the Embed page (?inst=...).
 
-import type { BotKey } from "@/lib/botSettings";
+import { getJSON, setJSON } from "./storage";
 
-export type InstMode = "basic" | "custom";
+// Keys
+const LIST_KEY = "botInstances:list";           // string[] of ids
+const ITEM_KEY = (id: string) => `botInstance:${id}`;
 
-export type BotInstance = {
+// Types that match how you'll use Instance IDs in Embed/Widget
+export type InstanceSummary = {
   id: string;
   name: string;
-  baseKey: BotKey;
-  mode: InstMode;
-  createdAt: number;
+  createdAt: string;
+  botId: string;            // e.g. "waitlist-bot"
+  mode: "basic" | "custom";
 };
 
-const INDEX_KEY = "botInstances:index";
+export type NurtureStep = {
+  enabled: boolean;
+  subject: string;
+  message: string;
+};
 
-function readIndex(): string[] {
-  try {
-    const raw = localStorage.getItem(INDEX_KEY);
-    if (raw) return JSON.parse(raw) as string[];
-  } catch {}
-  return [];
+export type InstancePayload = InstanceSummary & {
+  nurture?: NurtureStep[];  // copied from Nurture page
+  // room to grow later: overrides, knowledge, theme, etc.
+};
+
+// Utilities
+export function listInstanceIds(): string[] {
+  return getJSON<string[]>(LIST_KEY, []);
 }
 
-function writeIndex(ids: string[]) {
-  localStorage.setItem(INDEX_KEY, JSON.stringify(ids));
+export function listInstances(): InstanceSummary[] {
+  const ids = listInstanceIds();
+  return ids
+    .map((id) => getJSON<InstancePayload>(ITEM_KEY(id), null as any))
+    .filter(Boolean)
+    .map(({ id, name, createdAt, botId, mode }) => ({
+      id,
+      name,
+      createdAt,
+      botId,
+      mode,
+    }));
 }
 
-export function listInstances(): BotInstance[] {
-  const ids = readIndex();
-  const out: BotInstance[] = [];
-  for (const id of ids) {
-    try {
-      const raw = localStorage.getItem(`botSettingsInst:${id}`);
-      if (!raw) continue;
-      const meta = JSON.parse(raw) as Partial<BotInstance>;
-      out.push({
-        id,
-        name: meta.name || "Untitled Bot",
-        baseKey: meta.baseKey as BotKey,
-        mode: (meta.mode as InstMode) || "custom",
-        createdAt: (meta.createdAt as number) || 0,
-      });
-    } catch {}
-  }
-  // newest first
-  out.sort((a, b) => b.createdAt - a.createdAt);
-  return out;
+export function getInstance(id: string): InstancePayload | null {
+  return getJSON<InstancePayload>(ITEM_KEY(id), null as any);
 }
 
-export function createInstance(params: {
+// Core: create a new instance with supplied payload chunks
+export function createInstance(input: {
   name: string;
-  baseKey: BotKey;
-  mode: InstMode;
-}): BotInstance {
-  const id = `inst_${Date.now().toString(36)}_${Math.random()
-    .toString(36)
-    .slice(2, 6)}`;
+  botId: string;                  // "waitlist-bot", "lead-qualifier", etc.
+  mode: "basic" | "custom";
+  nurture?: NurtureStep[];
+}): InstancePayload {
+  const id = `inst_${Date.now()}`;
+  const createdAt = new Date().toISOString();
 
-  const inst: BotInstance = {
+  const payload: InstancePayload = {
     id,
-    name: params.name || "Untitled Bot",
-    baseKey: params.baseKey,
-    mode: params.mode,
-    createdAt: Date.now(),
+    name: input.name || "My Bot",
+    createdAt,
+    botId: input.botId,
+    mode: input.mode,
+    nurture: input.nurture || [],
   };
 
-  // meta
-  localStorage.setItem(
-    `botSettingsInst:${id}`,
-    JSON.stringify({
-      baseKey: inst.baseKey,
-      mode: inst.mode,
-      name: inst.name,
-      createdAt: inst.createdAt,
-    })
-  );
+  // persist
+  const ids = listInstanceIds();
+  setJSON(LIST_KEY, [...ids, id]);
+  setJSON(ITEM_KEY(id), payload);
 
-  // add to index
-  const ids = readIndex();
-  ids.unshift(id);
-  writeIndex(ids);
-
-  return inst;
-}
-
-export function duplicateInstanceFromTemplate(opts: {
-  baseKey: BotKey;
-  mode: InstMode;
-  name?: string;
-}): BotInstance {
-  return createInstance({
-    baseKey: opts.baseKey,
-    mode: opts.mode,
-    name: opts.name || "New Bot",
-  });
-}
-
-export function removeInstance(id: string) {
-  // remove meta
-  localStorage.removeItem(`botSettingsInst:${id}`);
-  // remove overrides for both modes, if present
-  localStorage.removeItem(`botOverridesInst:${id}_basic`);
-  localStorage.removeItem(`botOverridesInst:${id}_custom`);
-  // remove from index
-  const ids = readIndex().filter((x) => x !== id);
-  writeIndex(ids);
+  return payload;
 }
