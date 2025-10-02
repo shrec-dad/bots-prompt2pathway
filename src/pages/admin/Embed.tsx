@@ -1,7 +1,7 @@
 // src/pages/admin/Embed.tsx
 import React, { useMemo, useState } from "react";
 
-/** Copy helper */
+/** Simple helper to copy text to clipboard with quick feedback. */
 function CopyButton({ getText }: { getText: () => string }) {
   const [label, setLabel] = useState("Copy");
   async function onCopy() {
@@ -25,83 +25,146 @@ function CopyButton({ getText }: { getText: () => string }) {
 }
 
 type Mode = "popup" | "inline" | "sidebar";
+type Pos = "bottom-right" | "bottom-left";
+type Shape = "circle" | "rounded" | "oval" | "square";
+type Fit = "cover" | "contain";
+type MsgStyle =
+  | "outlined-black"
+  | "accent-yellow"
+  | "modern-soft"
+  | "pill"
+  | "rounded-rect"
+  | "minimal-outline";
 
 export default function Embed() {
-  // Instance-aware
-  const [instId, setInstId] = useState("");
-
-  // Core controls
+  // Core install fields
   const [botId, setBotId] = useState("waitlist-bot");
+  const [instId, setInstId] = useState(""); // optional instance override
   const [mode, setMode] = useState<Mode>("popup");
-  const [position, setPosition] = useState<"bottom-right" | "bottom-left">("bottom-right");
+  const [position, setPosition] = useState<Pos>("bottom-right");
   const [size, setSize] = useState(64);
-  const [color, setColor] = useState("#8b5cf6");
-  const [image, setImage] = useState<string>("");
 
-  // NEW: shape + imageFit
-  const [shape, setShape] = useState<"circle" | "rounded" | "square" | "oval" | "chat">("circle");
-  const [imageFit, setImageFit] = useState<"cover" | "contain">("cover");
+  // Bubble visuals
+  const [shape, setShape] = useState<Shape>("circle");
+  const [color, setColor] = useState("#7aa8ff");
+  const [image, setImage] = useState("");
+  const [imageFit, setImageFit] = useState<Fit>("cover");
+  const [label, setLabel] = useState("Chat");
+  const [labelColor, setLabelColor] = useState("#ffffff");
 
+  // Transcript visuals
+  const [messageStyle, setMessageStyle] = useState<MsgStyle>("outlined-black");
+  const [botAvatar, setBotAvatar] = useState("");
+
+  // Build the /widget URL for your current site (works locally + Lovable preview)
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const embedUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    if (instId.trim()) params.set("inst", instId.trim());
-    else params.set("bot", botId);
-    params.set("mode", mode);
-    params.set("position", position);
-    params.set("size", String(size));
-    params.set("color", color);
-    params.set("shape", shape);
-    params.set("imageFit", imageFit);
-    if (image.trim()) params.set("image", image.trim());
-    return `${origin}/widget?${params.toString()}`;
-  }, [origin, instId, botId, mode, position, size, color, shape, imageFit, image]);
+    const qp = new URLSearchParams();
+    if (instId.trim()) qp.set("inst", instId.trim());
+    else qp.set("bot", botId);
 
+    qp.set("mode", mode);
+    qp.set("position", position);
+    qp.set("size", String(size));
+    qp.set("shape", shape);
+    qp.set("imageFit", imageFit);
+    qp.set("messageStyle", messageStyle);
+
+    if (color) qp.set("color", color);
+    if (label) qp.set("label", label);
+    if (labelColor) qp.set("labelColor", labelColor);
+    if (image.trim()) qp.set("image", image.trim());
+    if (botAvatar.trim()) qp.set("botAvatar", botAvatar.trim());
+
+    return `${origin}/widget?${qp.toString()}`;
+  }, [
+    origin,
+    instId,
+    botId,
+    mode,
+    position,
+    size,
+    shape,
+    imageFit,
+    messageStyle,
+    color,
+    label,
+    labelColor,
+    image,
+    botAvatar,
+  ]);
+
+  // ---- Snippets ------------------------------------------------------------
   const iframeSnippet = useMemo(
     () =>
-`<!-- Paste near </body> -->
+`<!-- Paste near the end of your <body>. The iframe points to /widget and carries your options as query params. -->
 <iframe
   src="${embedUrl}"
   title="Bot Widget"
-  style="position: fixed; bottom: 24px; ${position === "bottom-right" ? "right" : "left"}: 24px;
-         width: ${mode === "sidebar" ? "360px" : `${size}px`};
-         height: ${mode === "sidebar" ? "100vh" : `${size}px`};
-         border: 0; border-radius: ${mode === "sidebar" ? "0" : (shape === "square" ? "0" : "50%")}; z-index: 999999; overflow: hidden;"
+  style="position: ${mode === "inline" ? "static" : "fixed"};
+         ${mode === "inline" ? "" : `bottom: 24px; ${position === "bottom-right" ? "right" : "left"}: 24px;`}
+         width: ${mode === "sidebar" ? "380px" : mode === "inline" ? "100%" : `${shape === "oval" ? Math.round(size * 1.55) : size}px`};
+         height: ${mode === "sidebar" ? "100vh" : mode === "inline" ? "560px" : `${shape === "oval" ? Math.round(size * 0.9) : size}px`};
+         border: 0; border-radius: ${mode === "sidebar" ? "0" : "12px"};
+         z-index: 999999; overflow: hidden;"
   loading="lazy"
   allow="clipboard-read; clipboard-write"
+  referrerpolicy="no-referrer-when-downgrade"
 ></iframe>`,
-    [embedUrl, size, mode, position, shape]
+    [embedUrl, mode, position, size, shape]
   );
 
   const reactSnippet = useMemo(
     () =>
-`// Example inside React (local component). For specific instances, prefer the iframe (?inst=…)
+`// Example usage inside a React app (uses your local ChatWidget component)
 import ChatWidget from "@/widgets/ChatWidget";
 
 export default function App() {
   return (
-    <div>
+    <>
+      {/* ...your app... */}
       <ChatWidget
         mode="${mode}"
         botId="${botId}"
-        color="${color}"
-        size={${size}}
         position="${position}"
+        size={${size}}
         shape="${shape}"
-        ${image ? `image="${image}"` : ""}
+        color="${color}"
+        image="${image}"
+        imageFit="${imageFit}"
+        label="${label}"
+        labelColor="${labelColor}"
+        messageStyle="${messageStyle}"
+        botAvatarUrl="${botAvatar}"
       />
-    </div>
+    </>
   );
 }`,
-    [mode, botId, color, size, position, shape, image]
+    [
+      mode,
+      botId,
+      position,
+      size,
+      shape,
+      color,
+      image,
+      imageFit,
+      label,
+      labelColor,
+      messageStyle,
+      botAvatar,
+    ]
   );
 
-  const headerCard = "rounded-2xl border bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-6";
+  // UI classes
+  const headerCard =
+    "rounded-2xl border bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-6";
   const sectionCard = "rounded-2xl border bg-white/90 p-4 md:p-5 shadow-sm";
   const labelCls = "text-sm font-bold uppercase text-purple-700";
   const inputCls =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
-  const codeBox = "mt-3 rounded-lg border bg-neutral-900 text-neutral-50 text-sm p-3 overflow-auto";
+  const codeBox =
+    "mt-3 rounded-lg border bg-neutral-900 text-neutral-50 text-sm p-3 overflow-auto";
 
   return (
     <div className="p-6 space-y-6">
@@ -109,8 +172,9 @@ export default function App() {
       <div className={headerCard}>
         <h1 className="text-3xl font-extrabold">Embed Code</h1>
         <p className="mt-2 text-muted-foreground">
-          Choose bot/instance and style options. Copy a snippet and paste into your site.
-          <strong> Iframe</strong> works everywhere; <strong>React</strong> is for your own React apps.
+          Choose your bot and style options. Copy one of the snippets below and paste it
+          into your website. The <strong>iframe</strong> snippet works everywhere.
+          The <strong>React</strong> snippet is best for React projects using your local components.
         </p>
       </div>
 
@@ -121,12 +185,12 @@ export default function App() {
             <div className={labelCls}>Instance ID (optional)</div>
             <input
               className={inputCls}
+              placeholder="inst_abc123…"
               value={instId}
               onChange={(e) => setInstId(e.target.value)}
-              placeholder="inst_abc123…"
             />
             <div className="text-xs text-muted-foreground mt-1">
-              If provided, overrides Bot ID.
+              If provided, Instance overrides Bot ID.
             </div>
           </div>
 
@@ -136,18 +200,21 @@ export default function App() {
               className={inputCls}
               value={botId}
               onChange={(e) => setBotId(e.target.value)}
-              placeholder="waitlist-bot"
               disabled={!!instId.trim()}
-              title={instId.trim() ? "Instance is set; Bot ID ignored" : ""}
+              title={instId.trim() ? "Instance is set; Bot ID ignored" : "Enter a bot id"}
             />
           </div>
 
           <div>
             <div className={labelCls}>Mode</div>
-            <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
-              <option value="popup">popup</option>
-              <option value="inline">inline</option>
-              <option value="sidebar">sidebar</option>
+            <select
+              className={inputCls}
+              value={mode}
+              onChange={(e) => setMode(e.target.value as Mode)}
+            >
+              <option value="popup">popup (floating bubble)</option>
+              <option value="inline">inline (in-page)</option>
+              <option value="sidebar">sidebar (full height right)</option>
             </select>
           </div>
 
@@ -156,8 +223,9 @@ export default function App() {
             <select
               className={inputCls}
               value={position}
-              onChange={(e) => setPosition(e.target.value as any)}
+              onChange={(e) => setPosition(e.target.value as Pos)}
               disabled={mode === "inline"}
+              title={mode === "inline" ? "Position is not used for inline mode" : ""}
             >
               <option value="bottom-right">bottom-right</option>
               <option value="bottom-left">bottom-left</option>
@@ -180,7 +248,43 @@ export default function App() {
           </div>
 
           <div>
-            <div className={labelCls}>Accent Color</div>
+            <div className={labelCls}>Bubble Shape</div>
+            <select
+              className={inputCls}
+              value={shape}
+              onChange={(e) => setShape(e.target.value as Shape)}
+            >
+              <option value="circle">circle</option>
+              <option value="rounded">rounded</option>
+              <option value="oval">oval (pill)</option>
+              <option value="square">square</option>
+            </select>
+          </div>
+
+          <div>
+            <div className={labelCls}>Bubble Image URL (optional)</div>
+            <input
+              className={inputCls}
+              placeholder="https://example.com/icon.png"
+              value={image}
+              onChange={(e) => setImage(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <div className={labelCls}>Image Fit</div>
+            <select
+              className={inputCls}
+              value={imageFit}
+              onChange={(e) => setImageFit(e.target.value as Fit)}
+            >
+              <option value="cover">cover (fill bubble)</option>
+              <option value="contain">contain (show entire image)</option>
+            </select>
+          </div>
+
+          <div>
+            <div className={labelCls}>Bubble Color</div>
             <input
               type="color"
               className="h-10 w-full rounded-lg border border-purple-200"
@@ -190,46 +294,56 @@ export default function App() {
           </div>
 
           <div>
-            <div className={labelCls}>Bubble Shape</div>
-            <select className={inputCls} value={shape} onChange={(e) => setShape(e.target.value as any)}>
-              <option value="circle">circle</option>
-              <option value="rounded">rounded</option>
-              <option value="square">square</option>
-              <option value="oval">oval</option>
-              <option value="chat">chat (speech bubble)</option>
-            </select>
-          </div>
-
-          <div>
-            <div className={labelCls}>Bubble Image URL (optional)</div>
+            <div className={labelCls}>Bubble Label</div>
             <input
               className={inputCls}
-              value={image}
-              onChange={(e) => setImage(e.target.value)}
-              placeholder="https://example.com/logo.png"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
             />
           </div>
 
           <div>
-            <div className={labelCls}>Image Fit</div>
-            <select className={inputCls} value={imageFit} onChange={(e) => setImageFit(e.target.value as any)}>
-              <option value="cover">cover</option>
-              <option value="contain">contain</option>
+            <div className={labelCls}>Bubble Label Color</div>
+            <input
+              type="color"
+              className="h-10 w-full rounded-lg border border-purple-200"
+              value={labelColor}
+              onChange={(e) => setLabelColor(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <div className={labelCls}>Message Style</div>
+            <select
+              className={inputCls}
+              value={messageStyle}
+              onChange={(e) => setMessageStyle(e.target.value as MsgStyle)}
+            >
+              <option value="outlined-black">outlined-black</option>
+              <option value="accent-yellow">accent-yellow</option>
+              <option value="modern-soft">modern-soft</option>
+              <option value="pill">pill</option>
+              <option value="rounded-rect">rounded-rect</option>
+              <option value="minimal-outline">minimal-outline</option>
             </select>
           </div>
 
-          {/* Preview URL + Open */}
-          <div className="md:col-span-2 flex items-center gap-2">
-            <div className="flex-1">
-              <div className={labelCls}>Preview URL</div>
-              <input className={inputCls} value={embedUrl} readOnly />
+          <div className="md:col-span-2">
+            <div className={labelCls}>Bot Avatar URL (optional)</div>
+            <input
+              className={inputCls}
+              placeholder="https://example.com/photo.jpg"
+              value={botAvatar}
+              onChange={(e) => setBotAvatar(e.target.value)}
+            />
+            <div className="text-xs text-muted-foreground mt-1">
+              Real photo or logo — shows next to bot messages.
             </div>
-            <button
-              onClick={() => window.open(embedUrl, "_blank")}
-              className="px-3 py-2 rounded-md border bg-white hover:bg-muted/40 text-sm font-semibold mt-6"
-            >
-              Open
-            </button>
+          </div>
+
+          <div>
+            <div className={labelCls}>Preview URL</div>
+            <input className={inputCls} value={embedUrl} readOnly />
           </div>
         </div>
       </div>
@@ -240,22 +354,20 @@ export default function App() {
           <div className="text-lg font-bold">Universal Snippet (iframe)</div>
           <CopyButton getText={() => iframeSnippet} />
         </div>
-        <pre className={codeBox}><code>{iframeSnippet}</code></pre>
-        <p className="text-xs text-muted-foreground mt-2">
-          Uses <code>/widget</code> with your options. Supports <code>?shape=</code> and <code>?imageFit=</code>.
-        </p>
+        <pre className={codeBox}>
+          <code>{iframeSnippet}</code>
+        </pre>
       </div>
 
       {/* React snippet */}
       <div className={sectionCard}>
         <div className="flex items-center justify-between gap-3">
-          <div className="text-lg font-bold">React Snippet (local component)</div>
+          <div className="text-lg font-bold">React Snippet (uses local component)</div>
           <CopyButton getText={() => reactSnippet} />
         </div>
-        <pre className={codeBox}><code>{reactSnippet}</code></pre>
-        <p className="text-xs text-muted-foreground mt-2">
-          For a specific <strong>instance</strong>, prefer the iframe with <code>?inst=</code>.
-        </p>
+        <pre className={codeBox}>
+          <code>{reactSnippet}</code>
+        </pre>
       </div>
     </div>
   );
