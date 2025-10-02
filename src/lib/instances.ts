@@ -13,7 +13,7 @@ export type Mode = "basic" | "custom";
 
 export type InstanceMeta = {
   id: string;             // inst_*
-  name: string;           // e.g. "Waitlist (Copy)"
+  name: string;           // e.g. "Waitlist (Copy)" or "My Bot"
   bot: BotKey;
   mode: Mode;
   createdAt: number;
@@ -37,7 +37,8 @@ const OV_KEY = (bot: BotKey, mode: Mode) => `botOverrides:${bot}_${mode}`;
 const BOT_SETTINGS_KEY = (bot: BotKey) => `botSettings:${bot}`;
 const BOT_KNOWLEDGE_KEY = (bot: BotKey) => `botKnowledge:${bot}`;
 
-/** -------- helpers -------- */
+/* ---------------- helpers ---------------- */
+
 function readJSON<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -56,7 +57,24 @@ function newId() {
   return `inst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** -------- public API -------- */
+function botToLabel(bot: BotKey): string {
+  switch (bot) {
+    case "LeadQualifier":
+      return "Lead Qualifier";
+    case "AppointmentBooking":
+      return "Appointment Booking";
+    case "CustomerSupport":
+      return "Customer Support";
+    case "Waitlist":
+      return "Waitlist";
+    case "SocialMedia":
+      return "Social Media";
+    default:
+      return bot;
+  }
+}
+
+/* ---------------- public API ---------------- */
 
 export function listInstances(): InstanceMeta[] {
   return readJSON<InstanceMeta[]>(INDEX_KEY, []);
@@ -104,12 +122,46 @@ export function removeInstance(id: string) {
 }
 
 /**
- * Create a brand-new instance by duplicating the CURRENT template context:
+ * Create a brand-new EMPTY instance.
+ * Useful when you want a fresh canvas without copying overrides/settings.
+ */
+export function createInstance(
+  bot: BotKey,
+  mode: Mode,
+  friendlyName?: string
+): InstanceMeta {
+  const id = newId();
+  const now = Date.now();
+
+  const meta: InstanceMeta = {
+    id,
+    name: friendlyName || `${botToLabel(bot)} (New)`,
+    bot,
+    mode,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const data: InstanceData = {
+    overrides: {},     // blank
+    settings: { mode },// minimal seed
+    knowledge: [],     // blank
+  };
+
+  writeJSON(DATA_KEY(id), data);
+
+  const index = listInstances();
+  index.push(meta);
+  writeJSON(INDEX_KEY, index);
+
+  return meta;
+}
+
+/**
+ * Duplicate from current template context:
  * - carries over per-bot+mode overrides (botOverrides:Bot_Mode)
  * - carries over bot settings (botSettings:Bot)
  * - carries over any bot knowledge list (botKnowledge:Bot) if present
- *
- * Return the freshly created InstanceMeta.
  */
 export function duplicateInstanceFromTemplate(
   bot: BotKey,
@@ -133,32 +185,12 @@ export function duplicateInstanceFromTemplate(
     updatedAt: now,
   };
 
-  // Save data
   const data: InstanceData = { overrides, settings, knowledge };
   writeJSON(DATA_KEY(id), data);
 
-  // Update index
   const index = listInstances();
   index.push(meta);
   writeJSON(INDEX_KEY, index);
 
   return meta;
-}
-
-/** Optional: label for UI defaults */
-function botToLabel(bot: BotKey): string {
-  switch (bot) {
-    case "LeadQualifier":
-      return "Lead Qualifier";
-    case "AppointmentBooking":
-      return "Appointment Booking";
-    case "CustomerSupport":
-      return "Customer Support";
-    case "Waitlist":
-      return "Waitlist";
-    case "SocialMedia":
-      return "Social Media";
-    default:
-      return bot;
-  }
 }
