@@ -40,17 +40,16 @@ export default function Nurture() {
     );
     if (!name) return;
 
-    // Make sure the current schedule is persisted first
+    // Persist current schedule first
     setJSON(KEY, steps);
 
     const payload = createInstance({
       name,
-      botId: currentBot,      // e.g. "waitlist-bot"
-      mode,                   // "basic" | "custom"
-      nurture: steps,         // carry 14-day sequence
+      botId: currentBot, // e.g. "waitlist-bot"
+      mode,              // "basic" | "custom"
+      nurture: steps,    // carry 14-day sequence
     });
 
-    // Show a clear success message with the new Instance ID
     alert(
       `Created instance!\n\nName: ${payload.name}\nBot: ${payload.botId} • ${payload.mode}\nInstance ID: ${payload.id}\n\nPaste this ID into Admin → Embed → "Instance ID" to use it in your widget snippet.`
     );
@@ -64,10 +63,15 @@ export default function Nurture() {
           "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
       }}
     >
+      {/* Header */}
       <div className="h-row mb-6">
         <div className="h-title text-black">Nurture (Day 1–14)</div>
-        <div className="stack" style={{ gridTemplateColumns: "auto auto auto" }}>
-          <button className="btn" onClick={duplicateToInstance} title="Clone this 14-day sequence into a new Instance">
+        <div className="stack" style={{ gridTemplateColumns: "auto auto" }}>
+          <button
+            className="btn"
+            onClick={duplicateToInstance}
+            title="Clone this 14-day sequence into a new Instance"
+          >
             Duplicate to New Instance
           </button>
           <button className="btn primary" onClick={save}>
@@ -76,6 +80,7 @@ export default function Nurture() {
         </div>
       </div>
 
+      {/* Content */}
       <div className="admin-section stack">
         <p className="text-black">
           Create simple 7–14 day sequences now. This page has placeholders ready
@@ -142,10 +147,8 @@ export default function Nurture() {
           ))}
         </div>
 
+        {/* Footer: only Save button now */}
         <div className="h-row mt-6" style={{ gap: 12 }}>
-          <button className="btn" onClick={duplicateToInstance}>
-            Duplicate to New Instance
-          </button>
           <button className="btn primary" onClick={save}>
             Save All
           </button>
