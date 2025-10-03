@@ -1,113 +1,199 @@
-// src/pages/admin/Settings.tsx
-import React, { useMemo, useState, useEffect } from "react";
-import { getJSON, setJSON } from "../../lib/storage"; // adjust if storage lives elsewhere
-import "../../styles/admin-shared.css";
+import React, { useMemo, useState } from "react";
+import { getJSON, setJSON } from "@/lib/storage";
+import { BotKey } from "@/lib/botSettings";
 
-type Settings = {
-  basicOrCustom: "basic" | "custom";
-  domainWhitelist: string;
+type AppSettings = {
+  mode: "basic" | "custom";
+  domain: string;
+  language: "English";
   darkMode: boolean;
-  language: string;
+  defaultBot?: BotKey;
+  consentText?: string;
 };
 
-const KEY = "appSettings";
+const KEY = "app:settings";
+
+const wrapper =
+  "rounded-2xl border-2 border-black p-5 bg-gradient-to-br from-emerald-50 via-blue-50 to-purple-50";
+const section = "rounded-2xl border bg-white p-5";
 
 export default function Settings() {
-  const initial = useMemo<Settings>(
+  const initial = useMemo<AppSettings>(
     () =>
-      getJSON(KEY, {
-        basicOrCustom: "basic",
-        domainWhitelist: "example.com",
+      getJSON<AppSettings>(KEY, {
+        mode: "basic",
+        domain: "",
+        language: "English",
         darkMode: false,
-        language: "en",
+        defaultBot: "Waitlist",
+        consentText:
+          "By continuing, you agree to our Terms and Privacy Policy.",
       }),
     []
   );
 
-  const [s, setS] = useState<Settings>(initial);
+  const [s, setS] = useState<AppSettings>(initial);
 
-  const save = () => {
+  function save() {
     setJSON(KEY, s);
-    alert("Settings saved!");
-  };
+    alert("Settings saved.");
+  }
 
-  // Apply dark mode by toggling a CSS class on <html>
-  useEffect(() => {
-    const html = document.documentElement;
-    if (s.darkMode) html.classList.add("dark");
-    else html.classList.remove("dark");
-  }, [s.darkMode]);
+  function resetAll() {
+    if (!confirm("Clear ALL local settings/data? This is not reversible.")) return;
+    localStorage.clear();
+    alert("Local data cleared. Refresh the page.");
+  }
+
+  function exportJson() {
+    const blob = new Blob([JSON.stringify(s, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "app-settings.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importJson(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+      const parsed = JSON.parse(text);
+      setS(parsed);
+      setJSON(KEY, parsed);
+      alert("Settings imported.");
+    } catch {
+      alert("Invalid JSON.");
+    } finally {
+      e.currentTarget.value = "";
+    }
+  }
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-r from-green-200 via-blue-200 to-purple-200 min-h-screen">
-      {/* Header */}
-      <div className="border-2 border-black rounded-xl p-6 bg-white shadow">
-        <h1 className="text-2xl font-bold text-black">⚙️ Settings</h1>
-        <p className="mt-2 text-black">
-          Adjust system preferences and account details.
-        </p>
+    <div className={wrapper}>
+      <div className="text-3xl font-extrabold mb-4">Settings</div>
+      <div className="text-sm font-semibold text-foreground/80 mb-6">
+        Adjust system preferences and account details.
       </div>
 
-      {/* Preferences */}
-      <div className="border-2 border-black rounded-xl p-6 bg-white shadow space-y-4">
-        <h2 className="font-bold text-lg text-black">Preferences</h2>
+      <div className="grid grid-cols-1 gap-6">
+        <div className={section}>
+          <div className="text-xl font-extrabold mb-3">Preferences</div>
 
-        {/* Mode toggle */}
-        <label className="block text-black font-semibold">
-          Mode
-          <select
-            className="ml-2 border-2 border-black rounded p-1"
-            value={s.basicOrCustom}
-            onChange={(e) =>
-              setS({ ...s, basicOrCustom: e.target.value as Settings["basicOrCustom"] })
-            }
-          >
-            <option value="basic">Basic</option>
-            <option value="custom">Custom</option>
-          </select>
-        </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm font-bold uppercase text-purple-700">
+                Mode
+              </div>
+              <select
+                className="w-full rounded-lg border px-3 py-2 font-semibold"
+                value={s.mode}
+                onChange={(e) =>
+                  setS((p) => ({ ...p, mode: e.target.value as AppSettings["mode"] }))
+                }
+              >
+                <option value="basic">Basic</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
 
-        {/* Domain whitelist */}
-        <label className="block text-black font-semibold">
-          Domain Whitelist
-          <input
-            className="ml-2 border-2 border-black rounded p-1 w-full"
-            placeholder="example.com, clientsite.com"
-            value={s.domainWhitelist}
-            onChange={(e) => setS({ ...s, domainWhitelist: e.target.value })}
-          />
-        </label>
+            <div>
+              <div className="text-sm font-bold uppercase text-purple-700">
+                Domain Whitelist
+              </div>
+              <input
+                className="w-full rounded-lg border px-3 py-2 font-semibold"
+                placeholder="example.com"
+                value={s.domain}
+                onChange={(e) => setS((p) => ({ ...p, domain: e.target.value }))}
+              />
+            </div>
 
-        {/* Language */}
-        <label className="block text-black font-semibold">
-          Language
-          <select
-            className="ml-2 border-2 border-black rounded p-1"
-            value={s.language}
-            onChange={(e) => setS({ ...s, language: e.target.value })}
-          >
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-          </select>
-        </label>
+            <div>
+              <div className="text-sm font-bold uppercase text-purple-700">
+                Language
+              </div>
+              <select
+                className="w-full rounded-lg border px-3 py-2 font-semibold"
+                value={s.language}
+                onChange={(e) =>
+                  setS((p) => ({ ...p, language: e.target.value as AppSettings["language"] }))
+                }
+              >
+                <option value="English">English</option>
+              </select>
+            </div>
 
-        {/* Dark mode */}
-        <label className="flex items-center text-black font-semibold gap-2">
-          <input
-            type="checkbox"
-            checked={s.darkMode}
-            onChange={(e) => setS({ ...s, darkMode: e.target.checked })}
-          />
-          Dark Mode
-        </label>
+            <div>
+              <div className="text-sm font-bold uppercase text-purple-700">
+                Default Bot
+              </div>
+              <select
+                className="w-full rounded-lg border px-3 py-2 font-semibold"
+                value={s.defaultBot}
+                onChange={(e) =>
+                  setS((p) => ({ ...p, defaultBot: e.target.value as BotKey }))
+                }
+              >
+                <option value="LeadQualifier">Lead Qualifier</option>
+                <option value="AppointmentBooking">Appointment Booking</option>
+                <option value="CustomerSupport">Customer Support</option>
+                <option value="Waitlist">Waitlist</option>
+                <option value="SocialMedia">Social Media</option>
+              </select>
+            </div>
+          </div>
 
-        {/* Save button */}
-        <button
-          className="mt-4 px-4 py-2 border-2 border-black rounded-md bg-black text-white font-bold"
-          onClick={save}
-        >
-          Save Changes
-        </button>
+          <label className="mt-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={!!s.darkMode}
+              onChange={(e) => setS((p) => ({ ...p, darkMode: e.target.checked }))}
+            />
+            <span className="text-sm font-semibold">Dark Mode</span>
+          </label>
+
+          <div className="mt-4">
+            <div className="text-sm font-bold uppercase text-purple-700">
+              Consent / Disclaimer Text
+            </div>
+            <textarea
+              className="w-full rounded-lg border px-3 py-2 font-semibold"
+              rows={3}
+              value={s.consentText || ""}
+              onChange={(e) => setS((p) => ({ ...p, consentText: e.target.value }))}
+            />
+          </div>
+
+          <div className="mt-5 flex items-center gap-3">
+            <button
+              className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+              onClick={save}
+            >
+              Save Changes
+            </button>
+            <button
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+              onClick={exportJson}
+            >
+              Export
+            </button>
+            <label className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40 cursor-pointer">
+              Import
+              <input type="file" accept="application/json" className="hidden" onChange={importJson} />
+            </label>
+            <button
+              className="ml-auto rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-rose-50"
+              onClick={resetAll}
+            >
+              Reset All Local Data
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
