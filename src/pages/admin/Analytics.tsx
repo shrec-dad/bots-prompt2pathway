@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 
-/** Local storage helpers (kept inline so file is self-contained) */
+/** ------------------------------------------------------------
+ * Local storage helpers (self-contained)
+ * ------------------------------------------------------------ */
 const readJSON = <T,>(key: string, fallback: T): T => {
   try {
     const raw = localStorage.getItem(key);
@@ -11,28 +13,50 @@ const readJSON = <T,>(key: string, fallback: T): T => {
 const writeJSON = (key: string, value: any) =>
   localStorage.setItem(key, JSON.stringify(value));
 
-/** Storage key for analytics */
+/** ------------------------------------------------------------
+ * XLSX (SheetJS) loader — on-demand via CDN (no npm install)
+ * ------------------------------------------------------------ */
+declare global {
+  interface Window {
+    XLSX: any;
+  }
+}
+async function ensureXLSX(): Promise<any> {
+  if (window.XLSX) return window.XLSX;
+  await new Promise<void>((resolve, reject) => {
+    const el = document.createElement("script");
+    el.src =
+      "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    el.async = true;
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error("Failed to load XLSX library"));
+    document.head.appendChild(el);
+  });
+  return window.XLSX;
+}
+
+/** ------------------------------------------------------------
+ * Storage key and metric types
+ * ------------------------------------------------------------ */
 const AKEY = "analytics.metrics.v2";
 
-/** Metric type (core + new pro cards) */
 type Metrics = {
   // core six
   conversations: number;
   leads: number;
   appointments: number;
-  csatPct: number;            // 0–100
-  avgResponseSecs: number;    // seconds
-  conversionPct: number;      // 0–100
+  csatPct: number; // 0–100
+  avgResponseSecs: number; // seconds
+  conversionPct: number; // 0–100
 
-  // ✨ new five
-  dropoffPct: number;         // 0–100
-  qualifiedLeads: number;     // count
-  avgConversationSecs: number;// seconds
-  handoffRatePct: number;     // 0–100
-  peakChatTime: string;       // label like "2–3 PM"
+  // pro five
+  dropoffPct: number; // 0–100
+  qualifiedLeads: number; // count
+  avgConversationSecs: number; // seconds
+  handoffRatePct: number; // 0–100
+  peakChatTime: string; // label like "2–3 PM"
 };
 
-/** Default data (safe placeholders) */
 const defaultMetrics: Metrics = {
   conversations: 0,
   leads: 0,
@@ -48,32 +72,35 @@ const defaultMetrics: Metrics = {
   peakChatTime: "—",
 };
 
-/** Small helper for CSV escaping */
-function csvEscape(v: string | number) {
-  const s = String(v ?? "");
-  // If it contains comma, quote or newline, wrap in quotes and escape quotes.
-  if (/[",\n]/.test(s)) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
+/** ------------------------------------------------------------
+ * Small UI helpers
+ * ------------------------------------------------------------ */
+const sectionCls =
+  "rounded-2xl border-2 border-black bg-gradient-to-r from-violet-100 via-sky-100 to-emerald-100 p-5";
+const labelCls = "text-xs font-bold uppercase text-purple-700";
+const inputCls =
+  "w-full rounded-lg border-2 border-purple-300 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
-/** Timestamp for filenames: 2025-03-01_142355 */
-function stamp() {
-  const d = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
-    `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
-  );
-}
+const Card = ({
+  title,
+  value,
+}: {
+  title: React.ReactNode;
+  value: React.ReactNode;
+}) => (
+  <div className="rounded-2xl border-2 border-black bg-white p-5 shadow-sm">
+    <div className="text-lg font-extrabold leading-tight">{title}</div>
+    <div className="mt-2 text-4xl font-black">{value}</div>
+  </div>
+);
 
+/** ------------------------------------------------------------
+ * Component
+ * ------------------------------------------------------------ */
 export default function Analytics() {
-  const initial = useMemo(
-    () => readJSON<Metrics>(AKEY, defaultMetrics),
-    []
-  );
+  const initial = useMemo(() => readJSON<Metrics>(AKEY, defaultMetrics), []);
   const [m, setM] = useState<Metrics>(initial);
+  const [exporting, setExporting] = useState(false);
 
   const save = () => {
     writeJSON(AKEY, m);
@@ -86,56 +113,61 @@ export default function Analytics() {
     writeJSON(AKEY, { ...defaultMetrics });
   };
 
-  /** Export as CSV (Excel-compatible). Two columns: Metric, Value. */
-  const exportCSV = () => {
-    const rows: Array<[string, string | number]> = [
-      // core six
-      ["Conversations", m.conversations],
-      ["Leads Captured", m.leads],
-      ["Appointments Booked", m.appointments],
-      ["CSAT (Customer Satisfaction Score) %", `${m.csatPct}`],
-      ["Avg Response Time (secs)", `${m.avgResponseSecs}`],
-      ["Conversion Rate %", `${m.conversionPct}`],
-      // pro five
-      ["Drop-off Rate %", `${m.dropoffPct}`],
-      ["Qualified Leads", m.qualifiedLeads],
-      ["Avg Conversation Length (secs)", `${m.avgConversationSecs}`],
-      ["Sales Handoff Rate %", `${m.handoffRatePct}`],
-      ["Peak Chat Time", m.peakChatTime || "—"],
-      // meta
-      ["Exported At", new Date().toISOString()],
-    ];
+  /** ------------------------------------------------------------
+   * Export a true .xlsx workbook using SheetJS (loaded on demand)
+   * ------------------------------------------------------------ */
+  const exportXLSX = async () => {
+    try {
+      setExporting(true);
+      const XLSX = await ensureXLSX();
 
-    const header = ["Metric", "Value"];
-    const csv =
-      header.map(csvEscape).join(",") +
-      "\n" +
-      rows.map((r) => r.map(csvEscape).join(",")).join("\n");
+      // Build a 2D array for the sheet
+      const rows: Array<[string, string | number]> = [
+        ["Metric", "Value"],
+        // core six
+        ["Conversations", m.conversations],
+        ["Leads Captured", m.leads],
+        ["Appointments Booked", m.appointments],
+        ["CSAT (Customer Satisfaction Score) %", `${m.csatPct}`],
+        ["Avg Response Time (secs)", `${m.avgResponseSecs}`],
+        ["Conversion Rate %", `${m.conversionPct}`],
+        // pro five
+        ["Drop-off Rate %", `${m.dropoffPct}`],
+        ["Qualified Leads", m.qualifiedLeads],
+        ["Avg Conversation Length (secs)", `${m.avgConversationSecs}`],
+        ["Sales Handoff Rate %", `${m.handoffRatePct}`],
+        ["Peak Chat Time", m.peakChatTime || "—"],
+        // meta
+        ["Exported At", new Date().toISOString()],
+      ];
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `analytics-${stamp()}.csv`; // Excel will open this directly
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Analytics");
+
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], {
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const a = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = `analytics-${timeStamp()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert(
+        "Export failed. If this persists, your network may block CDN script loads."
+      );
+    } finally {
+      setExporting(false);
+    }
   };
-
-  const card = (title: React.ReactNode, value: React.ReactNode) => (
-    <div className="rounded-2xl border-2 border-black bg-white p-5 shadow-sm">
-      <div className="text-lg font-extrabold leading-tight">{title}</div>
-      <div className="mt-2 text-4xl font-black">{value}</div>
-    </div>
-  );
-
-  const section =
-    "rounded-2xl border-2 border-black bg-gradient-to-r from-violet-100 via-sky-100 to-emerald-100 p-5";
-
-  const label = "text-xs font-bold uppercase text-purple-700";
-  const input =
-    "w-full rounded-lg border-2 border-purple-300 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
   return (
     <div
@@ -158,11 +190,12 @@ export default function Analytics() {
           {/* Export / Save / Reset controls */}
           <div className="flex items-center gap-2">
             <button
-              onClick={exportCSV}
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
-              title="Download as CSV (Excel)"
+              onClick={exportXLSX}
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40 disabled:opacity-60"
+              title="Download as Excel (.xlsx)"
+              disabled={exporting}
             >
-              Export CSV
+              {exporting ? "Exporting…" : "Export XLSX"}
             </button>
             <button
               onClick={save}
@@ -183,147 +216,120 @@ export default function Analytics() {
       </div>
 
       {/* Metric Cards */}
-      <div className={section}>
+      <div className={sectionCls}>
         <div className="text-2xl font-extrabold mb-4">Metrics</div>
 
         {/* Core six */}
         <div className="grid gap-4 md:grid-cols-3">
-          {card("Conversations", m.conversations)}
-          {card("Leads Captured", m.leads)}
-          {card("Appointments Booked", m.appointments)}
+          <Card title="Conversations" value={m.conversations} />
+          <Card title="Leads Captured" value={m.leads} />
+          <Card title="Appointments Booked" value={m.appointments} />
 
-          {card("CSAT (Customer Satisfaction Score)", `${m.csatPct}%`)}
-          {card("Avg Response Time", `${m.avgResponseSecs}s`)}
-          {card("Conversion Rate", `${m.conversionPct}%`)}
+          <Card
+            title="CSAT (Customer Satisfaction Score)"
+            value={`${m.csatPct}%`}
+          />
+          <Card
+            title="Avg Response Time"
+            value={`${m.avgResponseSecs}s`}
+          />
+          <Card title="Conversion Rate" value={`${m.conversionPct}%`} />
         </div>
 
-        {/* New Pro Five */}
+        {/* Pro five */}
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {card("Drop-off Rate", `${m.dropoffPct}%`)}
-          {card("Qualified Leads", m.qualifiedLeads)}
-          {card("Avg Conversation Length", `${m.avgConversationSecs}s`)}
+          <Card title="Drop-off Rate" value={`${m.dropoffPct}%`} />
+          <Card title="Qualified Leads" value={m.qualifiedLeads} />
+          <Card
+            title="Avg Conversation Length"
+            value={`${m.avgConversationSecs}s`}
+          />
 
-          {card("Sales Handoff Rate", `${m.handoffRatePct}%`)}
-          {card("Peak Chat Time", m.peakChatTime || "—")}
-          {/* Empty spacer to balance grid if needed */}
+          <Card
+            title="Sales Handoff Rate"
+            value={`${m.handoffRatePct}%`}
+          />
+          <Card title="Peak Chat Time" value={m.peakChatTime || "—"} />
           <div className="hidden md:block" />
         </div>
       </div>
 
       {/* Edit inputs */}
       <div className="mt-6 rounded-2xl border-2 border-black bg-white p-5 shadow">
-        <div className="text-lg font-extrabold mb-3">Update Metrics (demo inputs)</div>
+        <div className="text-lg font-extrabold mb-3">
+          Update Metrics (demo inputs)
+        </div>
 
         <div className="grid gap-4 md:grid-cols-3">
           {/* core six */}
-          <div>
-            <div className={label}>Conversations</div>
-            <input
-              type="number"
-              className={input}
-              value={m.conversations}
-              onChange={(e) => setM({ ...m, conversations: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <div className={label}>Leads</div>
-            <input
-              type="number"
-              className={input}
-              value={m.leads}
-              onChange={(e) => setM({ ...m, leads: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <div className={label}>Appointments</div>
-            <input
-              type="number"
-              className={input}
-              value={m.appointments}
-              onChange={(e) => setM({ ...m, appointments: Number(e.target.value || 0) })}
-            />
-          </div>
+          <Field
+            label="Conversations"
+            value={m.conversations}
+            onChange={(v) => setM({ ...m, conversations: v })}
+          />
+          <Field
+            label="Leads"
+            value={m.leads}
+            onChange={(v) => setM({ ...m, leads: v })}
+          />
+          <Field
+            label="Appointments"
+            value={m.appointments}
+            onChange={(v) => setM({ ...m, appointments: v })}
+          />
 
-          <div>
-            <div className={label}>CSAT %</div>
-            <input
-              type="number"
-              className={input}
-              min={0}
-              max={100}
-              value={m.csatPct}
-              onChange={(e) => setM({ ...m, csatPct: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <div className={label}>Avg Response (secs)</div>
-            <input
-              type="number"
-              className={input}
-              min={0}
-              value={m.avgResponseSecs}
-              onChange={(e) => setM({ ...m, avgResponseSecs: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <div className={label}>Conversion %</div>
-            <input
-              type="number"
-              className={input}
-              min={0}
-              max={100}
-              value={m.conversionPct}
-              onChange={(e) => setM({ ...m, conversionPct: Number(e.target.value || 0) })}
-            />
-          </div>
+          <Field
+            label="CSAT %"
+            value={m.csatPct}
+            min={0}
+            max={100}
+            onChange={(v) => setM({ ...m, csatPct: v })}
+          />
+          <Field
+            label="Avg Response (secs)"
+            value={m.avgResponseSecs}
+            min={0}
+            onChange={(v) => setM({ ...m, avgResponseSecs: v })}
+          />
+          <Field
+            label="Conversion %"
+            value={m.conversionPct}
+            min={0}
+            max={100}
+            onChange={(v) => setM({ ...m, conversionPct: v })}
+          />
 
           {/* pro five */}
+          <Field
+            label="Drop-off %"
+            value={m.dropoffPct}
+            min={0}
+            max={100}
+            onChange={(v) => setM({ ...m, dropoffPct: v })}
+          />
+          <Field
+            label="Qualified Leads"
+            value={m.qualifiedLeads}
+            min={0}
+            onChange={(v) => setM({ ...m, qualifiedLeads: v })}
+          />
+          <Field
+            label="Avg Conversation (secs)"
+            value={m.avgConversationSecs}
+            min={0}
+            onChange={(v) => setM({ ...m, avgConversationSecs: v })}
+          />
+          <Field
+            label="Sales Handoff %"
+            value={m.handoffRatePct}
+            min={0}
+            max={100}
+            onChange={(v) => setM({ ...m, handoffRatePct: v })}
+          />
           <div>
-            <div className={label}>Drop-off %</div>
+            <div className={labelCls}>Peak Chat Time (label)</div>
             <input
-              type="number"
-              className={input}
-              min={0}
-              max={100}
-              value={m.dropoffPct}
-              onChange={(e) => setM({ ...m, dropoffPct: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <div className={label}>Qualified Leads</div>
-            <input
-              type="number"
-              className={input}
-              min={0}
-              value={m.qualifiedLeads}
-              onChange={(e) => setM({ ...m, qualifiedLeads: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <div className={label}>Avg Conversation (secs)</div>
-            <input
-              type="number"
-              className={input}
-              min={0}
-              value={m.avgConversationSecs}
-              onChange={(e) => setM({ ...m, avgConversationSecs: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <div className={label}>Sales Handoff %</div>
-            <input
-              type="number"
-              className={input}
-              min={0}
-              max={100}
-              value={m.handoffRatePct}
-              onChange={(e) => setM({ ...m, handoffRatePct: Number(e.target.value || 0) })}
-            />
-          </div>
-          <div>
-            <div className={label}>Peak Chat Time (label)</div>
-            <input
-              className={input}
+              className={inputCls}
               placeholder="e.g., 2–3 PM"
               value={m.peakChatTime}
               onChange={(e) => setM({ ...m, peakChatTime: e.target.value })}
@@ -333,11 +339,12 @@ export default function Analytics() {
 
         <div className="mt-4 flex items-center gap-2">
           <button
-            onClick={exportCSV}
-            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
-            title="Download as CSV (Excel)"
+            onClick={exportXLSX}
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40 disabled:opacity-60"
+            title="Download as Excel (.xlsx)"
+            disabled={exporting}
           >
-            Export CSV
+            {exporting ? "Exporting…" : "Export XLSX"}
           </button>
           <button
             onClick={save}
@@ -356,5 +363,44 @@ export default function Analytics() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Reusable numeric field component */
+function Field({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  return (
+    <div>
+      <div className={labelCls}>{label}</div>
+      <input
+        type="number"
+        className={inputCls}
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(Number(e.target.value || 0))}
+      />
+    </div>
+  );
+}
+
+/** Simple timestamp for filenames: 2025-10-03_142355 */
+function timeStamp() {
+  const d = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
+    `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
   );
 }
