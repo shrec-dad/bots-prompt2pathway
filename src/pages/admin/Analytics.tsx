@@ -25,8 +25,7 @@ async function ensureXLSX(): Promise<any> {
   if (window.XLSX) return window.XLSX;
   await new Promise<void>((resolve, reject) => {
     const el = document.createElement("script");
-    el.src =
-      "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    el.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
     el.async = true;
     el.onload = () => resolve();
     el.onerror = () => reject(new Error("Failed to load XLSX library"));
@@ -45,16 +44,16 @@ type Metrics = {
   conversations: number;
   leads: number;
   appointments: number;
-  csatPct: number; // 0–100
+  csatPct: number;         // 0–100
   avgResponseSecs: number; // seconds
-  conversionPct: number; // 0–100
+  conversionPct: number;   // 0–100
 
   // pro five
-  dropoffPct: number; // 0–100
-  qualifiedLeads: number; // count
+  dropoffPct: number;        // 0–100
+  qualifiedLeads: number;    // count
   avgConversationSecs: number; // seconds
-  handoffRatePct: number; // 0–100
-  peakChatTime: string; // label like "2–3 PM"
+  handoffRatePct: number;    // 0–100
+  peakChatTime: string;      // e.g., "2–3 PM"
 };
 
 const defaultMetrics: Metrics = {
@@ -77,9 +76,6 @@ const defaultMetrics: Metrics = {
  * ------------------------------------------------------------ */
 const sectionCls =
   "rounded-2xl border-2 border-black bg-gradient-to-r from-violet-100 via-sky-100 to-emerald-100 p-5";
-const labelCls = "text-xs font-bold uppercase text-purple-700";
-const inputCls =
-  "w-full rounded-lg border-2 border-purple-300 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
 const Card = ({
   title,
@@ -94,50 +90,57 @@ const Card = ({
   </div>
 );
 
+/** Simple timestamp for filenames: 2025-10-03_142355 */
+function timeStamp() {
+  const d = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
+    `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+  );
+}
+
 /** ------------------------------------------------------------
  * Component
  * ------------------------------------------------------------ */
 export default function Analytics() {
+  // Load persisted metrics (display-only on this page)
   const initial = useMemo(() => readJSON<Metrics>(AKEY, defaultMetrics), []);
   const [m, setM] = useState<Metrics>(initial);
   const [exporting, setExporting] = useState(false);
 
+  /** Save whatever is currently in state (useful after you sync from backend later) */
   const save = () => {
     writeJSON(AKEY, m);
     alert("Analytics saved.");
   };
 
+  /** Reset to zeros/placeholders */
   const reset = () => {
     if (!confirm("Reset all analytics to defaults?")) return;
     setM({ ...defaultMetrics });
     writeJSON(AKEY, { ...defaultMetrics });
   };
 
-  /** ------------------------------------------------------------
-   * Export a true .xlsx workbook using SheetJS (loaded on demand)
-   * ------------------------------------------------------------ */
+  /** Export a true .xlsx workbook using SheetJS (loaded on demand) */
   const exportXLSX = async () => {
     try {
       setExporting(true);
       const XLSX = await ensureXLSX();
 
-      // Build a 2D array for the sheet
       const rows: Array<[string, string | number]> = [
         ["Metric", "Value"],
-        // core six
         ["Conversations", m.conversations],
         ["Leads Captured", m.leads],
         ["Appointments Booked", m.appointments],
         ["CSAT (Customer Satisfaction Score) %", `${m.csatPct}`],
         ["Avg Response Time (secs)", `${m.avgResponseSecs}`],
         ["Conversion Rate %", `${m.conversionPct}`],
-        // pro five
         ["Drop-off Rate %", `${m.dropoffPct}`],
         ["Qualified Leads", m.qualifiedLeads],
         ["Avg Conversation Length (secs)", `${m.avgConversationSecs}`],
         ["Sales Handoff Rate %", `${m.handoffRatePct}`],
         ["Peak Chat Time", m.peakChatTime || "—"],
-        // meta
         ["Exported At", new Date().toISOString()],
       ];
 
@@ -147,8 +150,7 @@ export default function Analytics() {
 
       const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
       const blob = new Blob([wbout], {
-        type:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
 
       const a = document.createElement("a");
@@ -161,9 +163,7 @@ export default function Analytics() {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error(e);
-      alert(
-        "Export failed. If this persists, your network may block CDN script loads."
-      );
+      alert("Export failed. If this persists, your network may block CDN script loads.");
     } finally {
       setExporting(false);
     }
@@ -215,7 +215,7 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Metric Cards */}
+      {/* Metric Cards (display-only) */}
       <div className={sectionCls}>
         <div className="text-2xl font-extrabold mb-4">Metrics</div>
 
@@ -225,14 +225,8 @@ export default function Analytics() {
           <Card title="Leads Captured" value={m.leads} />
           <Card title="Appointments Booked" value={m.appointments} />
 
-          <Card
-            title="CSAT (Customer Satisfaction Score)"
-            value={`${m.csatPct}%`}
-          />
-          <Card
-            title="Avg Response Time"
-            value={`${m.avgResponseSecs}s`}
-          />
+          <Card title="CSAT (Customer Satisfaction Score)" value={`${m.csatPct}%`} />
+          <Card title="Avg Response Time" value={`${m.avgResponseSecs}s`} />
           <Card title="Conversion Rate" value={`${m.conversionPct}%`} />
         </div>
 
@@ -240,167 +234,17 @@ export default function Analytics() {
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <Card title="Drop-off Rate" value={`${m.dropoffPct}%`} />
           <Card title="Qualified Leads" value={m.qualifiedLeads} />
-          <Card
-            title="Avg Conversation Length"
-            value={`${m.avgConversationSecs}s`}
-          />
+          <Card title="Avg Conversation Length" value={`${m.avgConversationSecs}s`} />
 
-          <Card
-            title="Sales Handoff Rate"
-            value={`${m.handoffRatePct}%`}
-          />
+          <Card title="Sales Handoff Rate" value={`${m.handoffRatePct}%`} />
           <Card title="Peak Chat Time" value={m.peakChatTime || "—"} />
           <div className="hidden md:block" />
         </div>
       </div>
 
-      {/* Edit inputs */}
-      <div className="mt-6 rounded-2xl border-2 border-black bg-white p-5 shadow">
-        <div className="text-lg font-extrabold mb-3">
-          Update Metrics (demo inputs)
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {/* core six */}
-          <Field
-            label="Conversations"
-            value={m.conversations}
-            onChange={(v) => setM({ ...m, conversations: v })}
-          />
-          <Field
-            label="Leads"
-            value={m.leads}
-            onChange={(v) => setM({ ...m, leads: v })}
-          />
-          <Field
-            label="Appointments"
-            value={m.appointments}
-            onChange={(v) => setM({ ...m, appointments: v })}
-          />
-
-          <Field
-            label="CSAT %"
-            value={m.csatPct}
-            min={0}
-            max={100}
-            onChange={(v) => setM({ ...m, csatPct: v })}
-          />
-          <Field
-            label="Avg Response (secs)"
-            value={m.avgResponseSecs}
-            min={0}
-            onChange={(v) => setM({ ...m, avgResponseSecs: v })}
-          />
-          <Field
-            label="Conversion %"
-            value={m.conversionPct}
-            min={0}
-            max={100}
-            onChange={(v) => setM({ ...m, conversionPct: v })}
-          />
-
-          {/* pro five */}
-          <Field
-            label="Drop-off %"
-            value={m.dropoffPct}
-            min={0}
-            max={100}
-            onChange={(v) => setM({ ...m, dropoffPct: v })}
-          />
-          <Field
-            label="Qualified Leads"
-            value={m.qualifiedLeads}
-            min={0}
-            onChange={(v) => setM({ ...m, qualifiedLeads: v })}
-          />
-          <Field
-            label="Avg Conversation (secs)"
-            value={m.avgConversationSecs}
-            min={0}
-            onChange={(v) => setM({ ...m, avgConversationSecs: v })}
-          />
-          <Field
-            label="Sales Handoff %"
-            value={m.handoffRatePct}
-            min={0}
-            max={100}
-            onChange={(v) => setM({ ...m, handoffRatePct: v })}
-          />
-          <div>
-            <div className={labelCls}>Peak Chat Time (label)</div>
-            <input
-              className={inputCls}
-              placeholder="e.g., 2–3 PM"
-              value={m.peakChatTime}
-              onChange={(e) => setM({ ...m, peakChatTime: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-2">
-          <button
-            onClick={exportXLSX}
-            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40 disabled:opacity-60"
-            title="Download as Excel (.xlsx)"
-            disabled={exporting}
-          >
-            {exporting ? "Exporting…" : "Export XLSX"}
-          </button>
-          <button
-            onClick={save}
-            className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-            title="Save metrics to your browser"
-          >
-            Save
-          </button>
-          <button
-            onClick={reset}
-            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
-            title="Reset all metrics"
-          >
-            Reset
-          </button>
-        </div>
-      </div>
+      {/* Note: values are display-only here.
+         When you wire a backend or event tracker, update state `m` via effects
+         or props and then `Save` will persist locally; `Export XLSX` will reflect it. */}
     </div>
-  );
-}
-
-/** Reusable numeric field component */
-function Field({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  min?: number;
-  max?: number;
-}) {
-  return (
-    <div>
-      <div className={labelCls}>{label}</div>
-      <input
-        type="number"
-        className={inputCls}
-        value={value}
-        min={min}
-        max={max}
-        onChange={(e) => onChange(Number(e.target.value || 0))}
-      />
-    </div>
-  );
-}
-
-/** Simple timestamp for filenames: 2025-10-03_142355 */
-function timeStamp() {
-  const d = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
-    `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
   );
 }
