@@ -27,6 +27,27 @@ function uid() {
 }
 
 /* =========================
+   XLSX loader (on-demand)
+   ========================= */
+declare global { interface Window { XLSX: any; } }
+
+async function ensureXLSX(): Promise<any> {
+  if (window.XLSX) return window.XLSX;
+  await new Promise<void>((resolve, reject) => {
+    const el = document.createElement("script");
+    el.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    el.async = true;
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error("Failed to load XLSX library"));
+    document.head.appendChild(el);
+  });
+  return window.XLSX;
+}
+
+const ts = () =>
+  new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+
+/* =========================
    Style helpers
    ========================= */
 
@@ -84,12 +105,15 @@ export default function Clients() {
     setJSON(KEY, next);
   }
 
-  /* ---------- CSV Download ---------- */
-  function downloadCsv() {
+  /* ---------- Excel (.xlsx) Download ---------- */
+  async function downloadXlsx() {
     if (!clients.length) {
       alert("No clients to export yet.");
       return;
     }
+
+    const XLSX = await ensureXLSX();
+
     const headers = [
       "id",
       "companyName",
@@ -103,37 +127,38 @@ export default function Clients() {
       "defaultBot",
       "notes",
     ];
+
     const rows = clients.map((c) => [
       c.id,
       c.companyName || "",
       c.name || "",
       c.email || "",
       c.plan || "",
-      String(c.bots ?? 0),
-      String(c.leads ?? 0),
+      c.bots ?? 0,
+      c.leads ?? 0,
       c.status,
       c.lastActivity || "",
       c.defaultBot || "",
       (c.notes || "").replace(/\n/g, " "),
     ]);
 
-    // Simple CSV escape
-    const esc = (val: string) =>
-      /[",\n]/.test(val) ? `"${val.replace(/"/g, '""')}"` : val;
+    const aoa = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Clients");
 
-    const csv =
-      headers.join(",") +
-      "\n" +
-      rows.map((r) => r.map(esc).join(",")).join("\n");
+    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([out], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `clients_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `clients_${ts()}.xlsx`;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
+    a.remove();
     URL.revokeObjectURL(url);
   }
 
@@ -224,8 +249,13 @@ export default function Clients() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className={actionBtn} onClick={downloadCsv} aria-label="Download clients CSV">
-            ⬇︎ Download CSV
+          <button
+            className={actionBtn}
+            onClick={downloadXlsx}
+            aria-label="Download clients Excel"
+            title="Download Excel (.xlsx)"
+          >
+            ⬇︎ Export XLSX
           </button>
           <button className={actionBtn} onClick={() => setOpenAdd(true)}>
             + Add Client
