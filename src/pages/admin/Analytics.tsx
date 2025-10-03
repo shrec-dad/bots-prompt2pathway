@@ -1,166 +1,359 @@
-// src/pages/admin/Analytics.tsx
 import React, { useMemo, useState } from "react";
-import { getJSON, setJSON } from "@/lib/storage";
 
-/** ------------------------------------------------------------
- *  Types & storage helpers
- *  ------------------------------------------------------------ */
+/** Local storage helpers (kept inline so file is self-contained) */
+const readJSON = <T,>(key: string, fallback: T): T => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as T;
+  } catch {}
+  return fallback;
+};
+const writeJSON = (key: string, value: any) =>
+  localStorage.setItem(key, JSON.stringify(value));
+
+/** Storage key for analytics */
+const AKEY = "analytics.metrics.v2";
+
+/** Metric type (core + new pro cards) */
 type Metrics = {
+  // core six
   conversations: number;
   leads: number;
   appointments: number;
-  csat: number; // percentage 0-100
-  avgResponseSecs: number; // seconds
-  conversionPct: number; // percentage 0-100
+  csatPct: number;            // 0–100
+  avgResponseSecs: number;    // seconds
+  conversionPct: number;      // 0–100
+
+  // ✨ new five
+  dropoffPct: number;         // 0–100
+  qualifiedLeads: number;     // count
+  avgConversationSecs: number;// seconds
+  handoffRatePct: number;     // 0–100
+  peakChatTime: string;       // label like "2–3 PM"
 };
 
-const KEY = "analytics.metrics.v1";
-
+/** Default data (safe placeholders) */
 const defaultMetrics: Metrics = {
   conversations: 0,
   leads: 0,
   appointments: 0,
-  csat: 0,
+  csatPct: 0,
   avgResponseSecs: 0,
   conversionPct: 0,
+
+  dropoffPct: 0,
+  qualifiedLeads: 0,
+  avgConversationSecs: 0,
+  handoffRatePct: 0,
+  peakChatTime: "—",
 };
 
-/** ------------------------------------------------------------
- *  Small presentational card
- *  ------------------------------------------------------------ */
-function MetricCard({
-  title,
-  value,
-  suffix,
-}: {
-  title: string;
-  value: string | number;
-  suffix?: string;
-}) {
+/** Small helper for CSV escaping */
+function csvEscape(v: string | number) {
+  const s = String(v ?? "");
+  // If it contains comma, quote or newline, wrap in quotes and escape quotes.
+  if (/[",\n]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+/** Timestamp for filenames: 2025-03-01_142355 */
+function stamp() {
+  const d = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
   return (
-    <div
-      className="rounded-2xl border-2 border-black bg-white p-5 shadow"
-      style={{ boxShadow: "6px 6px 0 #000" }}
-    >
-      <div className="text-lg font-extrabold tracking-tight">{title}</div>
-      <div className="mt-2 text-4xl font-extrabold">
-        {value}
-        {suffix ? <span className="text-2xl font-extrabold ml-1">{suffix}</span> : null}
-      </div>
-    </div>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
+    `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
   );
 }
 
-/** ------------------------------------------------------------
- *  Page
- *  ------------------------------------------------------------ */
 export default function Analytics() {
-  const initial = useMemo<Metrics>(
-    () => getJSON<Metrics>(KEY, defaultMetrics),
+  const initial = useMemo(
+    () => readJSON<Metrics>(AKEY, defaultMetrics),
     []
   );
+  const [m, setM] = useState<Metrics>(initial);
 
-  const [metrics, setMetrics] = useState<Metrics>(initial);
-  const [saving, setSaving] = useState(false);
-
-  const save = (m: Metrics) => {
-    setJSON(KEY, m);
-    setMetrics(m);
+  const save = () => {
+    writeJSON(AKEY, m);
+    alert("Analytics saved.");
   };
 
-  const onReset = () => {
-    const cleared = { ...defaultMetrics };
-    save(cleared);
+  const reset = () => {
+    if (!confirm("Reset all analytics to defaults?")) return;
+    setM({ ...defaultMetrics });
+    writeJSON(AKEY, { ...defaultMetrics });
   };
+
+  /** Export as CSV (Excel-compatible). Two columns: Metric, Value. */
+  const exportCSV = () => {
+    const rows: Array<[string, string | number]> = [
+      // core six
+      ["Conversations", m.conversations],
+      ["Leads Captured", m.leads],
+      ["Appointments Booked", m.appointments],
+      ["CSAT (Customer Satisfaction Score) %", `${m.csatPct}`],
+      ["Avg Response Time (secs)", `${m.avgResponseSecs}`],
+      ["Conversion Rate %", `${m.conversionPct}`],
+      // pro five
+      ["Drop-off Rate %", `${m.dropoffPct}`],
+      ["Qualified Leads", m.qualifiedLeads],
+      ["Avg Conversation Length (secs)", `${m.avgConversationSecs}`],
+      ["Sales Handoff Rate %", `${m.handoffRatePct}`],
+      ["Peak Chat Time", m.peakChatTime || "—"],
+      // meta
+      ["Exported At", new Date().toISOString()],
+    ];
+
+    const header = ["Metric", "Value"];
+    const csv =
+      header.map(csvEscape).join(",") +
+      "\n" +
+      rows.map((r) => r.map(csvEscape).join(",")).join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analytics-${stamp()}.csv`; // Excel will open this directly
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const card = (title: React.ReactNode, value: React.ReactNode) => (
+    <div className="rounded-2xl border-2 border-black bg-white p-5 shadow-sm">
+      <div className="text-lg font-extrabold leading-tight">{title}</div>
+      <div className="mt-2 text-4xl font-black">{value}</div>
+    </div>
+  );
+
+  const section =
+    "rounded-2xl border-2 border-black bg-gradient-to-r from-violet-100 via-sky-100 to-emerald-100 p-5";
+
+  const label = "text-xs font-bold uppercase text-purple-700";
+  const input =
+    "w-full rounded-lg border-2 border-purple-300 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
   return (
     <div
-      className="p-6 rounded-2xl border-2 border-purple-200"
+      className="p-6 rounded-2xl border-2 border-purple-200 shadow-lg"
       style={{
         background:
-          "linear-gradient(135deg, #ffeef8 0%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
+          "linear-gradient(135deg,#ffeef8 0%,#f3e7fc 25%,#e7f0ff 50%,#e7fcf7 75%,#fff9e7 100%)",
       }}
     >
       {/* Header */}
-      <div className="rounded-2xl border-2 border-black bg-white shadow mb-6">
-        <div
-          className="rounded-t-2xl p-5 text-white"
-          style={{
-            background:
-              "linear-gradient(90deg, rgba(168,85,247,0.9) 0%, rgba(99,102,241,0.9) 50%, rgba(45,212,191,0.9) 100%)",
-          }}
-        >
-          <div className="text-3xl font-extrabold">Analytics</div>
-          <div className="text-sm opacity-90">
-            Track performance, usage, and engagement metrics.
+      <div className="rounded-2xl border-2 border-black bg-white p-5 shadow mb-6">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-3xl font-extrabold">Analytics</div>
+            <div className="text-foreground/80 mt-1">
+              Track performance, usage, and engagement metrics.
+            </div>
           </div>
-        </div>
 
-        {/* Toolbar */}
-        <div className="p-4 flex items-center gap-3">
-          <button
-            className="rounded-xl px-4 py-2 font-bold ring-1 ring-black bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
-            onClick={() => {
-              setSaving(true);
-              setTimeout(() => setSaving(false), 500);
-              save(metrics);
-            }}
-          >
-            {saving ? "Saved" : "Save Snapshot"}
-          </button>
-
-          <button
-            className="ml-auto rounded-xl px-4 py-2 font-bold text-white"
-            style={{
-              background:
-                "linear-gradient(90deg, #ef4444 0%, #f59e0b 100%)",
-              boxShadow: "0 3px 0 #000",
-            }}
-            onClick={onReset}
-            title="Clear all metrics to zero"
-          >
-            Reset Metrics
-          </button>
+          {/* Export / Save / Reset controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportCSV}
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+              title="Download as CSV (Excel)"
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={save}
+              className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+              title="Save metrics to your browser"
+            >
+              Save
+            </button>
+            <button
+              onClick={reset}
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+              title="Reset all metrics"
+            >
+              Reset
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Metric grid */}
-      <div
-        className="rounded-2xl border-2 border-black p-5 shadow"
-        style={{
-          background:
-            "linear-gradient(135deg, rgba(167,139,250,0.25) 0%, rgba(147,197,253,0.25) 50%, rgba(134,239,172,0.25) 100%)",
-          boxShadow: "8px 8px 0 #000",
-        }}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <MetricCard title="Conversations" value={metrics.conversations} />
-          <MetricCard title="Leads Captured" value={metrics.leads} />
-          <MetricCard title="Appointments Booked" value={metrics.appointments} />
+      {/* Metric Cards */}
+      <div className={section}>
+        <div className="text-2xl font-extrabold mb-4">Metrics</div>
 
-          <MetricCard
-            title="CSAT (Customer Satisfaction Score)"
-            value={metrics.csat}
-            suffix="%"
-          />
-          <MetricCard
-            title="Avg Response Time"
-            value={metrics.avgResponseSecs}
-            suffix="s"
-          />
-          <MetricCard
-            title="Conversion Rate"
-            value={metrics.conversionPct}
-            suffix="%"
-          />
+        {/* Core six */}
+        <div className="grid gap-4 md:grid-cols-3">
+          {card("Conversations", m.conversations)}
+          {card("Leads Captured", m.leads)}
+          {card("Appointments Booked", m.appointments)}
+
+          {card("CSAT (Customer Satisfaction Score)", `${m.csatPct}%`)}
+          {card("Avg Response Time", `${m.avgResponseSecs}s`)}
+          {card("Conversion Rate", `${m.conversionPct}%`)}
         </div>
 
-        {/* NOTE:
-            This page now shows display-only metric cards.
-            Data stays in localStorage using the same storage helpers.
-            The Reset button clears everything back to zero.
-            When you wire real data later, call `save({...})` with live values.
-        */}
+        {/* New Pro Five */}
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {card("Drop-off Rate", `${m.dropoffPct}%`)}
+          {card("Qualified Leads", m.qualifiedLeads)}
+          {card("Avg Conversation Length", `${m.avgConversationSecs}s`)}
+
+          {card("Sales Handoff Rate", `${m.handoffRatePct}%`)}
+          {card("Peak Chat Time", m.peakChatTime || "—")}
+          {/* Empty spacer to balance grid if needed */}
+          <div className="hidden md:block" />
+        </div>
+      </div>
+
+      {/* Edit inputs */}
+      <div className="mt-6 rounded-2xl border-2 border-black bg-white p-5 shadow">
+        <div className="text-lg font-extrabold mb-3">Update Metrics (demo inputs)</div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* core six */}
+          <div>
+            <div className={label}>Conversations</div>
+            <input
+              type="number"
+              className={input}
+              value={m.conversations}
+              onChange={(e) => setM({ ...m, conversations: Number(e.target.value || 0) })}
+            />
+          </div>
+          <div>
+            <div className={label}>Leads</div>
+            <input
+              type="number"
+              className={input}
+              value={m.leads}
+              onChange={(e) => setM({ ...m, leads: Number(e.target.value || 0) })}
+            />
+          </div>
+          <div>
+            <div className={label}>Appointments</div>
+            <input
+              type="number"
+              className={input}
+              value={m.appointments}
+              onChange={(e) => setM({ ...m, appointments: Number(e.target.value || 0) })}
+            />
+          </div>
+
+          <div>
+            <div className={label}>CSAT %</div>
+            <input
+              type="number"
+              className={input}
+              min={0}
+              max={100}
+              value={m.csatPct}
+              onChange={(e) => setM({ ...m, csatPct: Number(e.target.value || 0) })}
+            />
+          </div>
+          <div>
+            <div className={label}>Avg Response (secs)</div>
+            <input
+              type="number"
+              className={input}
+              min={0}
+              value={m.avgResponseSecs}
+              onChange={(e) => setM({ ...m, avgResponseSecs: Number(e.target.value || 0) })}
+            />
+          </div>
+          <div>
+            <div className={label}>Conversion %</div>
+            <input
+              type="number"
+              className={input}
+              min={0}
+              max={100}
+              value={m.conversionPct}
+              onChange={(e) => setM({ ...m, conversionPct: Number(e.target.value || 0) })}
+            />
+          </div>
+
+          {/* pro five */}
+          <div>
+            <div className={label}>Drop-off %</div>
+            <input
+              type="number"
+              className={input}
+              min={0}
+              max={100}
+              value={m.dropoffPct}
+              onChange={(e) => setM({ ...m, dropoffPct: Number(e.target.value || 0) })}
+            />
+          </div>
+          <div>
+            <div className={label}>Qualified Leads</div>
+            <input
+              type="number"
+              className={input}
+              min={0}
+              value={m.qualifiedLeads}
+              onChange={(e) => setM({ ...m, qualifiedLeads: Number(e.target.value || 0) })}
+            />
+          </div>
+          <div>
+            <div className={label}>Avg Conversation (secs)</div>
+            <input
+              type="number"
+              className={input}
+              min={0}
+              value={m.avgConversationSecs}
+              onChange={(e) => setM({ ...m, avgConversationSecs: Number(e.target.value || 0) })}
+            />
+          </div>
+          <div>
+            <div className={label}>Sales Handoff %</div>
+            <input
+              type="number"
+              className={input}
+              min={0}
+              max={100}
+              value={m.handoffRatePct}
+              onChange={(e) => setM({ ...m, handoffRatePct: Number(e.target.value || 0) })}
+            />
+          </div>
+          <div>
+            <div className={label}>Peak Chat Time (label)</div>
+            <input
+              className={input}
+              placeholder="e.g., 2–3 PM"
+              value={m.peakChatTime}
+              onChange={(e) => setM({ ...m, peakChatTime: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            onClick={exportCSV}
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+            title="Download as CSV (Excel)"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={save}
+            className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+            title="Save metrics to your browser"
+          >
+            Save
+          </button>
+          <button
+            onClick={reset}
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+            title="Reset all metrics"
+          >
+            Reset
+          </button>
+        </div>
       </div>
     </div>
   );
