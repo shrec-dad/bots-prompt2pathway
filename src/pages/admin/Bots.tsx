@@ -143,18 +143,18 @@ export default function Bots() {
 
   // Assign bot to client (stored in client.notes for demo)
   function assignBotToClient(botId: string, clientId: string) {
-    const clientList = getJSON<any[]>(CLIENTS_KEY, []);
-    const updated = clientList.map((c) =>
-      c.id === clientId
-        ? {
-            ...c,
-            notes: (c.notes || "") + `\nAssigned Bot: ${botId}`,
-          }
-        : c
-    );
-    setJSON(CLIENTS_KEY, updated);
-    alert("Bot assigned to client!");
-  }
+  const clientList = getJSON<any[]>(CLIENTS_KEY, []);
+  const updated = clientList.map((c) =>
+    c.id === clientId
+      ? {
+          ...c,
+          assignedBots: [...(c.assignedBots || []), botId],
+        }
+      : c
+  );
+  setJSON(CLIENTS_KEY, updated);
+  alert("Bot assigned to client!");
+}
 
   return (
     <div className="w-full h-full">
