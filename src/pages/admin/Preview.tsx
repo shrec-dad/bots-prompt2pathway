@@ -1,99 +1,94 @@
 // src/pages/admin/Preview.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
-import { useAdminStore } from "@/lib/AdminStore";
-import { listInstances, createInstance } from "@/lib/instances"; // <-- uses your instances util
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
+type Shape = "circle" | "rounded" | "square" | "oval" | "chat" | "badge";
+type ImageFit = "cover" | "contain" | "center";
 
-type SavedInstance = {
-  id: string;
-  name?: string;
-  bot?: string;
-  mode?: string;
-  createdAt?: number;
-  // appearance we may persist
-  position?: Pos;
-  size?: number;
-  color?: string;
-  image?: string;
-  shape?: "circle" | "rounded" | "square" | "oval";
-  imageFit?: "cover" | "contain" | "fill" | "center" | "none";
-  label?: string;
-  labelColor?: string;
-  avatar?: string;
+// Branding store (used by /widget)
+const BRAND_KEY = "brandingSettings";
+
+type Branding = {
+  logoDataUrl?: string;
+  primaryColor: string;
+  secondaryColor: string;
+  fontFamily: string;
+  chatBubbleImage?: string;
+  chatBubbleColor: string;
+  chatBubbleSize: number;
+  chatBubblePosition: Pos;
+  // New optional fields (backwards compatible)
+  chatBubbleShape?: Shape;
+  chatBubbleLabel?: string;
+  chatBubbleLabelColor?: string;
+  chatBubbleImageFit?: ImageFit;
 };
 
-export default function Preview() {
-  /* ------------------------------------------------------------------ */
-  /* 1) Data sources                                                     */
-  /* ------------------------------------------------------------------ */
-  const { bots } = useAdminStore();
-  const [instances, setInstances] = useState<SavedInstance[]>([]);
-
-  const refreshInstances = () => {
-    try {
-      const list = listInstances?.() ?? [];
-      setInstances(
-        list.map((i: any) => ({
-          id: String(i.id),
-          name: i.name ?? i.title ?? i.id,
-          bot: i.bot,
-          mode: i.mode,
-          createdAt: i.createdAt,
-          position: i.position,
-          size: i.size,
-          color: i.color,
-          image: i.image,
-          shape: i.shape,
-          imageFit: i.imageFit,
-          label: i.label,
-          labelColor: i.labelColor,
-          avatar: i.avatar,
-        }))
-      );
-    } catch {
-      setInstances([]);
-    }
+function getBranding(): Branding {
+  try {
+    const raw = localStorage.getItem(BRAND_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {
+    primaryColor: "#7aa8ff",
+    secondaryColor: "#76c19a",
+    fontFamily: "Inter, system-ui, Arial, sans-serif",
+    chatBubbleColor: "#7aa8ff",
+    chatBubbleSize: 56,
+    chatBubblePosition: "bottom-left",
+    chatBubbleShape: "circle",
+    chatBubbleLabel: "Chat",
+    chatBubbleLabelColor: "#ffffff",
+    chatBubbleImageFit: "cover",
   };
+}
 
-  useEffect(() => {
-    refreshInstances();
-  }, []);
+function setBranding(next: Partial<Branding>) {
+  const prev = getBranding();
+  const merged = { ...prev, ...next };
+  localStorage.setItem(BRAND_KEY, JSON.stringify(merged));
+  return merged as Branding;
+}
 
-  /* ------------------------------------------------------------------ */
-  /* 2) Preview controls                                                 */
-  /* ------------------------------------------------------------------ */
-  // If an instance is selected it overrides botId for embed/preview
+export default function Preview() {
+  // ---- Demo bot/instance controls (unchanged behavior) ----
+  const [botId, setBotId] = useState("waitlist-bot");
   const [instId, setInstId] = useState<string>("");
 
-  // default bot (from AdminStore list)
-  const defaultBot = bots?.[0]?.id ?? "waitlist-bot";
-  const [botId, setBotId] = useState<string>(defaultBot);
-
+  // ---- Bubble/Widget visual controls (now persisted) ----
+  const b = useMemo(getBranding, []);
   const [mode, setMode] = useState<Mode>("popup");
-  const [pos, setPos] = useState<Pos>("bottom-left");
-  const [size, setSize] = useState(56);
-  const [color, setColor] = useState<string>("");
-  const [img, setImg] = useState<string>("");
-
-  // bubble visuals
-  const [shape, setShape] = useState<"circle" | "rounded" | "square" | "oval">("circle");
-  const [label, setLabel] = useState("Chat");
-  const [labelColor, setLabelColor] = useState("#ffffff");
-  const [imageFit, setImageFit] = useState<"cover" | "contain" | "fill" | "center" | "none">(
-    "cover"
+  const [pos, setPos] = useState<Pos>(b.chatBubblePosition ?? "bottom-left");
+  const [size, setSize] = useState<number>(b.chatBubbleSize ?? 56);
+  const [color, setColor] = useState<string>(b.chatBubbleColor ?? "#7aa8ff");
+  const [img, setImg] = useState<string>(b.chatBubbleImage ?? "");
+  const [shape, setShape] = useState<Shape>(b.chatBubbleShape ?? "circle");
+  const [imageFit, setImageFit] = useState<ImageFit>(
+    b.chatBubbleImageFit ?? "cover"
   );
-  const [avatar, setAvatar] = useState<string>("");
+  const [label, setLabel] = useState<string>(b.chatBubbleLabel ?? "Chat");
+  const [labelColor, setLabelColor] = useState<string>(
+    b.chatBubbleLabelColor ?? "#ffffff"
+  );
 
-  // demo modal
   const [open, setOpen] = useState(true);
   const [step, setStep] = useState(0);
+  const [savedNote, setSavedNote] = useState<null | string>(null);
+
+  useEffect(() => {
+    if (!savedNote) return;
+    const t = setTimeout(() => setSavedNote(null), 1200);
+    return () => clearTimeout(t);
+  }, [savedNote]);
+
   const gradientHeader =
     "bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white";
+
   const next = () => setStep((s) => Math.min(s + 1, 3));
   const back = () => setStep((s) => Math.max(s - 1, 0));
+
   const title = useMemo(() => {
     switch (step) {
       case 0:
@@ -107,27 +102,23 @@ export default function Preview() {
     }
   }, [step]);
 
-  /* ------------------------------------------------------------------ */
-  /* 3) Embed URL                                                        */
-  /* ------------------------------------------------------------------ */
+  // Instance-aware /widget URL preview
   const widgetSrc = useMemo(() => {
     const qp = new URLSearchParams();
-
     if (instId.trim()) qp.set("inst", instId.trim());
     else qp.set("bot", botId);
 
     qp.set("position", pos);
     qp.set("size", String(size));
+    qp.set("shape", shape);
+    qp.set("imageFit", imageFit);
+    if (label.trim()) qp.set("label", label.trim());
+    if (labelColor.trim()) qp.set("labelColor", labelColor.trim());
     if (color.trim()) qp.set("color", color.trim());
     if (img.trim()) qp.set("image", img.trim());
-    if (shape) qp.set("shape", shape);
-    if (label) qp.set("label", label);
-    if (labelColor) qp.set("labelColor", labelColor);
-    if (imageFit) qp.set("imageFit", imageFit);
-    if (avatar.trim()) qp.set("avatar", avatar.trim());
 
     return `/widget?${qp.toString()}`;
-  }, [instId, botId, pos, size, color, img, shape, label, labelColor, imageFit, avatar]);
+  }, [instId, botId, pos, size, color, img, label, labelColor, shape, imageFit]);
 
   const embedIframe = `<iframe
   src="${widgetSrc}"
@@ -136,120 +127,108 @@ export default function Preview() {
   referrerpolicy="no-referrer-when-downgrade"
 ></iframe>`;
 
-  const activeBotName =
-    bots?.find((b) => b.id === botId)?.name ??
-    botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase());
+  // ---- Save / Reset ----
+  const onSave = () => {
+    setBranding({
+      chatBubblePosition: pos,
+      chatBubbleSize: size,
+      chatBubbleColor: color,
+      chatBubbleImage: img || undefined,
+      chatBubbleShape: shape,
+      chatBubbleImageFit: imageFit,
+      chatBubbleLabel: label,
+      chatBubbleLabelColor: labelColor,
+    });
+    setSavedNote("Saved!");
+  };
 
-  /* ------------------------------------------------------------------ */
-  /* 4) Create instance from current preview                            */
-  /* ------------------------------------------------------------------ */
-  async function onCreateInstanceFromPreview() {
-    try {
-      const defaultName =
-        (bots?.find((b) => b.id === botId)?.name ?? botId).replace(/-/g, " ") + " (Preview)";
-      const name = window.prompt("Name this instance:", defaultName);
-      if (!name) return;
+  const onReset = () => {
+    const d = {
+      primaryColor: "#7aa8ff",
+      secondaryColor: "#76c19a",
+      fontFamily: "Inter, system-ui, Arial, sans-serif",
+      chatBubbleColor: "#7aa8ff",
+      chatBubbleSize: 56,
+      chatBubblePosition: "bottom-left" as Pos,
+      chatBubbleShape: "circle" as Shape,
+      chatBubbleLabel: "Chat",
+      chatBubbleLabelColor: "#ffffff",
+      chatBubbleImageFit: "cover" as ImageFit,
+      chatBubbleImage: "",
+    };
+    setBranding(d);
+    setPos(d.chatBubblePosition);
+    setSize(d.chatBubbleSize);
+    setColor(d.chatBubbleColor);
+    setImg(d.chatBubbleImage || "");
+    setShape(d.chatBubbleShape);
+    setImageFit(d.chatBubbleImageFit);
+    setLabel(d.chatBubbleLabel);
+    setLabelColor(d.chatBubbleLabelColor);
+    setSavedNote("Reset");
+  };
 
-      const payload = {
-        // identity
-        name,
-        bot: instId ? undefined : botId, // if you had an inst selected, we still capture visuals; bot optional
-        mode,
-        // visuals / placement
-        position: pos,
-        size,
-        color,
-        image: img,
-        shape,
-        imageFit,
-        label,
-        labelColor,
-        avatar,
-      };
-
-      const created = createInstance?.(payload as any);
-      if (!created || !created.id) {
-        alert("Could not create instance. Please try again.");
-        return;
-      }
-
-      // refresh list, select it, and clear bot entry (because inst overrides)
-      refreshInstances();
-      setInstId(created.id);
-
-      alert(`Instance "${name}" created! It is now selected in the preview.`);
-    } catch (e) {
-      console.error(e);
-      alert("Something went wrong while creating the instance.");
-    }
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* 5) Render                                                           */
-  /* ------------------------------------------------------------------ */
   return (
     <div className="p-6 space-y-6">
       {/* Controls */}
       <div className="rounded-2xl border bg-white shadow-sm">
         <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
-          <div className="text-xl font-extrabold">Widget Preview</div>
-          <div className="text-sm opacity-90">
-            Choose a <b>Bot</b> or a saved <b>Instance</b>, then tweak widget appearance.
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xl font-extrabold">Widget Preview</div>
+              <div className="text-sm opacity-90">
+                Tune the customer-facing widget style.
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
+                onClick={onSave}
+                aria-label="Save widget look"
+              >
+                Save
+              </button>
+              <button
+                className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-white hover:bg-gray-50"
+                onClick={onReset}
+                aria-label="Reset to defaults"
+              >
+                Reset
+              </button>
+            </div>
           </div>
+          {savedNote && (
+            <div className="mt-2 text-xs font-bold">{savedNote}</div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-          {/* Instance Picker */}
+          {/* Instance (optional) & Bot ID */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Instance (overrides bot)</label>
-            <div className="flex gap-2">
-              <select
-                className="w-full rounded-lg border px-3 py-2"
-                value={instId}
-                onChange={(e) => setInstId(e.target.value)}
-                title="Pick a saved Instance to preview"
-              >
-                <option value="">— None (use Bot) —</option>
-                {instances.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name || i.id} {i.bot ? `• ${i.bot}` : ""} {i.mode ? `• ${i.mode}` : ""}
-                  </option>
-                ))}
-              </select>
-              {instId && (
-                <button
-                  className="rounded-lg border px-3 py-2 text-sm font-bold"
-                  onClick={() => setInstId("")}
-                  title="Clear instance selection"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
+            <label className="text-sm font-semibold">Instance ID (optional)</label>
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="inst_abc123…"
+              value={instId}
+              onChange={(e) => setInstId(e.target.value)}
+            />
             <div className="text-xs text-muted-foreground">
-              If an instance is selected, the Bot dropdown is disabled.
+              If provided, the instance overrides the Bot ID.
             </div>
           </div>
 
-          {/* Bot Picker */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Bot</label>
-            <select
+            <label className="text-sm font-semibold">Bot ID</label>
+            <input
               className="w-full rounded-lg border px-3 py-2"
               value={botId}
               onChange={(e) => setBotId(e.target.value)}
               disabled={!!instId.trim()}
-              title={instId.trim() ? "Instance is set; Bot is ignored" : "Choose a template bot"}
-            >
-              {bots?.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              )) || <option value={botId}>{activeBotName}</option>}
-            </select>
+              title={instId.trim() ? "Instance is set; Bot ID ignored" : "Enter a bot id"}
+            />
           </div>
 
-          {/* Mode / Position / Size */}
+          {/* Mode & Position */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Mode</label>
             <select
@@ -275,6 +254,7 @@ export default function Preview() {
             </select>
           </div>
 
+          {/* Size & Shape */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Size (px)</label>
             <input
@@ -287,14 +267,54 @@ export default function Preview() {
             />
           </div>
 
-          {/* Visuals */}
           <div className="space-y-2">
+            <label className="text-sm font-semibold">Bubble Shape</label>
+            <select
+              className="w-full rounded-lg border px-3 py-2"
+              value={shape}
+              onChange={(e) => setShape(e.target.value as Shape)}
+            >
+              <option value="circle">circle</option>
+              <option value="rounded">rounded</option>
+              <option value="square">square</option>
+              <option value="oval">oval</option>
+              <option value="chat">chat (speech)</option>
+              <option value="badge">badge</option>
+            </select>
+          </div>
+
+          {/* Image & Fit */}
+          <div className="space-y-2 md:col-span-2">
             <label className="text-sm font-semibold">Bubble Image URL (optional)</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
               placeholder="https://example.com/icon.png"
               value={img}
               onChange={(e) => setImg(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Image Fit</label>
+            <select
+              className="w-full rounded-lg border px-3 py-2"
+              value={imageFit}
+              onChange={(e) => setImageFit(e.target.value as ImageFit)}
+            >
+              <option value="cover">cover (fill bubble)</option>
+              <option value="contain">contain (fit inside)</option>
+              <option value="center">center (no scale)</option>
+            </select>
+          </div>
+
+          {/* Label & Colors */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Bubble Label</label>
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="Chat"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
             />
           </div>
 
@@ -309,44 +329,6 @@ export default function Preview() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Bubble Shape</label>
-            <select
-              className="w-full rounded-lg border px-3 py-2"
-              value={shape}
-              onChange={(e) => setShape(e.target.value as any)}
-            >
-              <option value="circle">circle</option>
-              <option value="rounded">rounded</option>
-              <option value="square">square</option>
-              <option value="oval">oval</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Image Fit</label>
-            <select
-              className="w-full rounded-lg border px-3 py-2"
-              value={imageFit}
-              onChange={(e) => setImageFit(e.target.value as any)}
-            >
-              <option value="cover">cover (fill bubble)</option>
-              <option value="contain">contain</option>
-              <option value="fill">fill (stretch)</option>
-              <option value="center">center (no scale)</option>
-              <option value="none">none</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Bubble Label</label>
-            <input
-              className="w-full rounded-lg border px-3 py-2"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
             <label className="text-sm font-semibold">Label Color</label>
             <input
               type="color"
@@ -356,33 +338,14 @@ export default function Preview() {
             />
           </div>
 
-          <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-semibold">Header Avatar (optional)</label>
-            <input
-              className="w-full rounded-lg border px-3 py-2"
-              placeholder="https://example.com/avatar.jpg"
-              value={avatar}
-              onChange={(e) => setAvatar(e.target.value)}
-            />
-          </div>
-
-          {/* Actions + quick embed URL */}
-          <div className="md:col-span-2 flex items-center gap-3 flex-wrap">
+          {/* Open modal + embed url */}
+          <div className="md:col-span-2 flex items-center gap-3">
             <button
               className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
               onClick={() => setOpen(true)}
             >
               Open Preview Modal
             </button>
-
-            <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
-              onClick={onCreateInstanceFromPreview}
-              title="Save everything you set here as a reusable Instance"
-            >
-              Create Instance from this Preview
-            </button>
-
             <div className="ml-auto text-sm font-semibold">Embed URL:</div>
             <input
               readOnly
@@ -407,7 +370,7 @@ export default function Preview() {
         </div>
       </div>
 
-      {/* Live area */}
+      {/* Live UI area */}
       <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
         {mode === "popup" && (
           <ChatWidget
@@ -418,10 +381,9 @@ export default function Preview() {
             color={color || undefined}
             image={img || undefined}
             shape={shape}
+            imageFit={imageFit}
             label={label}
             labelColor={labelColor}
-            imageFit={imageFit}
-            avatar={avatar || undefined}
           />
         )}
 
@@ -432,11 +394,10 @@ export default function Preview() {
           >
             <div
               className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto"
-              style={{ transform: "translateY(0)" }}
             >
               <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
                 <div className="text-lg font-extrabold">
-                  {(instId || botId).replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
+                  {botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
                 </div>
               </div>
 
@@ -466,7 +427,10 @@ export default function Preview() {
                   {step === 2 && (
                     <div className="mt-4 grid gap-2">
                       {["Curious", "Very interested", "VIP"].map((o) => (
-                        <button key={o} className="rounded-lg border px-3 py-2 hover:bg-muted/50">
+                        <button
+                          key={o}
+                          className="rounded-lg border px-3 py-2 hover:bg-muted/50"
+                        >
                           {o}
                         </button>
                       ))}
