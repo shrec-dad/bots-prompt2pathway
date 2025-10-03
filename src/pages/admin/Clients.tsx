@@ -1,15 +1,23 @@
 import React, { useMemo, useState } from "react";
 import { getJSON, setJSON } from "@/lib/storage";
+import { BotKey } from "@/lib/botSettings";
+
+/* =========================
+   Types / Storage
+   ========================= */
 
 type Client = {
   id: string;
+  companyName: string;         // NEW
   name: string;
   email: string;
-  plan: "Starter" | "Professional" | "Enterprise";
+  plan: string;                // CHANGED: free text
   bots: number;
   leads: number;
   status: "Active" | "Paused";
-  lastActivity: string; // human-ish text, e.g. "2 hours ago"
+  lastActivity: string;
+  defaultBot?: BotKey;
+  notes?: string;
 };
 
 const KEY = "clients:list";
@@ -17,6 +25,10 @@ const KEY = "clients:list";
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
+
+/* =========================
+   Style helpers
+   ========================= */
 
 const headerCard =
   "rounded-2xl border bg-white shadow-sm mb-6 flex items-center justify-between px-5 py-4";
@@ -26,21 +38,41 @@ const badge =
   "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-border";
 const actionBtn =
   "rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30";
+const input =
+  "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 font-semibold";
+
+/* =========================
+   Component
+   ========================= */
 
 export default function Clients() {
   const initial = useMemo<Client[]>(
-    () =>
-      getJSON<Client[]>(KEY, []), // no demo rows anymore
+    () => getJSON<Client[]>(KEY, []),
     []
   );
 
   const [clients, setClients] = useState<Client[]>(initial);
-  const [open, setOpen] = useState(false);
 
-  // add client form
+  // Add modal
+  const [openAdd, setOpenAdd] = useState(false);
+  const [companyName, setCompanyName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [plan, setPlan] = useState<Client["plan"]>("Starter");
+  const [plan, setPlan] = useState<string>("Starter"); // free text
+  const [defaultBot, setDefaultBot] = useState<BotKey>("Waitlist");
+
+  // Edit modal
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [eCompanyName, setECompanyName] = useState("");
+  const [eName, setEName] = useState("");
+  const [eEmail, setEEmail] = useState("");
+  const [ePlan, setEPlan] = useState<string>("Starter"); // free text
+  const [eStatus, setEStatus] = useState<Client["status"]>("Active");
+  const [eBots, setEBots] = useState(0);
+  const [eLeads, setELeads] = useState(0);
+  const [eDefaultBot, setEDefaultBot] = useState<BotKey>("Waitlist");
+  const [eNotes, setENotes] = useState("");
 
   const totalClients = clients.length;
   const activeClients = clients.filter((c) => c.status === "Active").length;
@@ -52,36 +84,133 @@ export default function Clients() {
     setJSON(KEY, next);
   }
 
-  function addClient() {
-    if (!name.trim()) return alert("Please enter a client name.");
-    if (!email.trim()) return alert("Please enter a client email.");
+  /* ---------- CSV Download ---------- */
+  function downloadCsv() {
+    if (!clients.length) {
+      alert("No clients to export yet.");
+      return;
+    }
+    const headers = [
+      "id",
+      "companyName",
+      "name",
+      "email",
+      "plan",
+      "bots",
+      "leads",
+      "status",
+      "lastActivity",
+      "defaultBot",
+      "notes",
+    ];
+    const rows = clients.map((c) => [
+      c.id,
+      c.companyName || "",
+      c.name || "",
+      c.email || "",
+      c.plan || "",
+      String(c.bots ?? 0),
+      String(c.leads ?? 0),
+      c.status,
+      c.lastActivity || "",
+      c.defaultBot || "",
+      (c.notes || "").replace(/\n/g, " "),
+    ]);
 
-    const now = new Date();
+    // Simple CSV escape
+    const esc = (val: string) =>
+      /[",\n]/.test(val) ? `"${val.replace(/"/g, '""')}"` : val;
+
+    const csv =
+      headers.join(",") +
+      "\n" +
+      rows.map((r) => r.map(esc).join(",")).join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `clients_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /* ---------- Add ---------- */
+  function addClient() {
+    if (!companyName.trim()) return alert("Please enter a company name.");
+    if (!name.trim()) return alert("Please enter a contact name.");
+    if (!email.trim()) return alert("Please enter a contact email.");
+
     const newClient: Client = {
       id: uid(),
+      companyName: companyName.trim(),
       name: name.trim(),
       email: email.trim(),
-      plan,
+      plan: plan.trim(),
       bots: 0,
       leads: 0,
       status: "Active",
       lastActivity: "just now",
+      defaultBot,
     };
 
-    const next = [newClient, ...clients];
-    saveList(next);
+    saveList([newClient, ...clients]);
 
     // reset form
+    setCompanyName("");
     setName("");
     setEmail("");
     setPlan("Starter");
-    setOpen(false);
+    setDefaultBot("Waitlist");
+    setOpenAdd(false);
+  }
+
+  /* ---------- Edit ---------- */
+  function openEditModal(c: Client) {
+    setEditId(c.id);
+    setECompanyName(c.companyName);
+    setEName(c.name);
+    setEEmail(c.email);
+    setEPlan(c.plan);
+    setEStatus(c.status);
+    setEBots(c.bots);
+    setELeads(c.leads);
+    setEDefaultBot(c.defaultBot || "Waitlist");
+    setENotes(c.notes || "");
+    setOpenEdit(true);
+  }
+
+  function saveEdit() {
+    if (!editId) return;
+
+    const next = clients.map((c) =>
+      c.id !== editId
+        ? c
+        : {
+            ...c,
+            companyName: eCompanyName.trim() || c.companyName,
+            name: eName.trim() || c.name,
+            email: eEmail.trim() || c.email,
+            plan: ePlan.trim(),
+            status: eStatus,
+            bots: eBots,
+            leads: eLeads,
+            defaultBot: eDefaultBot,
+            notes: eNotes,
+            lastActivity: "updated now",
+          }
+    );
+
+    saveList(next);
+    setOpenEdit(false);
+    setEditId(null);
   }
 
   function removeClient(id: string) {
-    if (!confirm("Remove this client? This only affects local data.")) return;
-    const next = clients.filter((c) => c.id !== id);
-    saveList(next);
+    if (!confirm("Delete this client? This only affects local data.")) return;
+    saveList(clients.filter((c) => c.id !== id));
   }
 
   return (
@@ -94,9 +223,14 @@ export default function Clients() {
             Manage your clients and their bot configurations.
           </div>
         </div>
-        <button className={actionBtn} onClick={() => setOpen(true)}>
-          + Add Client
-        </button>
+        <div className="flex items-center gap-2">
+          <button className={actionBtn} onClick={downloadCsv} aria-label="Download clients CSV">
+            ⬇︎ Download CSV
+          </button>
+          <button className={actionBtn} onClick={() => setOpenAdd(true)}>
+            + Add Client
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -171,14 +305,25 @@ export default function Clients() {
                   </div>
                   <div>
                     <div className="text-lg font-extrabold tracking-tight">
-                      {c.name}
+                      {c.companyName}
                     </div>
                     <div className="text-sm font-semibold text-foreground/80">
-                      {c.email}
+                      {c.name} • {c.email}
                     </div>
                     <div className="text-xs font-bold text-foreground/70 mt-1">
-                      Joined: <span className="font-semibold">{c.lastActivity}</span>
+                      Plan: <span className="font-semibold">{c.plan || "—"}</span>
                     </div>
+                    <div className="text-xs font-bold text-foreground/70 mt-1">
+                      Default Bot:{" "}
+                      <span className="font-semibold">
+                        {c.defaultBot || "Waitlist"}
+                      </span>
+                    </div>
+                    {c.notes ? (
+                      <div className="text-xs font-semibold text-foreground/70 mt-1 line-clamp-1">
+                        Notes: {c.notes}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -196,10 +341,11 @@ export default function Clients() {
                     </div>
                   </div>
 
-                  <span className={`${badge} ${c.plan === "Enterprise" ? "bg-purple-100" : c.plan === "Professional" ? "bg-blue-100" : "bg-emerald-100"}`}>
-                    {c.plan}
-                  </span>
-                  <span className={`${badge} ${c.status === "Active" ? "bg-emerald-100" : "bg-amber-100"}`}>
+                  <span
+                    className={`${badge} ${
+                      c.status === "Active" ? "bg-emerald-100" : "bg-amber-100"
+                    }`}
+                  >
                     {c.status}
                   </span>
 
@@ -209,6 +355,12 @@ export default function Clients() {
                       onClick={() => alert("Open client detail (future).")}
                     >
                       Open
+                    </button>
+                    <button
+                      className="rounded-xl px-3 py-1.5 font-bold ring-1 ring-border bg-white hover:bg-indigo-50"
+                      onClick={() => openEditModal(c)}
+                    >
+                      Edit
                     </button>
                     <button
                       className="rounded-xl px-3 py-1.5 font-bold ring-1 ring-border bg-white hover:bg-rose-50"
@@ -225,14 +377,14 @@ export default function Clients() {
       </div>
 
       {/* Add Client Modal */}
-      {open && (
+      {openAdd && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
-          <div className="w-[520px] max-w-[94vw] rounded-2xl border-2 border-black bg-white shadow-2xl">
+          <div className="w-[640px] max-w-[94vw] rounded-2xl border-2 border-black bg-white shadow-2xl">
             <div className="rounded-t-2xl p-4 bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 text-white flex items-center justify-between">
               <div className="text-lg font-extrabold">Add Client</div>
               <button
                 className="px-2 py-1 font-bold bg-white/90 text-black rounded-lg"
-                onClick={() => setOpen(false)}
+                onClick={() => setOpenAdd(false)}
               >
                 ×
               </button>
@@ -240,48 +392,67 @@ export default function Clients() {
 
             <div className="p-5 space-y-4">
               <div>
-                <div className="text-sm font-bold uppercase text-purple-700">
-                  Name
-                </div>
+                <div className="text-sm font-bold uppercase text-purple-700">Company Name</div>
                 <input
-                  className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2 font-semibold"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  className={input}
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Acme Corporation"
                 />
               </div>
 
-              <div>
-                <div className="text-sm font-bold uppercase text-purple-700">
-                  Email
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Contact Name</div>
+                  <input
+                    className={input}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Jane Doe"
+                  />
                 </div>
-                <input
-                  className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2 font-semibold"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Contact Email</div>
+                  <input
+                    className={input}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jane@acme.com"
+                  />
+                </div>
               </div>
 
-              <div>
-                <div className="text-sm font-bold uppercase text-purple-700">
-                  Plan
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Plan</div>
+                  <input
+                    className={input}
+                    value={plan}
+                    onChange={(e) => setPlan(e.target.value)}
+                    placeholder="Starter / Pro / Custom…"
+                  />
                 </div>
-                <select
-                  className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2 font-semibold"
-                  value={plan}
-                  onChange={(e) =>
-                    setPlan(e.target.value as Client["plan"])
-                  }
-                >
-                  <option value="Starter">Starter</option>
-                  <option value="Professional">Professional</option>
-                  <option value="Enterprise">Enterprise</option>
-                </select>
+
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Default Bot</div>
+                  <select
+                    className={input}
+                    value={defaultBot}
+                    onChange={(e) => setDefaultBot(e.target.value as BotKey)}
+                  >
+                    <option value="LeadQualifier">Lead Qualifier</option>
+                    <option value="AppointmentBooking">Appointment Booking</option>
+                    <option value="CustomerSupport">Customer Support</option>
+                    <option value="Waitlist">Waitlist</option>
+                    <option value="SocialMedia">Social Media</option>
+                  </select>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2">
                 <button
                   className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
-                  onClick={() => setOpen(false)}
+                  onClick={() => setOpenAdd(false)}
                 >
                   Cancel
                 </button>
@@ -291,6 +462,137 @@ export default function Clients() {
                 >
                   Save Client
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Client Modal */}
+      {openEdit && (
+        <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
+          <div className="w-[700px] max-w-[96vw] rounded-2xl border-2 border-black bg-white shadow-2xl">
+            <div className="rounded-t-2xl p-4 bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 text-white flex items-center justify-between">
+              <div className="text-lg font-extrabold">Edit Client</div>
+              <button
+                className="px-2 py-1 font-bold bg-white/90 text-black rounded-lg"
+                onClick={() => setOpenEdit(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <div className="text-sm font-bold uppercase text-purple-700">Company Name</div>
+                <input
+                  className={input}
+                  value={eCompanyName}
+                  onChange={(e) => setECompanyName(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Contact Name</div>
+                  <input className={input} value={eName} onChange={(e) => setEName(e.target.value)} />
+                </div>
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Contact Email</div>
+                  <input className={input} value={eEmail} onChange={(e) => setEEmail(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Plan</div>
+                  <input className={input} value={ePlan} onChange={(e) => setEPlan(e.target.value)} />
+                </div>
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Status</div>
+                  <select
+                    className={input}
+                    value={eStatus}
+                    onChange={(e) => setEStatus(e.target.value as Client["status"])}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Paused">Paused</option>
+                  </select>
+                </div>
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Default Bot</div>
+                  <select
+                    className={input}
+                    value={eDefaultBot}
+                    onChange={(e) => setEDefaultBot(e.target.value as BotKey)}
+                  >
+                    <option value="LeadQualifier">Lead Qualifier</option>
+                    <option value="AppointmentBooking">Appointment Booking</option>
+                    <option value="CustomerSupport">Customer Support</option>
+                    <option value="Waitlist">Waitlist</option>
+                    <option value="SocialMedia">Social Media</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Bots</div>
+                  <input
+                    className={input}
+                    type="number"
+                    min={0}
+                    value={eBots}
+                    onChange={(e) => setEBots(Number(e.target.value || 0))}
+                  />
+                </div>
+                <div>
+                  <div className="text-sm font-bold uppercase text-purple-700">Leads</div>
+                  <input
+                    className={input}
+                    type="number"
+                    min={0}
+                    value={eLeads}
+                    onChange={(e) => setELeads(Number(e.target.value || 0))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm font-bold uppercase text-purple-700">Notes</div>
+                <textarea
+                  className={input}
+                  rows={3}
+                  value={eNotes}
+                  onChange={(e) => setENotes(e.target.value)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <button
+                  className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-rose-50"
+                  onClick={() => {
+                    if (!editId) return;
+                    removeClient(editId);
+                    setOpenEdit(false);
+                  }}
+                >
+                  Delete Client
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+                    onClick={() => setOpenEdit(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                    onClick={saveEdit}
+                  >
+                    Save Changes
+                  </button>
+                </div>
               </div>
             </div>
           </div>
