@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { getJSON, setJSON } from "@/lib/storage";
 import { BotKey } from "@/lib/botSettings";
+import { listInstances } from "@/lib/instances";
 
 /* =========================
    Types / Storage
