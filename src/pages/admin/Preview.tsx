@@ -7,6 +7,29 @@ type Pos = "bottom-right" | "bottom-left";
 type Shape = "circle" | "rounded" | "square" | "oval" | "chat" | "badge";
 type ImageFit = "cover" | "contain" | "center";
 
+// Simple copy button with feedback
+function CopyButton({ getText }: { getText: () => string }) {
+  const [label, setLabel] = useState("Copy");
+  async function onCopy() {
+    try {
+      await navigator.clipboard.writeText(getText());
+      setLabel("Copied!");
+      setTimeout(() => setLabel("Copy"), 1200);
+    } catch {
+      setLabel("Failed");
+      setTimeout(() => setLabel("Copy"), 1500);
+    }
+  }
+  return (
+    <button
+      onClick={onCopy}
+      className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
+    >
+      {label}
+    </button>
+  );
+}
+
 // Branding store (used by /widget)
 const BRAND_KEY = "brandingSettings";
 
@@ -19,7 +42,6 @@ type Branding = {
   chatBubbleColor: string;
   chatBubbleSize: number;
   chatBubblePosition: Pos;
-  // New optional fields (backwards compatible)
   chatBubbleShape?: Shape;
   chatBubbleLabel?: string;
   chatBubbleLabelColor?: string;
@@ -53,11 +75,11 @@ function setBranding(next: Partial<Branding>) {
 }
 
 export default function Preview() {
-  // ---- Demo bot/instance controls (unchanged behavior) ----
+  // ---- Demo bot/instance controls ----
   const [botId, setBotId] = useState("waitlist-bot");
   const [instId, setInstId] = useState<string>("");
 
-  // ---- Bubble/Widget visual controls (now persisted) ----
+  // ---- Bubble/Widget visual controls (persisted) ----
   const b = useMemo(getBranding, []);
   const [mode, setMode] = useState<Mode>("popup");
   const [pos, setPos] = useState<Pos>(b.chatBubblePosition ?? "bottom-left");
@@ -65,13 +87,9 @@ export default function Preview() {
   const [color, setColor] = useState<string>(b.chatBubbleColor ?? "#7aa8ff");
   const [img, setImg] = useState<string>(b.chatBubbleImage ?? "");
   const [shape, setShape] = useState<Shape>(b.chatBubbleShape ?? "circle");
-  const [imageFit, setImageFit] = useState<ImageFit>(
-    b.chatBubbleImageFit ?? "cover"
-  );
+  const [imageFit, setImageFit] = useState<ImageFit>(b.chatBubbleImageFit ?? "cover");
   const [label, setLabel] = useState<string>(b.chatBubbleLabel ?? "Chat");
-  const [labelColor, setLabelColor] = useState<string>(
-    b.chatBubbleLabelColor ?? "#ffffff"
-  );
+  const [labelColor, setLabelColor] = useState<string>(b.chatBubbleLabelColor ?? "#ffffff");
 
   const [open, setOpen] = useState(true);
   const [step, setStep] = useState(0);
@@ -189,7 +207,7 @@ export default function Preview() {
                 Save
               </button>
               <button
-                className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-white hover:bg-gray-50"
+                className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
                 onClick={onReset}
                 aria-label="Reset to defaults"
               >
@@ -318,11 +336,12 @@ export default function Preview() {
             />
           </div>
 
+          {/* Accent Color now with picker */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Accent Color (optional)</label>
+            <label className="text-sm font-semibold">Accent Color</label>
             <input
-              className="w-full rounded-lg border px-3 py-2"
-              placeholder="#7aa8ff"
+              type="color"
+              className="h-10 w-full rounded-lg border"
               value={color}
               onChange={(e) => setColor(e.target.value)}
             />
@@ -338,7 +357,7 @@ export default function Preview() {
             />
           </div>
 
-          {/* Open modal + embed url */}
+          {/* Open modal + embed url (now with Copy) */}
           <div className="md:col-span-2 flex items-center gap-3">
             <button
               className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
@@ -346,6 +365,7 @@ export default function Preview() {
             >
               Open Preview Modal
             </button>
+
             <div className="ml-auto text-sm font-semibold">Embed URL:</div>
             <input
               readOnly
@@ -354,11 +374,15 @@ export default function Preview() {
               onFocus={(e) => e.currentTarget.select()}
               aria-label="Embed URL"
             />
+            <CopyButton getText={() => widgetSrc} />
           </div>
 
-          {/* Full iframe code */}
+          {/* Full iframe code (copyable) */}
           <div className="md:col-span-2">
-            <label className="text-sm font-semibold">Embed (iframe)</label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold">Embed (iframe)</label>
+              <CopyButton getText={() => embedIframe} />
+            </div>
             <textarea
               readOnly
               className="w-full rounded-lg border px-3 py-2 text-xs font-mono"
@@ -392,9 +416,7 @@ export default function Preview() {
             className="absolute inset-0 grid place-items-center"
             style={{ pointerEvents: "none" }}
           >
-            <div
-              className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto"
-            >
+            <div className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto">
               <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
                 <div className="text-lg font-extrabold">
                   {botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
