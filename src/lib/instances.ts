@@ -80,6 +80,12 @@ export function listInstances(): InstanceMeta[] {
   return readJSON<InstanceMeta[]>(INDEX_KEY, []);
 }
 
+/** Convenience: same as listInstances but newest updated first */
+export function listInstancesSorted(): InstanceMeta[] {
+  const list = listInstances();
+  return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
 export function getInstance(id: string): { meta: InstanceMeta; data: InstanceData } | null {
   const meta = listInstances().find((m) => m.id === id);
   if (!meta) return null;
@@ -193,4 +199,84 @@ export function duplicateInstanceFromTemplate(
   writeJSON(INDEX_KEY, index);
 
   return meta;
+}
+
+/**
+ * NEW: Duplicate from an EXISTING instance ID (clone its meta+data into a new instance).
+ * Useful when you want to copy a working bot as-is for a new client.
+ */
+export function duplicateInstanceFromExisting(
+  sourceId: string,
+  friendlyName?: string
+): InstanceMeta | null {
+  const source = getInstance(sourceId);
+  if (!source) return null;
+
+  const id = newId();
+  const now = Date.now();
+
+  const meta: InstanceMeta = {
+    id,
+    name: friendlyName || `${source.meta.name} (Copy)`,
+    bot: source.meta.bot,
+    mode: source.meta.mode,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // Deep-ish clone to avoid accidental shared references
+  const data: InstanceData = JSON.parse(
+    JSON.stringify({
+      overrides: source.data.overrides || {},
+      settings: source.data.settings || {},
+      knowledge: source.data.knowledge || [],
+    })
+  );
+
+  writeJSON(DATA_KEY(id), data);
+
+  const index = listInstances();
+  index.push(meta);
+  writeJSON(INDEX_KEY, index);
+
+  return meta;
+}
+
+/** Rename instance display name only */
+export function renameInstance(id: string, newName: string) {
+  const now = Date.now();
+  const index = listInstances();
+  const updated = index.map((m) =>
+    m.id === id ? { ...m, name: newName || m.name, updatedAt: now } : m
+  );
+  writeJSON(INDEX_KEY, updated);
+}
+
+/** Change instance mode (updates meta.mode and data.settings.mode) */
+export function setInstanceMode(id: string, mode: Mode) {
+  const inst = getInstance(id);
+  if (!inst) return;
+
+  // update data
+  const newData: InstanceData = {
+    ...inst.data,
+    settings: { ...(inst.data.settings || {}), mode },
+  };
+  writeJSON(DATA_KEY(id), newData);
+
+  // update meta
+  const now = Date.now();
+  const index = listInstances().map((m) =>
+    m.id === id ? { ...m, mode, updatedAt: now } : m
+  );
+  writeJSON(INDEX_KEY, index);
+}
+
+/** Change instance bot (meta only; use carefully) */
+export function setInstanceBot(id: string, bot: BotKey) {
+  const now = Date.now();
+  const index = listInstances().map((m) =>
+    m.id === id ? { ...m, bot, updatedAt: now } : m
+  );
+  writeJSON(INDEX_KEY, index);
 }
