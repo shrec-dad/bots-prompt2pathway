@@ -2,16 +2,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 /**
- * The public widget page your clients embed via <iframe src="/widget?...">.
- * Reads query params and renders:
+ * Public embed widget. Reads query params and renders:
  *  - floating chat bubble (popup) OR right sidebar (sidebar mode)
- *  - fully customizable bubble (shape, image, label, labelColor, imageFit)
+ *  - customizable bubble (shape, image, label, labelColor, imageFit)
  *  - simple conversation panel with optional header avatar
- *
- * No backend yet—messages are local state until you wire APIs.
  */
-
-/* ----------------------------- Types & helpers ---------------------------- */
 
 type Pos = "bottom-right" | "bottom-left";
 type Shape = "circle" | "rounded" | "square" | "oval";
@@ -19,23 +14,20 @@ type Fit = "cover" | "contain" | "fill" | "center" | "none";
 type Mode = "popup" | "sidebar" | "inline";
 
 type QueryConfig = {
-  // identity
   inst?: string;
   bot?: string;
 
-  // placement
   mode: Mode;
   position: Pos;
   size: number;
 
-  // visuals
-  color?: string; // bubble background
-  image?: string; // bubble image URL
+  color?: string;
+  image?: string;
   imageFit?: Fit;
   label?: string;
   labelColor?: string;
   shape: Shape;
-  avatar?: string; // header avatar in panel
+  avatar?: string;
 };
 
 function parseQuery(): QueryConfig {
@@ -60,10 +52,8 @@ function parseQuery(): QueryConfig {
     avatar: q.get("avatar") || undefined,
   };
 
-  // Basic guards
   if (cfg.size < 40) cfg.size = 40;
   if (cfg.size > 160 && cfg.mode !== "sidebar") cfg.size = 160;
-
   return cfg;
 }
 
@@ -76,26 +66,35 @@ function borderRadiusForShape(shape: Shape): string {
     case "square":
       return "8px";
     case "oval":
-      // very large radius yields a capsule/oval when width > height
-      return "9999px";
+      return "9999px"; // capsule
     default:
       return "50%";
   }
 }
 
-/* ------------------------------- Main Widget ------------------------------ */
-
 export default function Widget() {
   const cfg = useMemo(parseQuery, []);
   const [open, setOpen] = useState(false);
 
-  // local, temporary transcript (until API)
+  // responsive viewport height inside the iframe (prevents clipping)
+  const [vh, setVh] = useState<number>(
+    typeof window !== "undefined" ? window.innerHeight : 800
+  );
+  useEffect(() => {
+    const onResize = () => setVh(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // panel height: keep a 16px margin top & bottom (32 total), cap at 540
+  const panelHeight = Math.max(360, Math.min(540, vh - 32));
+
+  // demo messages (until wired)
   const [messages, setMessages] = useState<{ role: "bot" | "user"; text: string }[]>([
     { role: "bot", text: "Hi! How can I help you today?" },
   ]);
   const [input, setInput] = useState("");
 
-  // Optional: apply a clean, readable font by default
   useEffect(() => {
     document.body.style.fontFamily = "Inter, system-ui, Arial, sans-serif";
     document.body.style.background =
@@ -103,7 +102,6 @@ export default function Widget() {
     document.body.style.minHeight = "100vh";
   }, []);
 
-  // send a message in demo mode
   const send = () => {
     const text = input.trim();
     if (!text) return;
@@ -115,17 +113,15 @@ export default function Widget() {
     setInput("");
   };
 
-  // position style for floating elements
   const posStyle: React.CSSProperties =
     cfg.position === "bottom-left"
       ? { left: 16, right: "auto" }
       : { right: 16, left: "auto" };
 
-  // bubble dimensions: if "oval", make it visually oval (wider than tall)
+  // Make oval visibly wider than tall
   const bubbleWidth = cfg.shape === "oval" ? Math.round(cfg.size * 1.6) : cfg.size;
   const bubbleHeight = cfg.size;
 
-  // bubble background for images
   const backgroundForImage: React.CSSProperties =
     cfg.image
       ? {
@@ -146,7 +142,6 @@ export default function Widget() {
         }
       : {};
 
-  // shared header (colored) for panel
   const headerStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -156,14 +151,11 @@ export default function Widget() {
     borderBottom: "2px solid #000",
   };
 
-  /* -------------------------------- Render -------------------------------- */
-
   return (
     <div style={{ minHeight: "100vh" }}>
-      {/* ============ POPUP MODE (floating bubble + card) ============ */}
+      {/* POPUP MODE */}
       {cfg.mode !== "sidebar" && (
         <>
-          {/* Bubble */}
           {!open && (
             <button
               onClick={() => setOpen(true)}
@@ -184,10 +176,10 @@ export default function Widget() {
                 boxShadow: "4px 4px 0 #000",
                 padding: "0 12px",
                 overflow: "hidden",
+                zIndex: 2147483000,
                 ...backgroundForImage,
               }}
             >
-              {/* Overlay label (always visible even with an image) */}
               <span
                 style={{
                   color: cfg.labelColor || "#fff",
@@ -196,7 +188,6 @@ export default function Widget() {
                   background: cfg.image ? "rgba(0,0,0,0.18)" : "transparent",
                   padding: cfg.image ? "2px 6px" : 0,
                   borderRadius: cfg.image ? "8px" : 0,
-                  mixBlendMode: cfg.image ? "normal" : "unset",
                   maxWidth: "85%",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
@@ -208,7 +199,6 @@ export default function Widget() {
             </button>
           )}
 
-          {/* Panel (popup card) */}
           {open && (
             <div
               role="dialog"
@@ -218,7 +208,8 @@ export default function Widget() {
                 bottom: 16,
                 ...posStyle,
                 width: 380,
-                height: 540,
+                height: panelHeight,                 // <- responsive height
+                maxHeight: "calc(100vh - 32px)",     // <- never clip
                 borderRadius: 16,
                 border: "2px solid #000",
                 boxShadow: "8px 8px 0 #000",
@@ -226,9 +217,9 @@ export default function Widget() {
                 display: "flex",
                 flexDirection: "column",
                 overflow: "hidden",
+                zIndex: 2147483000,
               }}
             >
-              {/* Header */}
               <div style={headerStyle}>
                 {cfg.avatar ? (
                   <img
@@ -273,7 +264,6 @@ export default function Widget() {
                 </button>
               </div>
 
-              {/* Messages */}
               <div
                 style={{
                   padding: 12,
@@ -289,7 +279,7 @@ export default function Widget() {
                     key={i}
                     style={{
                       alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                      background: m.role === "user" ? "#e9d5ff" /* light purple */ : "#f1f5f9",
+                      background: m.role === "user" ? "#e9d5ff" : "#f1f5f9",
                       color: "#000",
                       border: "2px solid #000",
                       borderRadius: 12,
@@ -302,7 +292,6 @@ export default function Widget() {
                 ))}
               </div>
 
-              {/* Input */}
               <div style={{ display: "flex", borderTop: "2px solid #000" }}>
                 <input
                   value={input}
@@ -337,7 +326,7 @@ export default function Widget() {
         </>
       )}
 
-      {/* ============ SIDEBAR MODE (full height drawer on the right) ============ */}
+      {/* SIDEBAR MODE */}
       {cfg.mode === "sidebar" && (
         <div
           role="dialog"
@@ -354,9 +343,9 @@ export default function Widget() {
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
+            zIndex: 2147483000,
           }}
         >
-          {/* Header */}
           <div style={headerStyle}>
             {cfg.avatar ? (
               <img
@@ -387,7 +376,6 @@ export default function Widget() {
             </div>
           </div>
 
-          {/* Messages */}
           <div
             style={{
               padding: 12,
@@ -402,13 +390,13 @@ export default function Widget() {
               <div
                 key={i}
                 style={{
-                    alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                    background: m.role === "user" ? "#e9d5ff" : "#f1f5f9",
-                    color: "#000",
-                    border: "2px solid #000",
-                    borderRadius: 12,
-                    padding: "8px 10px",
-                    maxWidth: "75%",
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  background: m.role === "user" ? "#e9d5ff" : "#f1f5f9",
+                  color: "#000",
+                  border: "2px solid #000",
+                  borderRadius: 12,
+                  padding: "8px 10px",
+                  maxWidth: "75%",
                 }}
               >
                 {m.text}
@@ -416,7 +404,6 @@ export default function Widget() {
             ))}
           </div>
 
-          {/* Input */}
           <div style={{ display: "flex", borderTop: "2px solid #000" }}>
             <input
               value={input}
