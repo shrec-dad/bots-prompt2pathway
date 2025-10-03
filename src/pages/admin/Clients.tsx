@@ -8,16 +8,17 @@ import { BotKey } from "@/lib/botSettings";
 
 type Client = {
   id: string;
-  companyName: string;         // NEW
+  companyName: string;
   name: string;
   email: string;
-  plan: string;                // CHANGED: free text
+  plan: string;
   bots: number;
   leads: number;
   status: "Active" | "Paused";
   lastActivity: string;
   defaultBot?: BotKey;
   notes?: string;
+  assignedBots?: string[];   // NEW: holds instance IDs
 };
 
 const KEY = "clients:list";
