@@ -5,11 +5,14 @@ import {
   listInstances,
   removeInstance,
   duplicateInstanceFromTemplate,
+  duplicateInstanceFromExisting,
   createInstance,
+  renameInstance,
   type InstanceMeta,
 } from "@/lib/instances";
+import { getJSON, setJSON } from "@/lib/storage";
 
-/* ---------------- display helpers ---------------- */
+/* ---------------- types ---------------- */
 
 type BotDef = {
   key: BotKey;
@@ -18,6 +21,15 @@ type BotDef = {
   emoji: string;
   description: string;
 };
+
+type ClientRef = {
+  id: string;
+  companyName: string;
+};
+
+const CLIENTS_KEY = "clients:list";
+
+/* ---------------- display helpers ---------------- */
 
 const BOTS: BotDef[] = [
   {
@@ -92,6 +104,15 @@ export default function Bots() {
     listInstances()
   );
 
+  // Clients list for assignment
+  const [clients] = useState<ClientRef[]>(() =>
+    getJSON<ClientRef[]>(CLIENTS_KEY, [])
+  );
+
+  // UI states
+  const [assignId, setAssignId] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<string>("");
+
   // keep in sync if storage changes elsewhere
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -111,15 +132,29 @@ export default function Bots() {
   // Safely format a title for instances, even if name is missing
   const safeInstanceName = (m: InstanceMeta) => {
     const base =
-      (m.name && String(m.name)) ||
-      `${botKeyToLabel(m.bot)} Instance`; // fallback
+      (m.name && String(m.name)) || `${botKeyToLabel(m.bot)} Instance`;
     return base;
   };
 
-  // Tidy, sorted list for display
+  // Sorted list
   const sortedInstances = useMemo(() => {
     return [...instances].sort((a, b) => b.updatedAt - a.updatedAt);
   }, [instances]);
+
+  // Assign bot to client (stored in client.notes for demo)
+  function assignBotToClient(botId: string, clientId: string) {
+    const clientList = getJSON<any[]>(CLIENTS_KEY, []);
+    const updated = clientList.map((c) =>
+      c.id === clientId
+        ? {
+            ...c,
+            notes: (c.notes || "") + `\nAssigned Bot: ${botId}`,
+          }
+        : c
+    );
+    setJSON(CLIENTS_KEY, updated);
+    alert("Bot assigned to client!");
+  }
 
   return (
     <div className="w-full h-full">
@@ -129,7 +164,6 @@ export default function Bots() {
         <button
           className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
           onClick={() => {
-            // Make a blank instance using the first card’s bot & its current mode.
             const first = BOTS[0];
             const mode = modes[first.key] || "basic";
             const meta = createInstance(first.key, mode, `${first.name} (New)`);
@@ -141,7 +175,7 @@ export default function Bots() {
         </button>
       </div>
 
-      {/* Header metrics row (static demo numbers) */}
+      {/* Metrics row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
         <Stat label="Active Bots" value={String(sortedInstances.length)} />
         <Stat label="Conversations (7d)" value="1,284" />
@@ -186,38 +220,29 @@ export default function Bots() {
                   setModes((prev) => ({ ...prev, [b.key]: mode }));
                   setBotSettings(b.key, { mode });
                 }}
-                aria-label={`${b.name} plan`}
               >
                 <option value="basic">Basic</option>
                 <option value="custom">Custom</option>
               </select>
 
               <button
-                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20"
                 onClick={() =>
                   (window.location.href = `/admin/builder?bot=${b.key}`)
                 }
-                aria-label={`Open ${b.name} in Builder`}
               >
                 Open Builder
               </button>
             </div>
 
-            <div className="mt-3">
+            <div className="mt-3 flex gap-2">
               <button
-                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-muted/40"
+                className="rounded-lg border bg-white px-4 py-2 text-sm font-bold hover:bg-muted/40"
                 onClick={() => {
                   const mode = modes[b.key] || "basic";
-                  const meta = duplicateInstanceFromTemplate(
-                    b.key,
-                    mode,
-                    `${b.name} (Copy)`
-                  );
+                  duplicateInstanceFromTemplate(b.key, mode, `${b.name} (Copy)`);
                   setInstances(listInstances());
-                  // Keep user on list; they can open from My Bots
-                  // Or jump directly: window.location.href = `/admin/builder?inst=${meta.id}`
                 }}
-                aria-label={`Duplicate ${b.name}`}
               >
                 Duplicate
               </button>
@@ -232,15 +257,13 @@ export default function Bots() {
 
         {sortedInstances.length === 0 ? (
           <div className="rounded-xl border bg-card p-4 text-sm">
-            You don’t have any instances yet. Click <b>Duplicate</b> on a card
-            above or use <b>Create New Bot</b>.
+            You don’t have any instances yet.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {sortedInstances.map((m) => {
               const title = safeInstanceName(m);
-              const sub =
-                `${botKeyToLabel(m.bot)} • ${m.mode}`.trim();
+              const sub = `${botKeyToLabel(m.bot)} • ${m.mode}`;
 
               return (
                 <div
@@ -252,7 +275,7 @@ export default function Bots() {
                   </div>
                   <div className="text-sm text-foreground/80">{sub}</div>
 
-                  <div className="mt-2 flex items-center gap-3">
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
                       onClick={() =>
@@ -260,6 +283,36 @@ export default function Bots() {
                       }
                     >
                       Open
+                    </button>
+                    <button
+                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-indigo-50"
+                      onClick={() => {
+                        const newName = prompt("Rename bot:", m.name);
+                        if (newName) {
+                          renameInstance(m.id, newName);
+                          setInstances(listInstances());
+                        }
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-emerald-50"
+                      onClick={() => {
+                        const copy = duplicateInstanceFromExisting(
+                          m.id,
+                          `${m.name} (Copy)`
+                        );
+                        if (copy) setInstances(listInstances());
+                      }}
+                    >
+                      Clone
+                    </button>
+                    <button
+                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-sky-50"
+                      onClick={() => setAssignId(m.id)}
+                    >
+                      Assign
                     </button>
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-rose-50"
@@ -277,6 +330,48 @@ export default function Bots() {
           </div>
         )}
       </div>
+
+      {/* Assign modal */}
+      {assignId && (
+        <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-[400px] max-w-[95vw] shadow-xl border-2 border-black">
+            <h2 className="text-lg font-extrabold mb-4">Assign Bot</h2>
+            <select
+              className="w-full border rounded-lg px-3 py-2 mb-4"
+              value={selectedClient}
+              onChange={(e) => setSelectedClient(e.target.value)}
+            >
+              <option value="">Select client…</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.companyName}
+                </option>
+              ))}
+            </select>
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-4 py-2 rounded-lg border"
+                onClick={() => setAssignId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-emerald-500 text-white font-bold"
+                onClick={() => {
+                  if (!selectedClient) {
+                    alert("Please choose a client.");
+                    return;
+                  }
+                  assignBotToClient(assignId, selectedClient);
+                  setAssignId(null);
+                }}
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
