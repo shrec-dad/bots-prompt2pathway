@@ -14,13 +14,13 @@ type Client = {
   name: string;
   email: string;
   plan: string;
-  bots: number;
+  bots: number; // legacy numeric field; kept for backward-compat
   leads: number;
   status: "Active" | "Paused";
   lastActivity: string;
   defaultBot?: BotKey;
   notes?: string;
-  assignedBots?: string[];   // holds instance IDs
+  assignedBots?: string[]; // instance IDs
 };
 
 const KEY = "clients:list";
@@ -32,7 +32,11 @@ function uid() {
 /* =========================
    XLSX loader (on-demand)
    ========================= */
-declare global { interface Window { XLSX: any; } }
+declare global {
+  interface Window {
+    XLSX: any;
+  }
+}
 
 async function ensureXLSX(): Promise<any> {
   if (window.XLSX) return window.XLSX;
@@ -47,8 +51,7 @@ async function ensureXLSX(): Promise<any> {
   return window.XLSX;
 }
 
-const ts = () =>
-  new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+const ts = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
 /* =========================
    Style helpers
@@ -56,8 +59,7 @@ const ts = () =>
 
 const headerCard =
   "rounded-2xl border bg-white shadow-sm mb-6 flex items-center justify-between px-5 py-4";
-const statCard =
-  "rounded-2xl border bg-card px-4 py-3 flex items-center gap-3";
+const statCard = "rounded-2xl border bg-card px-4 py-3 flex items-center gap-3";
 const badge =
   "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-border";
 const actionBtn =
@@ -70,11 +72,7 @@ const input =
    ========================= */
 
 export default function Clients() {
-  const initial = useMemo<Client[]>(
-    () => getJSON<Client[]>(KEY, []),
-    []
-  );
-
+  const initial = useMemo<Client[]>(() => getJSON<Client[]>(KEY, []), []);
   const [clients, setClients] = useState<Client[]>(initial);
 
   // Add modal
@@ -82,7 +80,7 @@ export default function Clients() {
   const [companyName, setCompanyName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [plan, setPlan] = useState<string>("Starter"); // free text
+  const [plan, setPlan] = useState<string>("Starter");
   const [defaultBot, setDefaultBot] = useState<BotKey>("Waitlist");
 
   // Edit modal
@@ -91,17 +89,20 @@ export default function Clients() {
   const [eCompanyName, setECompanyName] = useState("");
   const [eName, setEName] = useState("");
   const [eEmail, setEEmail] = useState("");
-  const [ePlan, setEPlan] = useState<string>("Starter"); // free text
+  const [ePlan, setEPlan] = useState<string>("Starter");
   const [eStatus, setEStatus] = useState<Client["status"]>("Active");
   const [eBots, setEBots] = useState(0);
   const [eLeads, setELeads] = useState(0);
   const [eDefaultBot, setEDefaultBot] = useState<BotKey>("Waitlist");
   const [eNotes, setENotes] = useState("");
 
+  // ---- Totals (note the fixed syntax here) ----
   const totalClients = clients.length;
   const activeClients = clients.filter((c) => c.status === "Active").length;
- const totalBots = clients.reduce(
-  (a, c) => a + (c.assignedBots?.length ?? c.bots ?? 0),0
+  const totalBots = clients.reduce(
+    (a, c) => a + (c.assignedBots?.length ?? c.bots ?? 0),
+    0
+  );
   const totalLeads = clients.reduce((a, c) => a + c.leads, 0);
 
   function saveList(next: Client[]) {
@@ -135,7 +136,7 @@ export default function Clients() {
       "status",
       "lastActivity",
       "defaultBot",
-      "assignedBots",      // NEW
+      "assignedBots", // NEW
       "notes",
     ];
 
@@ -150,7 +151,9 @@ export default function Clients() {
       c.status,
       c.lastActivity || "",
       c.defaultBot || "",
-      (c.assignedBots || []).map((id) => nameById.get(id) || "(deleted)").join(", "),
+      (c.assignedBots || [])
+        .map((id) => nameById.get(id) || "(deleted)")
+        .join(", "),
       (c.notes || "").replace(/\n/g, " "),
     ]);
 
@@ -191,7 +194,7 @@ export default function Clients() {
       status: "Active",
       lastActivity: "just now",
       defaultBot,
-      assignedBots: [], // initialize so Excel export & UI are consistent
+      assignedBots: [], // initialize for a consistent UI/export
     };
 
     saveList([newClient, ...clients]);
@@ -349,6 +352,8 @@ export default function Clients() {
           <div className="flex flex-col gap-4">
             {clients.map((c) => {
               const assignedNames = resolveAssignedBotNames(c.assignedBots);
+              const botCount = c.assignedBots?.length ?? c.bots ?? 0;
+
               return (
                 <div
                   key={c.id}
@@ -375,7 +380,7 @@ export default function Clients() {
                         </span>
                       </div>
 
-                      {/* NEW: Assigned Bots list (by instance name) */}
+                      {/* Assigned Bots list (instance names) */}
                       {assignedNames.length > 0 && (
                         <div className="text-xs font-bold text-foreground/70 mt-1">
                           Assigned Bots:{" "}
@@ -395,7 +400,7 @@ export default function Clients() {
 
                   <div className="flex items-center gap-6">
                     <div className="text-center">
-                      <div className="text-xl font-extrabold">{(c.assignedBots?.length ?? c.bots ?? 0)}</div>
+                      <div className="text-xl font-extrabold">{botCount}</div>
                       <div className="text-xs font-semibold uppercase text-foreground/70">
                         Bots
                       </div>
@@ -459,7 +464,9 @@ export default function Clients() {
 
             <div className="p-5 space-y-4">
               <div>
-                <div className="text-sm font-bold uppercase text-purple-700">Company Name</div>
+                <div className="text-sm font-bold uppercase text-purple-700">
+                  Company Name
+                </div>
                 <input
                   className={input}
                   value={companyName}
@@ -470,7 +477,9 @@ export default function Clients() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Contact Name</div>
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Contact Name
+                  </div>
                   <input
                     className={input}
                     value={name}
@@ -479,7 +488,9 @@ export default function Clients() {
                   />
                 </div>
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Contact Email</div>
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Contact Email
+                  </div>
                   <input
                     className={input}
                     value={email}
@@ -491,8 +502,10 @@ export default function Clients() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Plan</div>
-                <input
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Plan
+                  </div>
+                  <input
                     className={input}
                     value={plan}
                     onChange={(e) => setPlan(e.target.value)}
@@ -501,7 +514,9 @@ export default function Clients() {
                 </div>
 
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Default Bot</div>
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Default Bot
+                  </div>
                   <select
                     className={input}
                     value={defaultBot}
@@ -551,7 +566,9 @@ export default function Clients() {
 
             <div className="p-5 space-y-4">
               <div>
-                <div className="text-sm font-bold uppercase text-purple-700">Company Name</div>
+                <div className="text-sm font-bold uppercase text-purple-700">
+                  Company Name
+                </div>
                 <input
                   className={input}
                   value={eCompanyName}
@@ -561,37 +578,63 @@ export default function Clients() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Contact Name</div>
-                  <input className={input} value={eName} onChange={(e) => setEName(e.target.value)} />
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Contact Name
+                  </div>
+                  <input
+                    className={input}
+                    value={eName}
+                    onChange={(e) => setEName(e.target.value)}
+                  />
                 </div>
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Contact Email</div>
-                  <input className={input} value={eEmail} onChange={(e) => setEEmail(e.target.value)} />
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Contact Email
+                  </div>
+                  <input
+                    className={input}
+                    value={eEmail}
+                    onChange={(e) => setEEmail(e.target.value)}
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Plan</div>
-                  <input className={input} value={ePlan} onChange={(e) => setEPlan(e.target.value)} />
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Plan
+                  </div>
+                  <input
+                    className={input}
+                    value={ePlan}
+                    onChange={(e) => setEPlan(e.target.value)}
+                  />
                 </div>
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Status</div>
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Status
+                  </div>
                   <select
                     className={input}
                     value={eStatus}
-                    onChange={(e) => setEStatus(e.target.value as Client["status"])}
+                    onChange={(e) =>
+                      setEStatus(e.target.value as Client["status"])
+                    }
                   >
                     <option value="Active">Active</option>
                     <option value="Paused">Paused</option>
                   </select>
                 </div>
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Default Bot</div>
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Default Bot
+                  </div>
                   <select
                     className={input}
                     value={eDefaultBot}
-                    onChange={(e) => setEDefaultBot(e.target.value as BotKey)}
+                    onChange={(e) =>
+                      setEDefaultBot(e.target.value as BotKey)
+                    }
                   >
                     <option value="LeadQualifier">Lead Qualifier</option>
                     <option value="AppointmentBooking">Appointment Booking</option>
@@ -604,7 +647,9 @@ export default function Clients() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Bots</div>
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Bots
+                  </div>
                   <input
                     className={input}
                     type="number"
@@ -614,7 +659,9 @@ export default function Clients() {
                   />
                 </div>
                 <div>
-                  <div className="text-sm font-bold uppercase text-purple-700">Leads</div>
+                  <div className="text-sm font-bold uppercase text-purple-700">
+                    Leads
+                  </div>
                   <input
                     className={input}
                     type="number"
@@ -626,7 +673,9 @@ export default function Clients() {
               </div>
 
               <div>
-                <div className="text-sm font-bold uppercase text-purple-700">Notes</div>
+                <div className="text-sm font-bold uppercase text-purple-700">
+                  Notes
+                </div>
                 <textarea
                   className={input}
                   rows={3}
