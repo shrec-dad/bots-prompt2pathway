@@ -63,6 +63,10 @@ function formatSize(bytes: number) {
   return `${bytes} B`;
 }
 
+function instanceLabel(m: InstanceMeta) {
+  return `${m.name || `${m.bot} Instance`} • ${m.mode}`;
+}
+
 /** -----------------------------------------------------------------------
  *  Page
  *  ---------------------------------------------------------------------*/
@@ -93,7 +97,7 @@ export default function Knowledge() {
   // Default to bot template using the store value (or first option if absent)
   const initialBot = useMemo<BotKey>(() => currentBot || BOT_OPTIONS[0].key, [currentBot]);
 
-  // We remember the last chosen instance (if any) so switching back and forth is nicer.
+  // Remember the last chosen instance (if any)
   const [lastInstId, setLastInstId] = useState<string>(() => {
     const first = listInstances()[0];
     return first ? first.id : "";
@@ -184,6 +188,17 @@ export default function Knowledge() {
       ? BOT_OPTIONS.find((b) => b.key === scope.bot)?.label || scope.bot
       : selectedInst?.name || "(deleted instance)";
 
+  const instanceOptions = instances
+    .slice()
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+
+  const selectedInstLabel =
+    scope.kind === "inst"
+      ? instanceOptions.find((m) => m.id === scope.id)
+        ? instanceLabel(instanceOptions.find((m) => m.id === scope.id) as InstanceMeta)
+        : "Select an instance"
+      : "";
+
   return (
     <div className="space-y-6">
       {/* Header / Pickers */}
@@ -244,33 +259,55 @@ export default function Knowledge() {
               </div>
             )}
 
-            {/* Instance picker */}
+            {/* Instance picker (wrapped label) */}
             {scope.kind === "inst" && (
               <div className="flex items-center gap-3">
                 <label className="text-xs font-bold uppercase text-foreground/70">My Bot</label>
-                <select
-                  className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[220px]"
-                  value={scope.id}
-                  onChange={(e) => {
-                    setLastInstId(e.target.value);
-                    setScope({ kind: "inst", id: e.target.value });
-                  }}
-                >
-                  {instances.length === 0 ? (
-                    <option value="" disabled>
-                      No instances yet — duplicate or create one first
-                    </option>
-                  ) : (
-                    instances
-                      .slice()
-                      .sort((a, b) => b.updatedAt - a.updatedAt)
-                      .map((m) => (
+
+                {/* Wrapped display with real select on top */}
+                <div className="relative w-full md:w-[380px]">
+                  {/* Visible, wrapping label box */}
+                  <div
+                    className="
+                      rounded-lg border bg-white pr-10 px-3 py-2
+                      font-semibold leading-snug
+                      whitespace-normal break-words
+                      min-h-[42px]
+                    "
+                  >
+                    {instances.length === 0
+                      ? "No instances yet — duplicate or create one first"
+                      : selectedInstLabel}
+                  </div>
+
+                  {/* Dropdown arrow */}
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 select-none text-foreground/70">
+                    ▾
+                  </span>
+
+                  {/* Real select (invisible but interactive) */}
+                  <select
+                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                    value={scope.id}
+                    onChange={(e) => {
+                      setLastInstId(e.target.value);
+                      setScope({ kind: "inst", id: e.target.value });
+                    }}
+                    aria-label="Choose client bot instance"
+                  >
+                    {instances.length === 0 ? (
+                      <option value="" disabled>
+                        No instances yet — duplicate or create one first
+                      </option>
+                    ) : (
+                      instanceOptions.map((m) => (
                         <option key={m.id} value={m.id}>
-                          {m.name || `${m.bot} Instance`} • {m.mode}
+                          {instanceLabel(m)}
                         </option>
                       ))
-                  )}
-                </select>
+                    )}
+                  </select>
+                </div>
               </div>
             )}
           </div>
