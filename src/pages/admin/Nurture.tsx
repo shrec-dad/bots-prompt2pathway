@@ -1,158 +1,320 @@
-// src/pages/admin/Nurture.tsx
-import React, { useMemo, useState } from "react";
-import "../../styles/admin-shared.css";
-import { getJSON, setJSON } from "../../lib/storage";
-import { useAdminStore } from "@/lib/AdminStore"; // to know current bot + mode
-import { createInstance, NurtureStep as Step } from "@/lib/instances";
+// src/pages/admin/Bots.tsx
+import React, { useEffect, useMemo, useState } from "react";
+import { getBotSettings, setBotSettings, BotKey } from "@/lib/botSettings";
+import {
+  listInstances,
+  removeInstance,
+  duplicateInstanceFromTemplate,
+  createInstance,
+  type InstanceMeta,
+} from "@/lib/instances";
+import { getJSON, setJSON } from "@/lib/storage";
 
-type NurtureStep = Step;
+/* ---------- shared analytics store ---------- */
+type Metrics = {
+  conversations: number;
+  leads: number;
+  avgResponseSecs?: number;
+  csatPct?: number;
+};
+const METRICS_KEY = "analytics:metrics";
 
-const KEY = "nurtureSchedule";
+/* ---------------- display helpers ---------------- */
+type BotDef = {
+  key: BotKey;
+  name: string;
+  gradient: string;
+  emoji: string;
+  description: string;
+};
 
-export default function Nurture() {
-  // Which bot/mode are we on?
-  const { currentBot, mode } = useAdminStore();
+const BOTS: BotDef[] = [
+  {
+    key: "LeadQualifier",
+    name: "Lead Qualifier",
+    emoji: "🎯",
+    gradient: "from-purple-500/20 via-fuchsia-400/20 to-pink-500/20",
+    description:
+      "Qualify leads with scoring, validation and routing. Best for sales intake.",
+  },
+  {
+    key: "AppointmentBooking",
+    name: "Appointment Booking",
+    emoji: "📅",
+    gradient: "from-emerald-500/20 via-teal-400/20 to-cyan-500/20",
+    description:
+      "Offer services, show availability, confirm and remind automatically.",
+  },
+  {
+    key: "CustomerSupport",
+    name: "Customer Support",
+    emoji: "🛟",
+    gradient: "from-indigo-500/20 via-blue-400/20 to-sky-500/20",
+    description:
+      "Answer FAQs, create tickets, route priority issues and hand off to humans.",
+  },
+  {
+    key: "Waitlist",
+    name: "Waitlist",
+    emoji: "⏳",
+    gradient: "from-amber-500/25 via-orange-400/20 to-rose-500/20",
+    description: "Collect interest, show queue status and notify customers.",
+  },
+  {
+    key: "SocialMedia",
+    name: "Social Media",
+    emoji: "📣",
+    gradient: "from-pink-500/20 via-rose-400/20 to-red-500/20",
+    description:
+      "Auto-DM replies, comment handling, and engagement prompts across platforms.",
+  },
+];
 
-  const initial = useMemo<NurtureStep[]>(
-    () =>
-      getJSON<NurtureStep[]>(
-        KEY,
-        Array.from({ length: 14 }, () => ({
-          enabled: false,
-          subject: "",
-          message: "",
-        }))
-      ),
-    []
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border bg-card px-4 py-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+        {label}
+      </div>
+      <div className="text-xl font-extrabold leading-tight">{value}</div>
+    </div>
+  );
+}
+
+function botKeyToLabel(key: BotKey) {
+  const found = BOTS.find((b) => b.key === key);
+  return found ? found.name : (key as string);
+}
+
+/* ---------------- main page ---------------- */
+
+export default function Bots() {
+  // Plan mode per bot
+  const [modes, setModes] = useState<Record<BotKey, "basic" | "custom">>(() =>
+    Object.fromEntries(
+      BOTS.map((b) => [b.key, getBotSettings(b.key).mode || "basic"])
+    ) as Record<BotKey, "basic" | "custom">
   );
 
-  const [steps, setSteps] = useState<NurtureStep[]>(initial);
+  // Instances list (My Bots)
+  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
+    listInstances()
+  );
 
-  const save = () => {
-    setJSON(KEY, steps);
-    alert("Nurture schedule saved!");
+  // Analytics metrics used for header stats
+  const [metrics, setMetrics] = useState<Metrics>(() =>
+    getJSON<Metrics>(METRICS_KEY, {
+      conversations: 0,
+      leads: 0,
+    })
+  );
+
+  // keep in sync if storage changes elsewhere
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key.startsWith("botSettings:")) {
+        const key = e.key.split(":")[1] as BotKey;
+        setModes((prev) => ({ ...prev, [key]: getBotSettings(key).mode }));
+      }
+      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
+        setInstances(listInstances());
+      }
+      if (e.key === METRICS_KEY) {
+        setMetrics(getJSON<Metrics>(METRICS_KEY, { conversations: 0, leads: 0 }));
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const resetTopStats = () => {
+    const next = { ...metrics, conversations: 0, leads: 0 };
+    setMetrics(next);
+    setJSON(METRICS_KEY, next);
   };
 
-  const duplicateToInstance = () => {
-    const name = window.prompt(
-      "Name this bot instance (customers will not see this name):",
-      "Waitlist (Copy)"
-    );
-    if (!name) return;
+  const fmtInt = (n: number) =>
+    Number.isFinite(n) ? Math.max(0, Math.round(n)).toLocaleString() : "0";
 
-    // Persist current schedule first
-    setJSON(KEY, steps);
-
-    const payload = createInstance({
-      name,
-      botId: currentBot, // e.g. "waitlist-bot"
-      mode,              // "basic" | "custom"
-      nurture: steps,    // carry 14-day sequence
-    });
-
-    alert(
-      `Created instance!\n\nName: ${payload.name}\nBot: ${payload.botId} • ${payload.mode}\nInstance ID: ${payload.id}\n\nPaste this ID into Admin → Embed → "Instance ID" to use it in your widget snippet.`
-    );
+  const safeInstanceName = (m: InstanceMeta) => {
+    const base =
+      (m.name && String(m.name)) || `${botKeyToLabel(m.bot)} Instance`;
+    return base;
   };
+
+  const sortedInstances = useMemo(
+    () => [...instances].sort((a, b) => b.updatedAt - a.updatedAt),
+    [instances]
+  );
 
   return (
-    <div
-      className="admin-page p-6 rounded-2xl border-2 border-purple-200 shadow-lg"
-      style={{
-        background:
-          "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
-      }}
-    >
-      {/* Header */}
-      <div className="h-row mb-6">
-        <div className="h-title text-black">Nurture (Day 1–14)</div>
-        <div className="stack" style={{ gridTemplateColumns: "auto auto" }}>
+    <div className="w-full h-full">
+      {/* Header + Create / Reset buttons */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-xl font-extrabold">Bots</div>
+        <div className="flex items-center gap-2">
           <button
-            className="btn"
-            onClick={duplicateToInstance}
-            title="Clone this 14-day sequence into a new Instance"
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30"
+            title="Reset Conversations and Leads"
+            onClick={resetTopStats}
           >
-            Duplicate to New Instance
+            Reset
           </button>
-          <button className="btn primary" onClick={save}>
-            Save Schedule
+          <button
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+            onClick={() => {
+              const first = BOTS[0];
+              const mode = modes[first.key] || "basic";
+              const meta = createInstance(first.key, mode, `${first.name} (New)`);
+              setInstances(listInstances());
+              window.location.href = `/admin/builder?inst=${meta.id}`;
+            }}
+          >
+            + Create New Bot
           </button>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="admin-section stack">
-        <p className="text-black">
-          Create simple 7–14 day sequences now. This page has placeholders ready
-          to wire to your email service later.
-        </p>
+      {/* Header metrics row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
+        <Stat label="Active Bots" value={String(sortedInstances.length)} />
+        <Stat label="Conversations (7d)" value={fmtInt(metrics.conversations)} />
+        <Stat label="Leads / Tickets (7d)" value={fmtInt(metrics.leads)} />
+      </div>
 
-        <div className="grid-2 gap-4">
-          {steps.map((s, idx) => (
+      {/* Bot catalog */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {BOTS.map((b) => (
+          <div
+            key={b.key}
+            className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
+          >
             <div
-              className="card stack border-2 border-black rounded-xl bg-white"
-              key={idx}
+              className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}
             >
-              <div className="h-row">
-                <div className="h-title text-black">Day {idx + 1}</div>
-                <label
-                  className="label text-black"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={s.enabled}
-                    onChange={(e) => {
-                      const copy = [...steps];
-                      copy[idx].enabled = e.target.checked;
-                      setSteps(copy);
-                    }}
-                  />
-                  Enabled
-                </label>
-              </div>
-
-              <div className="stack">
-                <label className="label text-black">Subject</label>
-                <input
-                  className="input border-2 border-purple-300 rounded-lg"
-                  placeholder="Subject for Day X"
-                  value={s.subject}
-                  onChange={(e) => {
-                    const copy = [...steps];
-                    copy[idx].subject = e.target.value;
-                    setSteps(copy);
-                  }}
-                />
-              </div>
-
-              <div className="stack">
-                <label className="label text-black">Message</label>
-                <textarea
-                  className="textarea border-2 border-purple-300 rounded-lg"
-                  placeholder="Short message for Day X"
-                  value={s.message}
-                  onChange={(e) => {
-                    const copy = [...steps];
-                    copy[idx].message = e.target.value;
-                    setSteps(copy);
-                  }}
-                />
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
+                  {b.emoji}
+                </div>
+                <div>
+                  <h3 className="text-xl font-extrabold tracking-tight">
+                    {b.name}
+                  </h3>
+                  <p className="text-sm font-semibold text-foreground/80">
+                    {b.description}
+                  </p>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* Footer: only Save button now */}
-        <div className="h-row mt-6" style={{ gap: 12 }}>
-          <button className="btn primary" onClick={save}>
-            Save All
-          </button>
-        </div>
+            <div className="mt-4 flex items-center gap-3">
+              <div className="text-sm font-semibold text-foreground/80">
+                Plan:
+              </div>
+
+              <select
+                className="ml-auto rounded-lg border bg-card px-3 py-2 text-sm font-bold shadow-sm"
+                value={modes[b.key]}
+                onChange={(e) => {
+                  const mode = e.target.value as "basic" | "custom";
+                  setModes((prev) => ({ ...prev, [b.key]: mode }));
+                  setBotSettings(b.key, { mode });
+                }}
+                aria-label={`${b.name} plan`}
+              >
+                <option value="basic">Basic</option>
+                <option value="custom">Custom</option>
+              </select>
+
+              <button
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+                onClick={() =>
+                  (window.location.href = `/admin/builder?bot=${b.key}`)
+                }
+                aria-label={`Open ${b.name} in Builder`}
+              >
+                Open Builder
+              </button>
+            </div>
+
+            <div className="mt-3">
+              <button
+                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-muted/40"
+                onClick={() => {
+                  const mode = modes[b.key] || "basic";
+                  duplicateInstanceFromTemplate(b.key, mode, `${b.name} (Copy)`);
+                  setInstances(listInstances());
+                }}
+                aria-label={`Duplicate ${b.name}`}
+              >
+                Duplicate
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* My Bots */}
+      <div className="mt-10">
+        <div className="text-lg font-extrabold mb-3">My Bots</div>
+
+        {sortedInstances.length === 0 ? (
+          <div className="rounded-xl border bg-card p-4 text-sm">
+            You don’t have any instances yet. Click <b>Duplicate</b> on a card
+            above or use <b>Create New Bot</b>.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {sortedInstances.map((m) => {
+              const title = safeInstanceName(m);
+              const sub = `${botKeyToLabel(m.bot)} • ${m.mode}`.trim();
+
+              return (
+                <div
+                  key={m.id}
+                  className="rounded-2xl border bg-card p-4 flex flex-col gap-3"
+                >
+                  <div className="text-lg font-extrabold leading-tight">
+                    {title}
+                  </div>
+                  <div className="text-sm text-foreground/80">{sub}</div>
+
+                  <div className="mt-2 flex items-center gap-3">
+                    <button
+                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
+                      onClick={() =>
+                        (window.location.href = `/admin/builder?inst=${m.id}`)
+                      }
+                    >
+                      Open
+                    </button>
+
+                    {/* NEW — quick link into Nurture for this instance */}
+                    <button
+                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-indigo-50"
+                      onClick={() =>
+                        (window.location.href = `/admin/nurture?inst=${m.id}`)
+                      }
+                    >
+                      Nurture
+                    </button>
+
+                    <button
+                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-rose-50"
+                      onClick={() => {
+                        removeInstance(m.id);
+                        setInstances(listInstances());
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
