@@ -12,7 +12,9 @@ export type BotKey =
   | "AppointmentBooking"
   | "CustomerSupport"
   | "Waitlist"
-  | "SocialMedia";
+  | "SocialMedia"
+  // Allow custom template keys as well:
+  | (string & {});
 
 export type Mode = "basic" | "custom";
 
@@ -21,12 +23,39 @@ export type BotTemplate = {
   edges: Edge[];
 };
 
-// tiny helper to keep ids readable & unique within a template
-const id = (p: string, n: number) => `${p}_${n}`;
+export type TemplateDef = {
+  key: string;          // unique slug/key (used in query ?bot=<key>)
+  name: string;         // display name
+  emoji: string;        // emoji badge
+  gradient: string;     // tailwind gradient classes
+  description: string;  // short blurb
+};
+
+/* ---------- Storage helpers for custom templates ---------- */
+
+const TPL_INDEX_KEY = "botTemplates:index"; // TemplateDef[]
+const TPL_DATA_KEY = (key: string, mode: Mode) => `botTemplates:data:${key}_${mode}`;
+
+function readJSON<T>(k: string, fb: T): T {
+  try {
+    const raw = localStorage.getItem(k);
+    if (!raw) return fb;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fb;
+  }
+}
+function writeJSON<T>(k: string, v: T) {
+  localStorage.setItem(k, JSON.stringify(v));
+}
 
 /* =========================================================================
-   1) LEAD QUALIFIER BOT
-   ======================================================================== */
+   BUILT-IN TEMPLATES (your existing 5) — graphs unchanged
+   ========================================================================= */
+
+const id = (p: string, n: number) => `${p}_${n}`;
+
+/* 1) LEAD QUALIFIER BOT --------------------------------------------------- */
 
 const LeadQualifier_basic: BotTemplate = {
   nodes: [
@@ -141,9 +170,7 @@ const LeadQualifier_custom: BotTemplate = {
   ],
 };
 
-/* =========================================================================
-   2) APPOINTMENT BOOKING BOT
-   ======================================================================== */
+/* 2) APPOINTMENT BOOKING BOT --------------------------------------------- */
 
 const AppointmentBooking_basic: BotTemplate = {
   nodes: [
@@ -237,9 +264,7 @@ const AppointmentBooking_custom: BotTemplate = {
   ],
 };
 
-/* =========================================================================
-   3) CUSTOMER SUPPORT BOT
-   ======================================================================== */
+/* 3) CUSTOMER SUPPORT BOT ------------------------------------------------- */
 
 const CustomerSupport_basic: BotTemplate = {
   nodes: [
@@ -333,9 +358,7 @@ const CustomerSupport_custom: BotTemplate = {
   ],
 };
 
-/* =========================================================================
-   4) WAITLIST BOT
-   ======================================================================== */
+/* 4) WAITLIST BOT --------------------------------------------------------- */
 
 const Waitlist_basic: BotTemplate = {
   nodes: [
@@ -429,9 +452,7 @@ const Waitlist_custom: BotTemplate = {
   ],
 };
 
-/* =========================================================================
-   5) SOCIAL MEDIA BOT
-   ======================================================================== */
+/* 5) SOCIAL MEDIA BOT ----------------------------------------------------- */
 
 const SocialMedia_basic: BotTemplate = {
   nodes: [
@@ -511,34 +532,155 @@ const SocialMedia_custom: BotTemplate = {
   ],
 };
 
-/* =========================================================================
-   EXPORTS
-   ======================================================================== */
+/* ---------- Built-in defs list ---------- */
 
-// Access by key pattern: `${BotKey}_${Mode}`
-export const templates: Record<string, BotTemplate> = {
-  // Lead Qualifier
+const builtinDefs: TemplateDef[] = [
+  {
+    key: "LeadQualifier",
+    name: "Lead Qualifier",
+    emoji: "🎯",
+    gradient: "from-purple-500/20 via-fuchsia-400/20 to-pink-500/20",
+    description: "Qualify leads with scoring, validation and routing. Best for sales intake.",
+  },
+  {
+    key: "AppointmentBooking",
+    name: "Appointment Booking",
+    emoji: "📅",
+    gradient: "from-emerald-500/20 via-teal-400/20 to-cyan-500/20",
+    description: "Offer services, show availability, confirm and remind automatically.",
+  },
+  {
+    key: "CustomerSupport",
+    name: "Customer Support",
+    emoji: "🛟",
+    gradient: "from-indigo-500/20 via-blue-400/20 to-sky-500/20",
+    description: "Answer FAQs, create tickets, route priority issues and hand off to humans.",
+  },
+  {
+    key: "Waitlist",
+    name: "Waitlist",
+    emoji: "⏳",
+    gradient: "from-amber-500/25 via-orange-400/20 to-rose-500/20",
+    description: "Collect interest, show queue status and notify customers.",
+  },
+  {
+    key: "SocialMedia",
+    name: "Social Media",
+    emoji: "📣",
+    gradient: "from-pink-500/20 via-rose-400/20 to-red-500/20",
+    description: "Auto-DM replies, comment handling, and engagement prompts across platforms.",
+  },
+];
+
+/* ---------- Built-in graphs map ---------- */
+const builtinGraphs: Record<string, BotTemplate> = {
   LeadQualifier_basic,
   LeadQualifier_custom,
-
-  // Appointment Booking
   AppointmentBooking_basic,
   AppointmentBooking_custom,
-
-  // Customer Support
   CustomerSupport_basic,
   CustomerSupport_custom,
-
-  // Waitlist
   Waitlist_basic,
   Waitlist_custom,
-
-  // Social Media
   SocialMedia_basic,
   SocialMedia_custom,
 };
 
-// Helper to get a template safely
+/* =========================================================================
+   PUBLIC API (built-ins + custom templates in localStorage)
+   ========================================================================= */
+
+/** Return all template defs (built-ins first, then custom). */
+export function listTemplateDefs(): TemplateDef[] {
+  const custom = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
+  // De-dupe by key: prefer custom override if same key (unlikely)
+  const seen = new Set<string>();
+  const out: TemplateDef[] = [];
+  for (const d of builtinDefs) {
+    if (!seen.has(d.key)) {
+      out.push(d);
+      seen.add(d.key);
+    }
+  }
+  for (const d of custom) {
+    if (!seen.has(d.key)) {
+      out.push(d);
+      seen.add(d.key);
+    }
+  }
+  return out;
+}
+
+/** Get a template def by key (checks custom first, then built-ins). */
+export function getTemplateDef(key: string): TemplateDef | undefined {
+  const custom = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
+  const foundCustom = custom.find((d) => d.key === key);
+  if (foundCustom) return foundCustom;
+  return builtinDefs.find((d) => d.key === key);
+}
+
+/** Save/replace the graph for a template key+mode. */
+export function saveTemplateGraph(key: string, mode: Mode, graph: BotTemplate): void {
+  writeJSON(TPL_DATA_KEY(key, mode), graph);
+}
+
+/** Create a new custom template with a skeleton graph (Welcome node). */
+export function createTemplate(name: string): TemplateDef {
+  const key = slugFromName(name);
+  const defs = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
+
+  // If exists, add suffix to keep unique
+  const finalKey = ensureUniqueKey(key, new Set([...defs.map((d) => d.key), ...builtinDefs.map((b) => b.key)]));
+
+  const def: TemplateDef = {
+    key: finalKey,
+    name: name.trim(),
+    emoji: "✨",
+    gradient: "from-violet-500/20 via-purple-400/20 to-emerald-400/20",
+    description: "Custom bot template",
+  };
+
+  // Skeleton graph (per your preference)
+  const skeleton: BotTemplate = {
+    nodes: [
+      {
+        id: "welcome_1",
+        type: "message",
+        data: { title: "Welcome", text: "Start building your new bot here…" },
+        position: { x: 60, y: 40 },
+      },
+    ],
+    edges: [],
+  };
+
+  const next = [...defs, def];
+  writeJSON(TPL_INDEX_KEY, next);
+  saveTemplateGraph(finalKey, "basic", skeleton);
+  saveTemplateGraph(finalKey, "custom", skeleton);
+
+  return def;
+}
+
+/** Get a graph by key+mode — checks custom store first, then built-ins. */
 export function getTemplate(bot: BotKey, mode: Mode): BotTemplate | undefined {
-  return templates[`${bot}_${mode}`];
+  const custom = readJSON<BotTemplate | null>(TPL_DATA_KEY(String(bot), mode), null);
+  if (custom) return custom;
+  return builtinGraphs[`${String(bot)}_${mode}`];
+}
+
+/* ---------- small helpers ---------- */
+
+function slugFromName(name: string): string {
+  const s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+  return s || `custom-${Date.now().toString(36)}`;
+}
+function ensureUniqueKey(base: string, used: Set<string>): string {
+  if (!used.has(base)) return base;
+  let i = 2;
+  while (used.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
 }
