@@ -100,7 +100,8 @@ export default function Clients() {
 
   const totalClients = clients.length;
   const activeClients = clients.filter((c) => c.status === "Active").length;
-  const totalBots = clients.reduce((a, c) => a + c.bots, 0);
+ const totalBots = clients.reduce(
+  (a, c) => a + (c.assignedBots?.length ?? c.bots ?? 0),0
   const totalLeads = clients.reduce((a, c) => a + c.leads, 0);
 
   function saveList(next: Client[]) {
@@ -394,7 +395,7 @@ export default function Clients() {
 
                   <div className="flex items-center gap-6">
                     <div className="text-center">
-                      <div className="text-xl font-extrabold">{c.bots}</div>
+                      <div className="text-xl font-extrabold">{(c.assignedBots?.length ?? c.bots ?? 0)}</div>
                       <div className="text-xs font-semibold uppercase text-foreground/70">
                         Bots
                       </div>
