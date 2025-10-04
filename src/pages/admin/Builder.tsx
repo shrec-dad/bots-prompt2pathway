@@ -26,6 +26,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings, setBotSettings, BotKey } from "@/lib/botSettings";
+import { listInstances, type InstanceMeta } from "@/lib/instances";
 
 /* =========================================================================
    0)  Instance support (duplicated bots)
@@ -184,12 +185,27 @@ function BuilderInner() {
     setCurrentBot?: (key: any) => void;
   };
 
+  // Load & live-sync instances so dropdown stays fresh
+  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
+    listInstances()
+  );
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
+        setInstances(listInstances());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const instMeta = instId ? readInstMeta(instId) : null;
 
   const initialBot: BotKey =
     (instMeta?.baseKey as BotKey) ||
     (urlBot as BotKey) ||
-    ((BOT_OPTIONS[0].key as unknown) as BotKey);
+    (BOT_OPTIONS[0].key as BotKey);
 
   const [bot, setBot] = useState<BotKey>(initialBot);
 
@@ -415,6 +431,23 @@ function BuilderInner() {
     [nodes, selectedId]
   );
 
+  // ===== DROPDOWN (templates + instances) =====
+  const selectValue = instId ? `inst:${instId}` : `bot:${bot}`;
+  const onBotOrInstanceChange = (val: string) => {
+    if (val.startsWith("inst:")) {
+      const id = val.slice(5);
+      // jump to instance editing mode
+      window.location.href = `/admin/builder?inst=${encodeURIComponent(id)}`;
+      return;
+    }
+    if (val.startsWith("bot:")) {
+      const key = val.slice(4) as BotKey;
+      setBot(key);
+    }
+  };
+
+  const botSelectDisabled = false; // allow switching between template/instance directly
+
   // UI helpers
   const inputClass =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
@@ -553,8 +586,6 @@ function BuilderInner() {
     );
   };
 
-  const botSelectDisabled = Boolean(instId);
-
   return (
     <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4">
       {/* ===== Header ===== */}
@@ -568,7 +599,7 @@ function BuilderInner() {
               Drag-and-drop flow editor.{" "}
               {instId
                 ? "Editing a duplicated bot instance."
-                : "Pick a bot and edit the copy of each node below."}
+                : "Pick a bot or one of your client bots and edit the nodes below."}
             </p>
           </div>
 
@@ -578,19 +609,36 @@ function BuilderInner() {
                 Bot
               </label>
               <select
-                className="rounded-lg border px-3 py-2 font-semibold bg-white"
-                value={bot}
-                onChange={(e) => setBot(e.target.value as BotKey)}
+                className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[260px]"
+                value={selectValue}
+                onChange={(e) => onBotOrInstanceChange(e.target.value)}
                 disabled={botSelectDisabled}
-                title={
-                  botSelectDisabled ? "Bot is fixed for this instance" : "Change bot"
-                }
+                title="Choose a template or a client bot"
               >
-                {BOT_OPTIONS.map((b) => (
-                  <option key={b.key} value={b.key}>
-                    {b.label}
-                  </option>
-                ))}
+                <optgroup label="Bot Templates">
+                  {BOT_OPTIONS.map((b) => (
+                    <option key={`bot:${b.key}`} value={`bot:${b.key}`}>
+                      {b.label}
+                    </option>
+                  ))}
+                </optgroup>
+
+                <optgroup label="My Bots">
+                  {instances.length === 0 ? (
+                    <option value="inst:" disabled>
+                      No instances yet — duplicate or create one first
+                    </option>
+                  ) : (
+                    instances
+                      .slice()
+                      .sort((a, b) => b.updatedAt - a.updatedAt)
+                      .map((m) => (
+                        <option key={`inst:${m.id}`} value={`inst:${m.id}`}>
+                          {(m.name || `${m.bot} Instance`) + " • " + m.mode}
+                        </option>
+                      ))
+                  )}
+                </optgroup>
               </select>
             </div>
 
@@ -672,7 +720,7 @@ function BuilderInner() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
-            onPaneClick={onPaneClick} // place node exactly where you click
+            onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
