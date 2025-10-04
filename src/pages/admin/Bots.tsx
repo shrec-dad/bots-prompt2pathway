@@ -1,7 +1,6 @@
 // src/pages/admin/Bots.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getBotSettings, setBotSettings, BotKey } from "@/lib/botSettings";
+import { getBotSettings, setBotSettings } from "@/lib/botSettings";
 import {
   listInstances,
   removeInstance,
@@ -10,6 +9,7 @@ import {
   type InstanceMeta,
 } from "@/lib/instances";
 import { getJSON, setJSON } from "@/lib/storage";
+import { listTemplateDefs, createTemplate } from "@/lib/templates";
 
 /* ---------- shared analytics store ---------- */
 type Metrics = {
@@ -21,88 +21,30 @@ type Metrics = {
 const METRICS_KEY = "analytics:metrics";
 
 /* ---------------- display helpers ---------------- */
-type BotDef = {
-  key: BotKey;
-  name: string;
-  gradient: string; // tailwind gradient classes
-  emoji: string;
-  description: string;
-};
+type BotKey = string;
 
-const BOTS: BotDef[] = [
-  {
-    key: "LeadQualifier",
-    name: "Lead Qualifier",
-    emoji: "🎯",
-    gradient: "from-purple-500/20 via-fuchsia-400/20 to-pink-500/20",
-    description:
-      "Qualify leads with scoring, validation and routing. Best for sales intake.",
-  },
-  {
-    key: "AppointmentBooking",
-    name: "Appointment Booking",
-    emoji: "📅",
-    gradient: "from-emerald-500/20 via-teal-400/20 to-cyan-500/20",
-    description:
-      "Offer services, show availability, confirm and remind automatically.",
-  },
-  {
-    key: "CustomerSupport",
-    name: "Customer Support",
-    emoji: "🛟",
-    gradient: "from-indigo-500/20 via-blue-400/20 to-sky-500/20",
-    description:
-      "Answer FAQs, create tickets, route priority issues and hand off to humans.",
-  },
-  {
-    key: "Waitlist",
-    name: "Waitlist",
-    emoji: "⏳",
-    gradient: "from-amber-500/25 via-orange-400/20 to-rose-500/20",
-    description: "Collect interest, show queue status and notify customers.",
-  },
-  {
-    key: "SocialMedia",
-    name: "Social Media",
-    emoji: "📣",
-    gradient: "from-pink-500/20 via-rose-400/20 to-red-500/20",
-    description:
-      "Auto-DM replies, comment handling, and engagement prompts across platforms.",
-  },
-];
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border bg-card px-4 py-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
-        {label}
-      </div>
-      <div className="text-xl font-extrabold leading-tight">{value}</div>
-    </div>
-  );
+function botKeyToLabel(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
+  return defs.find((b) => b.key === key)?.name || (key as string);
 }
-
-function botKeyToLabel(key: BotKey) {
-  const found = BOTS.find((b) => b.key === key);
-  return found ? found.name : (key as string);
+function botKeyToGradient(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
+  return defs.find((b) => b.key === key)?.gradient || "from-gray-200 to-gray-100";
 }
-function botKeyToGradient(key: BotKey) {
-  return BOTS.find((b) => b.key === key)?.gradient || "from-gray-200 to-gray-100";
-}
-function botKeyToEmoji(key: BotKey) {
-  return BOTS.find((b) => b.key === key)?.emoji || "🤖";
+function botKeyToEmoji(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
+  return defs.find((b) => b.key === key)?.emoji || "🤖";
 }
 
 /* ---------------- main page ---------------- */
 
 export default function Bots() {
-  const nav = useNavigate();
+  // Dynamic template catalog
+  const [defs, setDefs] = useState(() => listTemplateDefs());
 
-  // Plan mode per bot
-  const [modes, setModes] = useState<Record<BotKey, "basic" | "custom">>(() =>
-    Object.fromEntries(
-      BOTS.map((b) => [b.key, getBotSettings(b.key).mode || "basic"])
-    ) as Record<BotKey, "basic" | "custom">
+  // Plan mode per template key
+  const [modes, setModes] = useState<Record<string, "basic" | "custom">>(() =>
+    Object.fromEntries(defs.map((b) => [b.key, getBotSettings(b.key).mode || "basic"])) as Record<
+      string,
+      "basic" | "custom"
+    >
   );
 
   // Instances list (My Bots)
@@ -132,6 +74,9 @@ export default function Bots() {
       if (e.key === METRICS_KEY) {
         setMetrics(getJSON<Metrics>(METRICS_KEY, { conversations: 0, leads: 0 }));
       }
+      if (e.key === "botTemplates:index") {
+        setDefs(listTemplateDefs());
+      }
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -148,13 +93,23 @@ export default function Bots() {
 
   // safely format a title
   const safeInstanceName = (m: InstanceMeta) =>
-    (m.name && String(m.name)) || `${botKeyToLabel(m.bot)} Instance`;
+    (m.name && String(m.name)) || `${botKeyToLabel(defs, m.bot)} Instance`;
 
   // Tidy, sorted list for display
   const sortedInstances = useMemo(
     () => [...instances].sort((a, b) => b.updatedAt - a.updatedAt),
     [instances]
   );
+
+  // Utility: simple slug/key from a name
+  const toKey = (name: string) =>
+    name
+      .trim()
+      .replace(/[^a-zA-Z0-9]+/g, " ")
+      .trim()
+      .split(" ")
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join("");
 
   return (
     <div className="w-full h-full">
@@ -172,11 +127,17 @@ export default function Bots() {
           <button
             className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
             onClick={() => {
-              const first = BOTS[0];
-              const mode = modes[first.key] || "basic";
-              const meta = createInstance(first.key, mode, `${first.name} (New)`);
-              setInstances(listInstances());
-              window.location.href = `/admin/builder?inst=${meta.id}`;
+              const name = prompt("Name your new bot template:", "New Template")?.trim();
+              if (!name) return;
+              const key = toKey(name);
+              // prevent duplicate
+              if (defs.some((d) => d.key === key)) {
+                alert("A template with this name/key already exists. Please choose a different name.");
+                return;
+              }
+              createTemplate({ name, key });
+              setDefs(listTemplateDefs()); // refresh list in-place
+              // Q1=A: stay on Bots page; the new card will appear below
             }}
           >
             + Create New Bot
@@ -191,9 +152,9 @@ export default function Bots() {
         <Stat label="Leads / Tickets (7d)" value={fmtInt(metrics.leads)} />
       </div>
 
-      {/* Bot catalog (unchanged) */}
+      {/* Template catalog (dynamic) */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {BOTS.map((b) => (
+        {defs.map((b) => (
           <div
             key={b.key}
             className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
@@ -223,7 +184,7 @@ export default function Bots() {
 
               <select
                 className="ml-auto rounded-lg border bg-card px-3 py-2 text-sm font-bold shadow-sm"
-                value={modes[b.key]}
+                value={modes[b.key] || "basic"}
                 onChange={(e) => {
                   const mode = e.target.value as "basic" | "custom";
                   setModes((prev) => ({ ...prev, [b.key]: mode }));
@@ -250,16 +211,13 @@ export default function Bots() {
               <button
                 className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-muted/40"
                 onClick={() => {
-                  const mode = modes[b.key] || "basic";
+                  const mode = (modes[b.key] || "basic") as "basic" | "custom";
                   const defaultName = `${b.name} (Copy)`;
                   const desired =
                     prompt("Name this new client bot:", defaultName)?.trim() ||
                     defaultName;
 
-                  // Persist duplicate with user-provided name
-                  duplicateInstanceFromTemplate(b.key, mode, desired);
-
-                  // Refresh local list
+                  duplicateInstanceFromTemplate(b.key as any, mode, desired);
                   setInstances(listInstances());
                 }}
                 aria-label={`Duplicate ${b.name}`}
@@ -284,9 +242,9 @@ export default function Bots() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {sortedInstances.map((m) => {
               const title = safeInstanceName(m);
-              const sub = `${botKeyToLabel(m.bot)} • ${m.mode}`.trim();
-              const grad = botKeyToGradient(m.bot);
-              const emoji = botKeyToEmoji(m.bot);
+              const sub = `${botKeyToLabel(defs, m.bot)} • ${m.mode}`.trim();
+              const grad = botKeyToGradient(defs, m.bot);
+              const emoji = botKeyToEmoji(defs, m.bot);
 
               return (
                 <div
@@ -334,16 +292,13 @@ export default function Bots() {
                       onClick={() => {
                         const next = prompt("Rename this bot instance:", title);
                         if (!next) return;
-                        const idx = listInstances().find((x) => x.id === m.id);
-                        if (idx) {
-                          const rawKey = `botInstances:${m.id}`;
-                          const raw = localStorage.getItem(rawKey);
-                          if (raw) {
-                            const parsed = JSON.parse(raw);
-                            parsed.name = next;
-                            localStorage.setItem(rawKey, JSON.stringify(parsed));
-                            setInstances(listInstances());
-                          }
+                        const rawKey = `botInstances:${m.id}`;
+                        const raw = localStorage.getItem(rawKey);
+                        if (raw) {
+                          const parsed = JSON.parse(raw);
+                          parsed.name = next;
+                          localStorage.setItem(rawKey, JSON.stringify(parsed));
+                          setInstances(listInstances());
                         }
                       }}
                     >
@@ -366,6 +321,18 @@ export default function Bots() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---------- Small Stat component (unchanged) ---------- */
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border bg-card px-4 py-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+        {label}
+      </div>
+      <div className="text-xl font-extrabold leading-tight">{value}</div>
     </div>
   );
 }
