@@ -24,7 +24,7 @@ import "reactflow/dist/style.css";
 
 import { useSearchParams } from "react-router-dom";
 import { useAdminStore } from "@/lib/AdminStore";
-import { getTemplate } from "@/lib/templates";
+import { getTemplate, listTemplateDefs, type BotKey } from "@/lib/templates";
 import { getBotSettings, setBotSettings } from "@/lib/botSettings";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
 
@@ -32,8 +32,7 @@ import { listInstances, type InstanceMeta } from "@/lib/instances";
    0)  Instance support (duplicated bots)
    ========================================================================= */
 
-type BotKey = string;
-type InstMeta = { baseKey: BotKey; mode: "basic" | "custom" } | null;
+type InstMeta = { baseKey: string; mode: "basic" | "custom" } | null;
 
 function readInstMeta(instId: string): InstMeta {
   try {
@@ -131,11 +130,11 @@ type RFNode = Node & {
   data?: any;
 };
 
-const OV_KEY = (bot: BotKey, mode: "basic" | "custom") =>
+const OV_KEY = (bot: string, mode: "basic" | "custom") =>
   `botOverrides:${bot}_${mode}`;
 
 function getOverrides(
-  bot: BotKey,
+  bot: string,
   mode: "basic" | "custom",
   instId?: string
 ) {
@@ -148,7 +147,7 @@ function getOverrides(
 }
 
 function saveOverrides(
-  bot: BotKey,
+  bot: string,
   mode: "basic" | "custom",
   ov: Record<string, any>,
   instId?: string
@@ -161,23 +160,11 @@ function saveOverrides(
 }
 
 /* =========================================================================
-   3)  Template labels (for the dropdown)
-   ========================================================================= */
-
-const KNOWN_BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
-  { key: "LeadQualifier", label: "Lead Qualifier" },
-  { key: "AppointmentBooking", label: "Appointment Booking" },
-  { key: "CustomerSupport", label: "Customer Support" },
-  { key: "Waitlist", label: "Waitlist" },
-  { key: "SocialMedia", label: "Social Media" },
-];
-
-/* =========================================================================
-   4)  The actual Builder body (inside ReactFlowProvider)
+   3)  The actual Builder body (inside ReactFlowProvider)
    ========================================================================= */
 
 type Source =
-  | { kind: "tpl"; bot: BotKey }
+  | { kind: "tpl"; bot: string }
   | { kind: "inst"; id: string; meta: InstMeta };
 
 const sourceToValue = (s: Source) =>
@@ -186,12 +173,36 @@ const sourceToValue = (s: Source) =>
 function BuilderInner() {
   const [search, setSearch] = useSearchParams();
 
+  // existing query-string support
   const queryInst = search.get("inst") || undefined;
-  const queryBot = (search.get("bot") as BotKey | null) || null;
+  const queryBot = (search.get("bot") as string | null) || null;
 
+  // templates (dynamic: built-in + custom)
+  const [defs, setDefs] = useState(() => listTemplateDefs());
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === "botTemplates:index") {
+        setDefs(listTemplateDefs());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const BUILTIN_KEYS = new Set<BotKey>([
+    "LeadQualifier",
+    "AppointmentBooking",
+    "CustomerSupport",
+    "Waitlist",
+    "SocialMedia",
+  ] as BotKey[]);
+
+  // NOTE: AdminStore in your project uses fixed built-ins.
+  // To avoid conflicts, only sync when the key is one of the built-ins.
   const { currentBot, setCurrentBot } = useAdminStore() as {
-    currentBot: string | null;
-    setCurrentBot?: (key: string) => void;
+    currentBot: any;
+    setCurrentBot?: (key: any) => void;
   };
 
   // list client instances for dropdown
@@ -209,47 +220,62 @@ function BuilderInner() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Determine initial source
+  // Build initial source from URL or default to first template
   const initialSource: Source = useMemo(() => {
     if (queryInst) {
       return { kind: "inst", id: queryInst, meta: readInstMeta(queryInst) };
     }
-    const fallbackKey = queryBot || (currentBot as string) || "LeadQualifier";
-    return { kind: "tpl", bot: fallbackKey };
-  }, [queryInst, queryBot, currentBot]);
+    const defaultKey =
+      queryBot ||
+      defs[0]?.key ||
+      "LeadQualifier"; // safe fallback if nothing exists yet
+    return { kind: "tpl", bot: defaultKey };
+  }, [queryInst, queryBot, defs]);
 
   const [source, setSource] = useState<Source>(initialSource);
 
-  // Derived: bot key & mode
-  const initialBot: BotKey =
+  // Derived: bot (base template) and mode based on source
+  const initialBot: string =
     source.kind === "tpl"
       ? source.bot
-      : (source.meta?.baseKey as BotKey) || "LeadQualifier";
+      : (source.meta?.baseKey as string) || defs[0]?.key || "LeadQualifier";
 
-  // If the key has a stored mode, use it, otherwise default to basic
-  const [mode, setMode] = useState<"basic" | "custom">(
+  const [bot, setBot] = useState<string>(initialBot);
+
+  const initialMode: "basic" | "custom" =
     source.kind === "inst"
       ? (source.meta?.mode as "basic" | "custom") || "custom"
-      : (getBotSettings(initialBot).mode as "basic" | "custom") || "basic"
-  );
+      : (getBotSettings(initialBot as any).mode as "basic" | "custom") ||
+        "custom";
 
-  const [bot, setBot] = useState<BotKey>(initialBot);
+  const [mode, setMode] = useState<"basic" | "custom">(initialMode);
 
-  // Keep admin store in sync when editing a known template
+  // Keep admin store in sync when editing a template (only for built-ins)
   useEffect(() => {
-    if (source.kind === "tpl" && setCurrentBot && bot !== currentBot) {
-      setCurrentBot(bot);
+    if (source.kind === "tpl" && BUILTIN_KEYS.has(bot as BotKey)) {
+      if (setCurrentBot && bot !== currentBot) setCurrentBot(bot);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bot, source.kind]);
 
-  // ReactFlow data via getTemplate()
-  const tplKey = `${bot}_${mode}`;
-  const base = useMemo(
-    () => getTemplate(bot, mode) as { nodes: RFNode[]; edges: Edge[] } | undefined,
-    [bot, mode]
-  );
+  // If user changes AdminStore elsewhere, reflect it for built-ins only
+  useEffect(() => {
+    if (
+      source.kind === "tpl" &&
+      BUILTIN_KEYS.has(currentBot as BotKey) &&
+      currentBot &&
+      currentBot !== bot
+    ) {
+      setBot(currentBot);
+      setMode(
+        (getBotSettings(currentBot as any).mode as "basic" | "custom") ||
+          "custom"
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBot]);
 
+  // ReactFlow data (template + overrides)
   const activeInstId = source.kind === "inst" ? source.id : undefined;
 
   const [overrides, setOv] = useState<Record<string, any>>(() =>
@@ -266,25 +292,25 @@ function BuilderInner() {
     []
   );
 
+  const base = useMemo(() => getTemplate(bot, mode), [bot, mode]);
+
   const [nodes, setNodes, onNodesChange] = useNodesState<RFNode[]>(
-    base ? (mergeOverrides(base.nodes, overrides) as RFNode[]) : []
+    base ? (mergeOverrides((base as any).nodes, overrides) as RFNode[]) : []
   );
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>(
-    base ? base.edges : []
+    base ? (base as any).edges : []
   );
 
   // Rebuild when bot/mode/source changes
   useEffect(() => {
-    const found = getTemplate(bot, mode) as
-      | { nodes: RFNode[]; edges: Edge[] }
-      | undefined;
+    const found = getTemplate(bot, mode);
 
     const nextOv = getOverrides(bot, mode, activeInstId);
     setOv(nextOv);
 
     if (found) {
-      setNodes(mergeOverrides(found.nodes, nextOv) as Node[]);
-      setEdges(found.edges as Edge[]);
+      setNodes(mergeOverrides((found as any).nodes, nextOv) as Node[]);
+      setEdges((found as any).edges as Edge[]);
     } else {
       setNodes([]);
       setEdges([]);
@@ -294,9 +320,10 @@ function BuilderInner() {
   function onModeChange(next: "basic" | "custom") {
     setMode(next);
     if (source.kind === "inst") {
+      // persist on instance meta
       writeInstMeta(source.id, { baseKey: bot, mode: next });
     } else {
-      setBotSettings(bot, { mode: next });
+      setBotSettings(bot as any, { mode: next });
     }
   }
 
@@ -305,7 +332,7 @@ function BuilderInner() {
   const [editorValues, setEditorValues] = useState<any>({});
 
   useEffect(() => {
-    if (!selectedId) return setEditorValues({});
+    if (!selectedId) return setEditorValues({}); // clear if nothing selected
     const n = nodes.find((x) => x.id === selectedId);
     setEditorValues(n?.data || {});
   }, [selectedId, nodes]);
@@ -453,6 +480,7 @@ function BuilderInner() {
   );
 
   // ====== Dropdown with Templates + Client Bots ======
+  // Value is "tpl:<key>" OR "inst:<id>"
   const selectValue = sourceToValue(source);
 
   function onSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -461,13 +489,15 @@ function BuilderInner() {
     if (v.startsWith("inst:")) {
       const id = v.slice(5);
       const meta = readInstMeta(id);
-      const baseKey = (meta?.baseKey as BotKey | undefined) || "LeadQualifier";
+      const baseKey =
+        (meta?.baseKey as string | undefined) || defs[0]?.key || "LeadQualifier";
       const m = (meta?.mode as "basic" | "custom") || "custom";
 
       setSource({ kind: "inst", id, meta });
       setBot(baseKey);
       setMode(m);
 
+      // reflect in query string for deep-linking
       setSearch((s) => {
         s.set("inst", id);
         s.delete("bot");
@@ -477,8 +507,11 @@ function BuilderInner() {
     }
 
     if (v.startsWith("tpl:")) {
-      const key = v.slice(4) as BotKey;
-      const m = (getBotSettings(key).mode as "basic" | "custom") || "basic";
+      const key = v.slice(4);
+
+      const m =
+        (getBotSettings(key as any).mode as "basic" | "custom") ||
+        ("custom" as const);
 
       setSource({ kind: "tpl", bot: key });
       setBot(key);
@@ -671,20 +704,18 @@ function BuilderInner() {
                       .sort((a, b) => b.updatedAt - a.updatedAt)
                       .map((m) => (
                         <option key={m.id} value={`inst:${m.id}`}>
-                          {m.name || `${m.bot} Instance`} • {m.mode}
+                          {(m.name || `${m.bot} Instance`).toString()} • {m.mode}
                         </option>
                       ))
                   )}
                 </optgroup>
 
                 <optgroup label="Templates">
-                  {KNOWN_BOT_OPTIONS.map((b) => (
-                    <option key={b.key} value={`tpl:${b.key}`}>
-                      {b.label}
+                  {defs.map((d) => (
+                    <option key={d.key} value={`tpl:${d.key}`}>
+                      {d.name}
                     </option>
                   ))}
-                  {/* Custom templates appear in Bots list and are deep-linked via /admin/builder?bot=<key>.
-                      They won't appear here to keep the selector compact; editing them still works via URL/deeplink. */}
                 </optgroup>
               </select>
             </div>
@@ -794,9 +825,9 @@ function BuilderInner() {
 
         {!base && (
           <div className="px-4 py-3 text-sm text-foreground/80">
-            No template found for <b>{tplKey}</b>. If this is a custom template,
-            make sure it was created in <b>Bots</b> and deep-linked with{" "}
-            <code className="mx-1 px-1 rounded bg-muted/50">?bot={"{key}"}</code>.
+            No template found for <b>{bot}</b> in mode <b>{mode}</b>. Make sure your
+            <code className="mx-1 px-1 rounded bg-muted/50">templates</code>{" "}
+            storage includes a graph for this key+mode.
           </div>
         )}
 
@@ -841,6 +872,10 @@ function BuilderInner() {
     </div>
   );
 }
+
+/* =========================================================================
+   4)  Export with Provider wrapper to satisfy useReactFlow()
+   ========================================================================= */
 
 export default function Builder() {
   return (
