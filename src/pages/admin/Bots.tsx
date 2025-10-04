@@ -251,7 +251,15 @@ export default function Bots() {
                 className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-muted/40"
                 onClick={() => {
                   const mode = modes[b.key] || "basic";
-                  duplicateInstanceFromTemplate(b.key, mode, `${b.name} (Copy)`);
+                  const defaultName = `${b.name} (Copy)`;
+                  const desired =
+                    prompt("Name this new client bot:", defaultName)?.trim() ||
+                    defaultName;
+
+                  // Persist duplicate with user-provided name
+                  duplicateInstanceFromTemplate(b.key, mode, desired);
+
+                  // Refresh local list
                   setInstances(listInstances());
                 }}
                 aria-label={`Duplicate ${b.name}`}
@@ -324,13 +332,10 @@ export default function Bots() {
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
                       onClick={() => {
-                        // simple rename prompt to restore your earlier behavior
                         const next = prompt("Rename this bot instance:", title);
                         if (!next) return;
-                        // instances are stored in your instances lib; updating name via storage key
                         const idx = listInstances().find((x) => x.id === m.id);
                         if (idx) {
-                          // write through the same lib that created instances
                           const rawKey = `botInstances:${m.id}`;
                           const raw = localStorage.getItem(rawKey);
                           if (raw) {
