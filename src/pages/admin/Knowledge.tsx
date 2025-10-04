@@ -2,9 +2,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAdminStore } from "@/lib/AdminStore";
 import { BotKey } from "@/lib/botSettings";
+import { listInstances, type InstanceMeta } from "@/lib/instances";
 
 /** -----------------------------------------------------------------------
- *  Config
+ *  Types & Config
  *  ---------------------------------------------------------------------*/
 type DocFile = {
   id: string;
@@ -27,21 +28,24 @@ const ACCEPT =
   ".pdf,.doc,.docx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain";
 
 /** -----------------------------------------------------------------------
- *  Small helpers for per-bot persistence
+ *  Storage helpers
  *  ---------------------------------------------------------------------*/
-const storeKey = (bot: BotKey) => `knowledge:${bot}`;
+type Scope = { kind: "bot"; bot: BotKey } | { kind: "inst"; id: string };
 
-function loadDocs(bot: BotKey): DocFile[] {
+const keyForScope = (s: Scope) =>
+  s.kind === "bot" ? `knowledge:bot:${s.bot}` : `knowledge:inst:${s.id}`;
+
+function loadDocs(scope: Scope): DocFile[] {
   try {
-    const raw = localStorage.getItem(storeKey(bot));
+    const raw = localStorage.getItem(keyForScope(scope));
     return raw ? (JSON.parse(raw) as DocFile[]) : [];
   } catch {
     return [];
   }
 }
 
-function saveDocs(bot: BotKey, docs: DocFile[]) {
-  localStorage.setItem(storeKey(bot), JSON.stringify(docs));
+function saveDocs(scope: Scope, docs: DocFile[]) {
+  localStorage.setItem(keyForScope(scope), JSON.stringify(docs));
 }
 
 function readFileAsDataURL(file: File): Promise<string> {
@@ -71,32 +75,56 @@ export default function Knowledge() {
     setCurrentBot?: (key: BotKey) => void;
   };
 
-  // Fallback if store lacks a setter or current value
-  const initialBot = useMemo<BotKey>(
-    () => currentBot || BOT_OPTIONS[0].key,
-    [currentBot]
-  );
+  // Instances for the "Client Bot (instance)" picker
+  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
+  useEffect(() => {
+    // Keep in sync if other tabs modify instances
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
+        setInstances(listInstances());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
-  const [bot, setBot] = useState<BotKey>(initialBot);
-  const [docs, setDocs] = useState<DocFile[]>(() => loadDocs(initialBot));
+  // ---------- Scope state ----------
+  // Default to bot template using the store value (or first option if absent)
+  const initialBot = useMemo<BotKey>(() => currentBot || BOT_OPTIONS[0].key, [currentBot]);
+
+  // We remember the last chosen instance (if any) so switching back and forth is nicer.
+  const [lastInstId, setLastInstId] = useState<string>(() => {
+    const first = listInstances()[0];
+    return first ? first.id : "";
+  });
+
+  // Scope: "Bot Template" or "Client Bot (instance)"
+  const [scope, setScope] = useState<Scope>({ kind: "bot", bot: initialBot });
+
+  // Docs list for the current scope
+  const [docs, setDocs] = useState<DocFile[]>(() => loadDocs(scope));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Keep store and local state in sync when the picker changes
+  // Keep store and local docs in sync when scope changes
   useEffect(() => {
-    if (bot !== currentBot && setCurrentBot) setCurrentBot(bot);
-    setDocs(loadDocs(bot));
-  }, [bot]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (scope.kind === "bot" && scope.bot !== currentBot && setCurrentBot) {
+      setCurrentBot(scope.bot);
+    }
+    setDocs(loadDocs(scope));
+  }, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // If the store changes externally, refresh
+  // If the store changes externally, refresh only when in bot mode
   useEffect(() => {
-    if (currentBot && currentBot !== bot) {
-      setBot(currentBot);
-      setDocs(loadDocs(currentBot));
+    if (scope.kind === "bot" && currentBot && currentBot !== scope.bot) {
+      setScope({ kind: "bot", bot: currentBot });
+      setDocs(loadDocs({ kind: "bot", bot: currentBot }));
     }
   }, [currentBot]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function triggerUpload() {
+  // ---------- Upload handlers ----------
+  function triggerUpload() {
     setError(null);
     fileInputRef.current?.click();
   }
@@ -129,13 +157,12 @@ export default function Knowledge() {
       if (additions.length) {
         const next = [...docs, ...additions];
         setDocs(next);
-        saveDocs(bot, next);
+        saveDocs(scope, next);
       }
     } catch (err) {
       setError("Upload failed. Please try again.");
     } finally {
       setBusy(false);
-      // Reset input so the same file can be selected again
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
@@ -143,12 +170,23 @@ export default function Knowledge() {
   function removeDoc(id: string) {
     const next = docs.filter((d) => d.id !== id);
     setDocs(next);
-    saveDocs(bot, next);
+    saveDocs(scope, next);
   }
+
+  // ---------- UI helpers ----------
+  const selectedInst = useMemo(
+    () => (scope.kind === "inst" ? instances.find((m) => m.id === scope.id) : undefined),
+    [scope, instances]
+  );
+
+  const scopeLabel =
+    scope.kind === "bot"
+      ? BOT_OPTIONS.find((b) => b.key === scope.bot)?.label || scope.bot
+      : selectedInst?.name || "(deleted instance)";
 
   return (
     <div className="space-y-6">
-      {/* Header / Bot picker */}
+      {/* Header / Pickers */}
       <div className="rounded-2xl border bg-white shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
           <div>
@@ -158,19 +196,83 @@ export default function Knowledge() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-bold uppercase text-foreground/70">Bot</label>
-            <select
-              className="rounded-lg border px-3 py-2 font-semibold bg-white"
-              value={bot}
-              onChange={(e) => setBot(e.target.value as BotKey)}
-            >
-              {BOT_OPTIONS.map((b) => (
-                <option key={b.key} value={b.key}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
+          {/* Scope selector */}
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-bold uppercase text-foreground/70">Scope</label>
+              <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-2 text-sm font-semibold">
+                  <input
+                    type="radio"
+                    name="scope"
+                    checked={scope.kind === "bot"}
+                    onChange={() => setScope({ kind: "bot", bot: scope.kind === "bot" ? scope.bot : initialBot })}
+                  />
+                  Bot Template
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm font-semibold">
+                  <input
+                    type="radio"
+                    name="scope"
+                    checked={scope.kind === "inst"}
+                    onChange={() => {
+                      const first = instances[0];
+                      const nextId = lastInstId || (first ? first.id : "");
+                      setScope({ kind: "inst", id: nextId });
+                    }}
+                  />
+                  Client Bot (instance)
+                </label>
+              </div>
+            </div>
+
+            {/* Bot template picker */}
+            {scope.kind === "bot" && (
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-bold uppercase text-foreground/70">Bot</label>
+                <select
+                  className="rounded-lg border px-3 py-2 font-semibold bg-white"
+                  value={scope.bot}
+                  onChange={(e) => setScope({ kind: "bot", bot: e.target.value as BotKey })}
+                >
+                  {BOT_OPTIONS.map((b) => (
+                    <option key={b.key} value={b.key}>
+                      {b.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Instance picker */}
+            {scope.kind === "inst" && (
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-bold uppercase text-foreground/70">My Bot</label>
+                <select
+                  className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[220px]"
+                  value={scope.id}
+                  onChange={(e) => {
+                    setLastInstId(e.target.value);
+                    setScope({ kind: "inst", id: e.target.value });
+                  }}
+                >
+                  {instances.length === 0 ? (
+                    <option value="" disabled>
+                      No instances yet — duplicate or create one first
+                    </option>
+                  ) : (
+                    instances
+                      .slice()
+                      .sort((a, b) => b.updatedAt - a.updatedAt)
+                      .map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name || `${m.bot} Instance`} • {m.mode}
+                        </option>
+                      ))
+                  )}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -180,7 +282,7 @@ export default function Knowledge() {
             <div>
               <div className="text-xl font-extrabold">Upload Documents</div>
               <div className="text-sm text-foreground/70">
-                PDF, Word, Excel, or plain text. Files are stored locally per bot for this prototype.
+                PDF, Word, Excel, or plain text. Files are stored locally <b>per selected scope</b>.
               </div>
             </div>
 
@@ -196,7 +298,7 @@ export default function Knowledge() {
               <button
                 className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/15 to-emerald-500/15 hover:from-indigo-500/25 hover:to-emerald-500/25 disabled:opacity-60"
                 onClick={triggerUpload}
-                disabled={busy}
+                disabled={busy || (scope.kind === "inst" && !scope.id)}
               >
                 + Upload
               </button>
@@ -222,7 +324,7 @@ export default function Knowledge() {
         <div className="p-5 border-b bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl">
           <div className="text-xl font-extrabold">Uploaded Documents</div>
           <div className="text-sm text-foreground/70">
-            Stored for <span className="font-semibold">{BOT_OPTIONS.find((b) => b.key === bot)?.label}</span>.
+            Stored for <span className="font-semibold">{scopeLabel}</span>.
           </div>
         </div>
 
