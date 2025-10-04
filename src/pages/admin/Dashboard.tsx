@@ -1,23 +1,46 @@
 // src/pages/admin/Dashboard.tsx
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getJSON, setJSON } from "@/lib/storage";
+
+/** ====== Analytics store (aligns with Analytics page) ====== */
+type Metrics = {
+  conversations: number;
+  leads: number;
+  avgResponseSecs: number; // seconds
+  csatPct: number;         // 0–100
+  // Other metrics can exist here; we ignore them on this page.
+};
+
+const METRICS_KEY = "analytics:metrics";
+
+const DEFAULT_METRICS: Metrics = {
+  conversations: 0,
+  leads: 0,
+  avgResponseSecs: 0,
+  csatPct: 0,
+};
 
 /** Small helpers */
 function classNames(...xs: (string | false | undefined)[]) {
   return xs.filter(Boolean).join(" ");
 }
-const Grad = "bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55";
+const Grad =
+  "bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55";
 
-/** KPI card with drill-down + delta */
+/** KPI card with optional delta pill */
 type KpiProps = {
   title: string;
   value: string;
-  deltaPct?: number; // positive = up (good), negative = down
+  deltaPct?: number; // if undefined => hide the delta chip
   onClick?: () => void;
 };
-function KpiCard({ title, value, deltaPct = 0, onClick }: KpiProps) {
-  const up = deltaPct >= 0;
-  const badge = Math.abs(deltaPct).toFixed(1) + "% vs last week";
+function KpiCard({ title, value, deltaPct, onClick }: KpiProps) {
+  const up = (deltaPct ?? 0) >= 0;
+  const badge =
+    deltaPct !== undefined
+      ? `${Math.abs(deltaPct).toFixed(1)}% vs last week`
+      : "";
 
   return (
     <button
@@ -33,17 +56,19 @@ function KpiCard({ title, value, deltaPct = 0, onClick }: KpiProps) {
       </div>
       <div className="mt-2 text-[34px] leading-none font-black">{value}</div>
 
-      <div
-        className={classNames(
-          "mt-4 inline-flex items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-bold ring-1 ring-border",
-          up
-            ? "bg-emerald-500/10 text-emerald-700"
-            : "bg-rose-500/10 text-rose-700"
-        )}
-      >
-        <span>{up ? "▲" : "▼"}</span>
-        <span>{badge}</span>
-      </div>
+      {deltaPct !== undefined && (
+        <div
+          className={classNames(
+            "mt-4 inline-flex items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-bold ring-1 ring-border",
+            up
+              ? "bg-emerald-500/10 text-emerald-700"
+              : "bg-rose-500/10 text-rose-700"
+          )}
+        >
+          <span>{up ? "▲" : "▼"}</span>
+          <span>{badge}</span>
+        </div>
+      )}
 
       {/* tiny spark box */}
       <div className="mt-4 h-10 w-20 rounded-md bg-white/65 ring-1 ring-border flex items-center justify-center">
@@ -56,6 +81,32 @@ function KpiCard({ title, value, deltaPct = 0, onClick }: KpiProps) {
 export default function Dashboard() {
   const nav = useNavigate();
 
+  // Load metrics from storage (or defaults)
+  const [m, setM] = useState<Metrics>(() =>
+    getJSON<Metrics>(METRICS_KEY, DEFAULT_METRICS)
+  );
+
+  // Format helpers
+  const fmtInt = (n: number) =>
+    Number.isFinite(n) ? Math.max(0, Math.round(n)).toLocaleString() : "0";
+  const fmtSecs = (n: number) =>
+    `${Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0}s`;
+  const fmtPct = (n: number) =>
+    `${Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0}%`;
+
+  // Reset ONLY the four KPIs requested
+  function resetTopKpis() {
+    const next: Metrics = {
+      ...m,
+      conversations: 0,
+      leads: 0,
+      avgResponseSecs: 0,
+      csatPct: 0,
+    };
+    setM(next);
+    setJSON(METRICS_KEY, next);
+  }
+
   return (
     <div className="space-y-6">
       {/* title bar */}
@@ -66,43 +117,48 @@ export default function Dashboard() {
             Welcome to your admin dashboard. Tap any card to dive deeper.
           </p>
         </div>
-        <button
-          className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
-          onClick={() => nav("/admin/bots?new=1")}
-        >
-          + Create New Bot
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30"
+            onClick={resetTopKpis}
+            title="Reset Conversations, Leads, Avg. Response, and CSAT"
+          >
+            Reset
+          </button>
+          <button
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+            onClick={() => nav("/admin/bots?new=1")}
+          >
+            + Create New Bot
+          </button>
+        </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs (no demo stats; shows stored values) */}
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           title="Conversations (7d)"
-          value="1,284"
-          deltaPct={7.9}
+          value={fmtInt(m.conversations)}
           onClick={() => nav("/admin/analytics#conversations")}
         />
         <KpiCard
           title="Leads / Tickets (7d)"
-          value="312"
-          deltaPct={-5.5}
+          value={fmtInt(m.leads)}
           onClick={() => nav("/admin/analytics#leads")}
         />
         <KpiCard
           title="Avg. Response (sec)"
-          value="2.1s"
-          deltaPct={-12.5} // lower is better, still show down arrow to indicate change
+          value={fmtSecs(m.avgResponseSecs)}
           onClick={() => nav("/admin/analytics#response")}
         />
         <KpiCard
           title="CSAT (Customer Satisfaction, 7d)"
-          value="94%"
-          deltaPct={2.2}
+          value={fmtPct(m.csatPct)}
           onClick={() => nav("/admin/analytics#csat")}
         />
       </div>
 
-      {/* Quick links (keeps the page feeling full like your earlier layout) */}
+      {/* Quick links (unchanged) */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <a
           onClick={() => nav("/admin/bots")}
