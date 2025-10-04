@@ -9,7 +9,13 @@ import {
   type InstanceMeta,
 } from "@/lib/instances";
 import { getJSON, setJSON } from "@/lib/storage";
-import { listTemplateDefs, createTemplate } from "@/lib/templates";
+import {
+  listTemplateDefs,
+  createTemplate,
+  deleteTemplate,
+  isBuiltInKey,
+  type TemplateDef,
+} from "@/lib/templates";
 
 /* ---------- shared analytics store ---------- */
 type Metrics = {
@@ -23,21 +29,33 @@ const METRICS_KEY = "analytics:metrics";
 /* ---------------- display helpers ---------------- */
 type BotKey = string;
 
-function botKeyToLabel(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
+function botKeyToLabel(defs: TemplateDef[], key: BotKey) {
   return defs.find((b) => b.key === key)?.name || (key as string);
 }
-function botKeyToGradient(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
+function botKeyToGradient(defs: TemplateDef[], key: BotKey) {
   return defs.find((b) => b.key === key)?.gradient || "from-gray-200 to-gray-100";
 }
-function botKeyToEmoji(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
+function botKeyToEmoji(defs: TemplateDef[], key: BotKey) {
   return defs.find((b) => b.key === key)?.emoji || "🤖";
+}
+
+/* ---------------- small UI piece ---------------- */
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border bg-card px-4 py-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+        {label}
+      </div>
+      <div className="text-xl font-extrabold leading-tight">{value}</div>
+    </div>
+  );
 }
 
 /* ---------------- main page ---------------- */
 
 export default function Bots() {
   // Dynamic template catalog
-  const [defs, setDefs] = useState(() => listTemplateDefs());
+  const [defs, setDefs] = useState<TemplateDef[]>(() => listTemplateDefs());
 
   // Plan mode per template key
   const [modes, setModes] = useState<Record<string, "basic" | "custom">>(() =>
@@ -48,9 +66,7 @@ export default function Bots() {
   );
 
   // Instances list (My Bots)
-  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
-    listInstances()
-  );
+  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
 
   // Analytics metrics used for header stats
   const [metrics, setMetrics] = useState<Metrics>(() =>
@@ -74,7 +90,7 @@ export default function Bots() {
       if (e.key === METRICS_KEY) {
         setMetrics(getJSON<Metrics>(METRICS_KEY, { conversations: 0, leads: 0 }));
       }
-      if (e.key === "botTemplates:index") {
+      if (e.key === "botTemplates:index" || e.key === "botTemplates:hiddenKeys" || e.key?.startsWith("botTemplates:data:")) {
         setDefs(listTemplateDefs());
       }
     };
@@ -111,6 +127,29 @@ export default function Bots() {
       .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
       .join("");
 
+  // Count how many client instances use a given template key
+  const countUsing = (key: string) => instances.filter((m) => m.bot === key).length;
+
+  // Handler: delete template (custom = remove, built-in = hide)
+  const onDeleteTemplate = (tpl: TemplateDef) => {
+    const using = countUsing(tpl.key);
+    const kind = isBuiltInKey(tpl.key) ? "built-in" : "custom";
+    const warn =
+      using > 0
+        ? `\n\nNote: ${using} client bot(s) currently use this ${kind} template. They will continue to exist, but the template will be removed from the catalog.`
+        : "";
+
+    if (
+      !confirm(
+        `Delete template “${tpl.name}”? This cannot be undone for custom templates.${warn}`
+      )
+    )
+      return;
+
+    deleteTemplate(tpl.key);
+    setDefs(listTemplateDefs());
+  };
+
   return (
     <div className="w-full h-full">
       {/* Header + Create / Reset buttons */}
@@ -137,7 +176,7 @@ export default function Bots() {
               }
               createTemplate({ name, key });
               setDefs(listTemplateDefs()); // refresh list in-place
-              // Q1=A: stay on Bots page; the new card will appear below
+              // stays on Bots page; new card appears below
             }}
           >
             + Create New Bot
@@ -159,28 +198,20 @@ export default function Bots() {
             key={b.key}
             className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
           >
-            <div
-              className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}
-            >
+            <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}>
               <div className="flex items-center gap-3">
                 <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
                   {b.emoji}
                 </div>
                 <div>
-                  <h3 className="text-xl font-extrabold tracking-tight">
-                    {b.name}
-                  </h3>
-                  <p className="text-sm font-semibold text-foreground/80">
-                    {b.description}
-                  </p>
+                  <h3 className="text-xl font-extrabold tracking-tight">{b.name}</h3>
+                  <p className="text-sm font-semibold text-foreground/80">{b.description}</p>
                 </div>
               </div>
             </div>
 
             <div className="mt-4 flex items-center gap-3">
-              <div className="text-sm font-semibold text-foreground/80">
-                Plan:
-              </div>
+              <div className="text-sm font-semibold text-foreground/80">Plan:</div>
 
               <select
                 className="ml-auto rounded-lg border bg-card px-3 py-2 text-sm font-bold shadow-sm"
@@ -198,12 +229,19 @@ export default function Bots() {
 
               <button
                 className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
-                onClick={() =>
-                  (window.location.href = `/admin/builder?bot=${b.key}`)
-                }
+                onClick={() => (window.location.href = `/admin/builder?bot=${b.key}`)}
                 aria-label={`Open ${b.name} in Builder`}
               >
                 Open Builder
+              </button>
+
+              {/* NEW: Delete template (built-in => hide, custom => remove) */}
+              <button
+                className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-white hover:bg-rose-50"
+                title={isBuiltInKey(b.key) ? "Hide built-in template" : "Delete custom template"}
+                onClick={() => onDeleteTemplate(b)}
+              >
+                Delete
               </button>
             </div>
 
@@ -214,8 +252,7 @@ export default function Bots() {
                   const mode = (modes[b.key] || "basic") as "basic" | "custom";
                   const defaultName = `${b.name} (Copy)`;
                   const desired =
-                    prompt("Name this new client bot:", defaultName)?.trim() ||
-                    defaultName;
+                    prompt("Name this new client bot:", defaultName)?.trim() || defaultName;
 
                   duplicateInstanceFromTemplate(b.key as any, mode, desired);
                   setInstances(listInstances());
@@ -235,8 +272,8 @@ export default function Bots() {
 
         {sortedInstances.length === 0 ? (
           <div className="rounded-xl border bg-card p-4 text-sm">
-            You don’t have any instances yet. Click <b>Duplicate</b> on a card
-            above or use <b>Create New Bot</b>.
+            You don’t have any instances yet. Click <b>Duplicate</b> on a card above or use{" "}
+            <b>Create New Bot</b>.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -247,21 +284,14 @@ export default function Bots() {
               const emoji = botKeyToEmoji(defs, m.bot);
 
               return (
-                <div
-                  key={m.id}
-                  className="rounded-2xl border bg-card overflow-hidden flex flex-col"
-                >
-                  <div
-                    className={`p-4 ring-1 ring-border bg-gradient-to-br ${grad}`}
-                  >
+                <div key={m.id} className="rounded-2xl border bg-card overflow-hidden flex flex-col">
+                  <div className={`p-4 ring-1 ring-border bg-gradient-to-br ${grad}`}>
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 grid place-items-center rounded-xl bg-white/70 ring-1 ring-border text-xl">
                         {emoji}
                       </div>
                       <div>
-                        <div className="text-lg font-extrabold leading-tight">
-                          {title}
-                        </div>
+                        <div className="text-lg font-extrabold leading-tight">{title}</div>
                         <div className="text-sm text-foreground/80">{sub}</div>
                       </div>
                     </div>
@@ -270,18 +300,14 @@ export default function Bots() {
                   <div className="p-4 flex items-center gap-3">
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
-                      onClick={() =>
-                        (window.location.href = `/admin/builder?inst=${m.id}`)
-                      }
+                      onClick={() => (window.location.href = `/admin/builder?inst=${m.id}`)}
                     >
                       Open
                     </button>
 
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
-                      onClick={() =>
-                        (window.location.href = `/admin/nurture?inst=${m.id}`)
-                      }
+                      onClick={() => (window.location.href = `/admin/nurture?inst=${m.id}`)}
                       title="Open nurture schedule for this client bot"
                     >
                       Nurture
@@ -321,18 +347,6 @@ export default function Bots() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-/* ---------- Small Stat component (unchanged) ---------- */
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border bg-card px-4 py-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
-        {label}
-      </div>
-      <div className="text-xl font-extrabold leading-tight">{value}</div>
     </div>
   );
 }
