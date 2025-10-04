@@ -7,15 +7,7 @@ import type { Edge, Node } from "reactflow";
 
 /* ---------- Types ---------- */
 
-export type BotKey =
-  | "LeadQualifier"
-  | "AppointmentBooking"
-  | "CustomerSupport"
-  | "Waitlist"
-  | "SocialMedia"
-  // Allow custom template keys as well:
-  | (string & {});
-
+export type BotKey = string; // generalized so we can add custom keys beyond the 5
 export type Mode = "basic" | "custom";
 
 export type BotTemplate = {
@@ -24,38 +16,36 @@ export type BotTemplate = {
 };
 
 export type TemplateDef = {
-  key: string;          // unique slug/key (used in query ?bot=<key>)
-  name: string;         // display name
-  emoji: string;        // emoji badge
-  gradient: string;     // tailwind gradient classes
-  description: string;  // short blurb
+  key: BotKey;
+  name: string;
+  emoji: string;
+  gradient: string; // tailwind gradient classes
+  description: string;
 };
 
-/* ---------- Storage helpers for custom templates ---------- */
+/* ---------- Storage Keys for Custom Templates ---------- */
 
 const TPL_INDEX_KEY = "botTemplates:index"; // TemplateDef[]
 const TPL_DATA_KEY = (key: string, mode: Mode) => `botTemplates:data:${key}_${mode}`;
 
-function readJSON<T>(k: string, fb: T): T {
+/* ---------- Helpers ---------- */
+
+function readJSON<T>(k: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(k);
-    if (!raw) return fb;
-    return JSON.parse(raw) as T;
+    return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
-    return fb;
+    return fallback;
   }
 }
 function writeJSON<T>(k: string, v: T) {
   localStorage.setItem(k, JSON.stringify(v));
 }
-
-/* =========================================================================
-   BUILT-IN TEMPLATES (your existing 5) — graphs unchanged
-   ========================================================================= */
-
 const id = (p: string, n: number) => `${p}_${n}`;
 
-/* 1) LEAD QUALIFIER BOT --------------------------------------------------- */
+/* =========================================================================
+   Built-in 5 Templates (graphs)  — unchanged
+   ======================================================================== */
 
 const LeadQualifier_basic: BotTemplate = {
   nodes: [
@@ -170,8 +160,6 @@ const LeadQualifier_custom: BotTemplate = {
   ],
 };
 
-/* 2) APPOINTMENT BOOKING BOT --------------------------------------------- */
-
 const AppointmentBooking_basic: BotTemplate = {
   nodes: [
     {
@@ -263,8 +251,6 @@ const AppointmentBooking_custom: BotTemplate = {
     { id: "e10-11", source: id("calendarAPI", 10), target: id("rules", 11), type: "smoothstep" },
   ],
 };
-
-/* 3) CUSTOMER SUPPORT BOT ------------------------------------------------- */
 
 const CustomerSupport_basic: BotTemplate = {
   nodes: [
@@ -358,8 +344,6 @@ const CustomerSupport_custom: BotTemplate = {
   ],
 };
 
-/* 4) WAITLIST BOT --------------------------------------------------------- */
-
 const Waitlist_basic: BotTemplate = {
   nodes: [
     {
@@ -452,8 +436,6 @@ const Waitlist_custom: BotTemplate = {
   ],
 };
 
-/* 5) SOCIAL MEDIA BOT ----------------------------------------------------- */
-
 const SocialMedia_basic: BotTemplate = {
   nodes: [
     {
@@ -532,9 +514,8 @@ const SocialMedia_custom: BotTemplate = {
   ],
 };
 
-/* ---------- Built-in defs list ---------- */
-
-const builtinDefs: TemplateDef[] = [
+/* ---------- Built-in registry (metadata for the 5 cards) ---------- */
+const BUILTIN_DEFS: TemplateDef[] = [
   {
     key: "LeadQualifier",
     name: "Lead Qualifier",
@@ -587,100 +568,69 @@ const builtinGraphs: Record<string, BotTemplate> = {
 };
 
 /* =========================================================================
-   PUBLIC API (built-ins + custom templates in localStorage)
-   ========================================================================= */
+   Public API
+   ======================================================================== */
 
-/** Return all template defs (built-ins first, then custom). */
+// Return built-ins + any user-created TemplateDefs
 export function listTemplateDefs(): TemplateDef[] {
   const custom = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
-  // De-dupe by key: prefer custom override if same key (unlikely)
-  const seen = new Set<string>();
-  const out: TemplateDef[] = [];
-  for (const d of builtinDefs) {
-    if (!seen.has(d.key)) {
-      out.push(d);
-      seen.add(d.key);
-    }
-  }
-  for (const d of custom) {
-    if (!seen.has(d.key)) {
-      out.push(d);
-      seen.add(d.key);
-    }
-  }
-  return out;
+  // Ensure unique keys (built-ins take precedence if same key somehow exists)
+  const mergedMap = new Map<string, TemplateDef>();
+  [...BUILTIN_DEFS, ...custom].forEach((d) => mergedMap.set(d.key, d));
+  return Array.from(mergedMap.values());
 }
 
-/** Get a template def by key (checks custom first, then built-ins). */
-export function getTemplateDef(key: string): TemplateDef | undefined {
-  const custom = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
-  const foundCustom = custom.find((d) => d.key === key);
-  if (foundCustom) return foundCustom;
-  return builtinDefs.find((d) => d.key === key);
-}
+// Create a new template definition + seed skeleton graphs for both modes
+export function createTemplate(def: {
+  name: string;
+  key: string;
+  emoji?: string;
+  gradient?: string;
+  description?: string;
+}) {
+  const trimmedKey = (def.key || def.name || "NewBot").trim();
+  if (!trimmedKey) return;
 
-/** Save/replace the graph for a template key+mode. */
-export function saveTemplateGraph(key: string, mode: Mode, graph: BotTemplate): void {
-  writeJSON(TPL_DATA_KEY(key, mode), graph);
-}
+  // prevent duplicate keys
+  const existing = listTemplateDefs().some((d) => d.key === trimmedKey);
+  if (existing) return;
 
-/** Create a new custom template with a skeleton graph (Welcome node). */
-export function createTemplate(name: string): TemplateDef {
-  const key = slugFromName(name);
-  const defs = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
-
-  // If exists, add suffix to keep unique
-  const finalKey = ensureUniqueKey(key, new Set([...defs.map((d) => d.key), ...builtinDefs.map((b) => b.key)]));
-
-  const def: TemplateDef = {
-    key: finalKey,
-    name: name.trim(),
-    emoji: "✨",
-    gradient: "from-violet-500/20 via-purple-400/20 to-emerald-400/20",
-    description: "Custom bot template",
+  const tplDef: TemplateDef = {
+    key: trimmedKey,
+    name: def.name?.trim() || trimmedKey,
+    emoji: def.emoji || "🤖",
+    gradient: def.gradient || "from-purple-500/20 via-indigo-400/20 to-emerald-500/20",
+    description: def.description || "Custom template",
   };
 
-  // Skeleton graph (per your preference)
+  const index = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
+  index.push(tplDef);
+  writeJSON(TPL_INDEX_KEY, index);
+
+  // seed a skeleton graph for both modes (per your Q3=B)
   const skeleton: BotTemplate = {
     nodes: [
       {
-        id: "welcome_1",
+        id: id("welcome", 1),
         type: "message",
-        data: { title: "Welcome", text: "Start building your new bot here…" },
-        position: { x: 60, y: 40 },
+        data: { title: "Welcome", text: "Start building your flow…" },
+        position: { x: 80, y: 60 },
       },
     ],
     edges: [],
   };
-
-  const next = [...defs, def];
-  writeJSON(TPL_INDEX_KEY, next);
-  saveTemplateGraph(finalKey, "basic", skeleton);
-  saveTemplateGraph(finalKey, "custom", skeleton);
-
-  return def;
+  writeJSON(TPL_DATA_KEY(tplDef.key, "basic"), skeleton);
+  writeJSON(TPL_DATA_KEY(tplDef.key, "custom"), skeleton);
 }
 
-/** Get a graph by key+mode — checks custom store first, then built-ins. */
+// Save/replace a template graph for a given key + mode (used later if needed)
+export function saveTemplateGraph(key: BotKey, mode: Mode, graph: BotTemplate) {
+  writeJSON(TPL_DATA_KEY(key, mode), graph);
+}
+
+// Read a template graph for key+mode, preferring custom storage; fallback to built-ins
 export function getTemplate(bot: BotKey, mode: Mode): BotTemplate | undefined {
-  const custom = readJSON<BotTemplate | null>(TPL_DATA_KEY(String(bot), mode), null);
+  const custom = readJSON<BotTemplate | null>(TPL_DATA_KEY(bot, mode), null);
   if (custom) return custom;
-  return builtinGraphs[`${String(bot)}_${mode}`];
-}
-
-/* ---------- small helpers ---------- */
-
-function slugFromName(name: string): string {
-  const s = name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-  return s || `custom-${Date.now().toString(36)}`;
-}
-function ensureUniqueKey(base: string, used: Set<string>): string {
-  if (!used.has(base)) return base;
-  let i = 2;
-  while (used.has(`${base}-${i}`)) i++;
-  return `${base}-${i}`;
+  return builtinGraphs[`${bot}_${mode}`];
 }
