@@ -22,14 +22,14 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings, setBotSettings, BotKey } from "@/lib/botSettings";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
 
 /* =========================================================================
-   0)  Instance support (duplicated bots)
+   0)  Instance support helpers
    ========================================================================= */
 
 type InstMeta = { baseKey: BotKey; mode: "basic" | "custom" } | null;
@@ -66,7 +66,7 @@ function writeInstMeta(instId: string, meta: InstMeta) {
 }
 
 /* =========================================================================
-   1)  Custom Node components (same visual style you liked)
+   1)  Custom nodes
    ========================================================================= */
 
 const MessageNode = ({ data }: { data: any }) => (
@@ -115,7 +115,7 @@ const nodeTypes = {
 };
 
 /* =========================================================================
-   2)  Helpers: per-bot+mode (or instance+mode) overrides in localStorage
+   2)  Overrides storage (template or instance)
    ========================================================================= */
 
 type RFNode = Node & {
@@ -160,7 +160,7 @@ function saveOverrides(
 }
 
 /* =========================================================================
-   3)  Template bot options
+   3)  Template options
    ========================================================================= */
 
 const BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
@@ -172,20 +172,23 @@ const BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
 ];
 
 /* =========================================================================
-   4)  The actual Builder body (inside ReactFlowProvider)
+   4)  Builder (inner)
    ========================================================================= */
 
 function BuilderInner() {
+  const navigate = useNavigate();
   const [search] = useSearchParams();
-  const instId = search.get("inst") || undefined; // duplicated instance id
-  const urlBot = search.get("bot") as BotKey | null; // base bot via URL
+
+  // If URL has ?inst=... we're editing an instance; if ?bot=... we're editing a template.
+  const instId = search.get("inst") || undefined;
+  const urlBot = search.get("bot") as BotKey | null;
 
   const { currentBot, setCurrentBot } = useAdminStore() as {
     currentBot: any;
     setCurrentBot?: (key: any) => void;
   };
 
-  // ---- List instances so we can show them in the dropdown
+  // Load instances so we can populate Client Bots group
   const [instances, setInstances] = useState<InstanceMeta[]>(() =>
     listInstances()
   );
@@ -216,8 +219,8 @@ function BuilderInner() {
 
   const [mode, setMode] = useState<"basic" | "custom">(initialMode);
 
+  // Keep global "currentBot" store in sync for templates
   useEffect(() => {
-    // Only sync global store when editing templates
     if (!instId) {
       if (setCurrentBot && bot !== currentBot) setCurrentBot(bot as any);
       const nextMode =
@@ -225,7 +228,7 @@ function BuilderInner() {
       setMode(nextMode);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bot]);
+  }, [bot, instId]);
 
   function onModeChange(next: "basic" | "custom") {
     setMode(next);
@@ -266,6 +269,7 @@ function BuilderInner() {
     base ? base.edges : []
   );
 
+  // Reload template/overrides whenever bot/mode/instId changes
   useEffect(() => {
     const found =
       (templates as any)[`${bot}_${mode}`] as
@@ -322,7 +326,7 @@ function BuilderInner() {
     saveOverrides(bot, mode, nextOv, instId);
   }, [selectedId, editorValues, overrides, setNodes, bot, mode, instId]);
 
-  // ====== NEW: Add/Place/Delete Node ======
+  // ====== Add / place / delete node ======
   const rf = useReactFlow<RFNode, Edge>();
   const [pendingType, setPendingType] = useState<
     null | "message" | "choice" | "input" | "action"
@@ -343,7 +347,6 @@ function BuilderInner() {
       ? { label: "Your input", placeholder: "Type here…" }
       : { label: "Action", to: "mailto:example@domain.com" };
 
-  // Place on canvas click
   const onPaneClick = useCallback(
     (e: React.MouseEvent) => {
       if (!pendingType) return;
@@ -364,7 +367,6 @@ function BuilderInner() {
 
       setNodes((prev) => [...prev, newNode]);
 
-      // If a node is selected, auto-connect it to the new one
       if (selectedId) {
         setEdges((prev) => [
           ...prev,
@@ -377,7 +379,6 @@ function BuilderInner() {
         ]);
       }
 
-      // persist overrides immediately
       const nextOv = { ...overrides, [id]: { data } };
       setOv(nextOv);
       saveOverrides(bot, mode, nextOv, instId);
@@ -389,7 +390,6 @@ function BuilderInner() {
     [pendingType, rf, selectedId, overrides, bot, mode, instId, setEdges, setNodes]
   );
 
-  // Delete selected node + connected edges + override
   const deleteSelected = () => {
     if (!selectedId) return;
 
@@ -432,25 +432,20 @@ function BuilderInner() {
     [nodes, selectedId]
   );
 
-  // ---- Dropdown unified value & change handler ----
-  // value is "tpl:<BotKey>" for templates, or "inst:<id>" for client bots.
+  // ---- Unified dropdown value & handler ----
   const selectValue = instId ? `inst:${instId}` : `tpl:${bot}`;
 
   const onChangeSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     if (val.startsWith("tpl:")) {
       const nextBot = val.slice(4) as BotKey;
-      // Navigate to template version (clear inst param, set bot)
-      const url = new URL(window.location.href);
-      url.searchParams.delete("inst");
-      url.searchParams.set("bot", nextBot);
-      window.history.replaceState({}, "", url.toString());
-      setBot(nextBot);
-      // mode will sync via useEffect (for templates)
+      // Use React Router navigate so useSearchParams updates correctly.
+      navigate(`/admin/builder?bot=${nextBot}`, { replace: true });
+      setBot(nextBot); // local state follows immediately
     } else if (val.startsWith("inst:")) {
       const nextId = val.slice(5);
-      // Hard navigate so the instance metadata/overrides mount fresh
-      window.location.href = `/admin/builder?inst=${nextId}`;
+      // Navigate to instance; page remount is OK so per-instance meta loads fresh.
+      navigate(`/admin/builder?inst=${nextId}`, { replace: false });
     }
   };
 
@@ -564,7 +559,6 @@ function BuilderInner() {
       );
     }
 
-    // default => message
     return (
       <div className="space-y-3">
         <div>
@@ -616,7 +610,7 @@ function BuilderInner() {
                 Bot
               </label>
               <select
-                className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[260px] whitespace-pre-wrap"
+                className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[260px] whitespace-pre-wrap break-words"
                 value={selectValue}
                 onChange={onChangeSelect}
                 title="Choose a template or a client bot"
@@ -689,7 +683,7 @@ function BuilderInner() {
                   {(["message", "choice", "input", "action"] as const).map((t) => (
                     <button
                       key={t}
-                      role="menuitem"
+                      role="menuitem}
                       onClick={() => {
                         setPendingType(t);
                         setAddMenuOpen(false);
@@ -725,7 +719,7 @@ function BuilderInner() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
-            onPaneClick={onPaneClick} // place node exactly where you click
+            onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
@@ -794,7 +788,7 @@ function BuilderInner() {
 }
 
 /* =========================================================================
-   5)  Export with Provider wrapper to satisfy useReactFlow()
+   5)  Provider wrapper
    ========================================================================= */
 
 export default function Builder() {
