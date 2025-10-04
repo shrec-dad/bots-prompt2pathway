@@ -667,21 +667,36 @@ function BuilderInner() {
 
             {/* Add Node */}
             <div className="relative">
-              <button
-                onClick={() => setAddMenuOpen((v) => !v)}
-                className="rounded-md px-3 py-2 text-xs font-extrabold ring-1 ring-border bg-white hover:bg-gray-50"
-                aria-expanded={addMenuOpen}
-                aria-haspopup="menu"
-              >
-                + Add Node
-              </button>
-              {addMenuOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 mt-2 w-40 rounded-lg border-2 border-black bg-white shadow-xl z-20"
-                >
-                  {(["message", "choice", "input", "action"] as const).map((t) => (
-                    <button
+  <button
+    onClick={() => setAddMenuOpen((v) => !v)}
+    className="rounded-md px-3 py-2 text-xs font-extrabold ring-1 ring-border bg-white hover:bg-gray-50"
+    aria-expanded={addMenuOpen}
+    aria-haspopup="menu"
+  >
+    + Add Node
+  </button>
+
+  {addMenuOpen && (
+    <div
+      role="menu"
+      className="absolute right-0 mt-2 w-40 rounded-lg border-2 border-black bg-white shadow-xl z-20"
+    >
+      {(["message", "choice", "input", "action"] as const).map((t) => (
+        <button
+          key={t}
+          role="menuitem"
+          onClick={() => {
+            setPendingType(t);
+            setAddMenuOpen(false);
+          }}
+          className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+        >
+          {t[0].toUpperCase() + t.slice(1)} (click to place)
+        </button>
+      ))}
+    </div>
+  )}
+</div>
                       key={t}
                       role="menuitem}
                       onClick={() => {
