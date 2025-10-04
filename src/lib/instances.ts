@@ -2,13 +2,7 @@
 // Lightweight “instances” persistence in localStorage.
 // Each Instance = { meta, data } with an index for quick listing.
 
-export type BotKey =
-  | "LeadQualifier"
-  | "AppointmentBooking"
-  | "CustomerSupport"
-  | "Waitlist"
-  | "SocialMedia";
-
+export type BotKey = string; // allow custom template keys beyond the 5
 export type Mode = "basic" | "custom";
 
 export type InstanceMeta = {
@@ -58,6 +52,13 @@ function newId() {
 }
 
 function botToLabel(bot: BotKey): string {
+  // Try to resolve name from dynamic template defs if present
+  try {
+    const defs = JSON.parse(localStorage.getItem("botTemplates:index") || "[]") as Array<{ key: string; name: string }>;
+    const found = defs.find((d) => d.key === bot);
+    if (found?.name) return found.name;
+  } catch {}
+  // fallback labels for known built-ins
   switch (bot) {
     case "LeadQualifier":
       return "Lead Qualifier";
@@ -70,7 +71,8 @@ function botToLabel(bot: BotKey): string {
     case "SocialMedia":
       return "Social Media";
     default:
-      return bot;
+      // best-effort prettify
+      return String(bot);
   }
 }
 
