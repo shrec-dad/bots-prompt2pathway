@@ -160,7 +160,7 @@ function saveOverrides(
 }
 
 /* =========================================================================
-   3)  Bot options (display labels only)
+   3)  Template bot options
    ========================================================================= */
 
 const BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
@@ -185,7 +185,7 @@ function BuilderInner() {
     setCurrentBot?: (key: any) => void;
   };
 
-  // Load & live-sync instances so dropdown stays fresh
+  // ---- List instances so we can show them in the dropdown
   const [instances, setInstances] = useState<InstanceMeta[]>(() =>
     listInstances()
   );
@@ -205,7 +205,7 @@ function BuilderInner() {
   const initialBot: BotKey =
     (instMeta?.baseKey as BotKey) ||
     (urlBot as BotKey) ||
-    (BOT_OPTIONS[0].key as BotKey);
+    ((BOT_OPTIONS[0].key as unknown) as BotKey);
 
   const [bot, setBot] = useState<BotKey>(initialBot);
 
@@ -217,6 +217,7 @@ function BuilderInner() {
   const [mode, setMode] = useState<"basic" | "custom">(initialMode);
 
   useEffect(() => {
+    // Only sync global store when editing templates
     if (!instId) {
       if (setCurrentBot && bot !== currentBot) setCurrentBot(bot as any);
       const nextMode =
@@ -431,22 +432,27 @@ function BuilderInner() {
     [nodes, selectedId]
   );
 
-  // ===== DROPDOWN (templates + instances) =====
-  const selectValue = instId ? `inst:${instId}` : `bot:${bot}`;
-  const onBotOrInstanceChange = (val: string) => {
-    if (val.startsWith("inst:")) {
-      const id = val.slice(5);
-      // jump to instance editing mode
-      window.location.href = `/admin/builder?inst=${encodeURIComponent(id)}`;
-      return;
-    }
-    if (val.startsWith("bot:")) {
-      const key = val.slice(4) as BotKey;
-      setBot(key);
+  // ---- Dropdown unified value & change handler ----
+  // value is "tpl:<BotKey>" for templates, or "inst:<id>" for client bots.
+  const selectValue = instId ? `inst:${instId}` : `tpl:${bot}`;
+
+  const onChangeSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val.startsWith("tpl:")) {
+      const nextBot = val.slice(4) as BotKey;
+      // Navigate to template version (clear inst param, set bot)
+      const url = new URL(window.location.href);
+      url.searchParams.delete("inst");
+      url.searchParams.set("bot", nextBot);
+      window.history.replaceState({}, "", url.toString());
+      setBot(nextBot);
+      // mode will sync via useEffect (for templates)
+    } else if (val.startsWith("inst:")) {
+      const nextId = val.slice(5);
+      // Hard navigate so the instance metadata/overrides mount fresh
+      window.location.href = `/admin/builder?inst=${nextId}`;
     }
   };
-
-  const botSelectDisabled = false; // allow switching between template/instance directly
 
   // UI helpers
   const inputClass =
@@ -599,44 +605,43 @@ function BuilderInner() {
               Drag-and-drop flow editor.{" "}
               {instId
                 ? "Editing a duplicated bot instance."
-                : "Pick a bot or one of your client bots and edit the nodes below."}
+                : "Pick a bot and edit the copy of each node below."}
             </p>
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Unified dropdown (templates + instances) */}
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold uppercase text-foreground/70">
                 Bot
               </label>
               <select
-                className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[260px]"
+                className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[260px] whitespace-pre-wrap"
                 value={selectValue}
-                onChange={(e) => onBotOrInstanceChange(e.target.value)}
-                disabled={botSelectDisabled}
+                onChange={onChangeSelect}
                 title="Choose a template or a client bot"
               >
                 <optgroup label="Bot Templates">
                   {BOT_OPTIONS.map((b) => (
-                    <option key={`bot:${b.key}`} value={`bot:${b.key}`}>
+                    <option key={`tpl:${b.key}`} value={`tpl:${b.key}`}>
                       {b.label}
                     </option>
                   ))}
                 </optgroup>
 
-                <optgroup label="My Bots">
-                  {instances.length === 0 ? (
-                    <option value="inst:" disabled>
-                      No instances yet — duplicate or create one first
+                <optgroup label="Client Bots">
+                  {instances
+                    .slice()
+                    .sort((a, b) => b.updatedAt - a.updatedAt)
+                    .map((m) => (
+                      <option key={`inst:${m.id}`} value={`inst:${m.id}`}>
+                        {(m.name || `${m.bot} Instance`) + " • " + m.mode}
+                      </option>
+                    ))}
+                  {instances.length === 0 && (
+                    <option value="" disabled>
+                      No client bots yet — create or duplicate one
                     </option>
-                  ) : (
-                    instances
-                      .slice()
-                      .sort((a, b) => b.updatedAt - a.updatedAt)
-                      .map((m) => (
-                        <option key={`inst:${m.id}`} value={`inst:${m.id}`}>
-                          {(m.name || `${m.bot} Instance`) + " • " + m.mode}
-                        </option>
-                      ))
                   )}
                 </optgroup>
               </select>
@@ -720,7 +725,7 @@ function BuilderInner() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
-            onPaneClick={onPaneClick}
+            onPaneClick={onPaneClick} // place node exactly where you click
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
