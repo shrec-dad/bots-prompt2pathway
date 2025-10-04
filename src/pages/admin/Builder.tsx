@@ -22,14 +22,14 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useAdminStore } from "@/lib/AdminStore";
 import { templates } from "@/lib/templates";
 import { getBotSettings, setBotSettings, BotKey } from "@/lib/botSettings";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
 
 /* =========================================================================
-   0)  Instance support helpers
+   0)  Instance support (duplicated bots)
    ========================================================================= */
 
 type InstMeta = { baseKey: BotKey; mode: "basic" | "custom" } | null;
@@ -66,7 +66,7 @@ function writeInstMeta(instId: string, meta: InstMeta) {
 }
 
 /* =========================================================================
-   1)  Custom nodes
+   1)  Custom Node components (same visual style you liked)
    ========================================================================= */
 
 const MessageNode = ({ data }: { data: any }) => (
@@ -115,7 +115,7 @@ const nodeTypes = {
 };
 
 /* =========================================================================
-   2)  Overrides storage (template or instance)
+   2)  Helpers: per-bot+mode (or instance+mode) overrides in localStorage
    ========================================================================= */
 
 type RFNode = Node & {
@@ -160,7 +160,7 @@ function saveOverrides(
 }
 
 /* =========================================================================
-   3)  Template options
+   3)  Template labels
    ========================================================================= */
 
 const BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
@@ -172,23 +172,29 @@ const BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
 ];
 
 /* =========================================================================
-   4)  Builder (inner)
+   4)  The actual Builder body (inside ReactFlowProvider)
    ========================================================================= */
 
-function BuilderInner() {
-  const navigate = useNavigate();
-  const [search] = useSearchParams();
+type Source =
+  | { kind: "tpl"; bot: BotKey }
+  | { kind: "inst"; id: string; meta: InstMeta };
 
-  // If URL has ?inst=... we're editing an instance; if ?bot=... we're editing a template.
-  const instId = search.get("inst") || undefined;
-  const urlBot = search.get("bot") as BotKey | null;
+const sourceToValue = (s: Source) =>
+  s.kind === "tpl" ? `tpl:${s.bot}` : `inst:${s.id}`;
+
+function BuilderInner() {
+  const [search, setSearch] = useSearchParams();
+
+  // existing query-string support
+  const queryInst = search.get("inst") || undefined;
+  const queryBot = (search.get("bot") as BotKey | null) || null;
 
   const { currentBot, setCurrentBot } = useAdminStore() as {
-    currentBot: any;
-    setCurrentBot?: (key: any) => void;
+    currentBot: BotKey | null;
+    setCurrentBot?: (key: BotKey) => void;
   };
 
-  // Load instances so we can populate Client Bots group
+  // list client instances for dropdown
   const [instances, setInstances] = useState<InstanceMeta[]>(() =>
     listInstances()
   );
@@ -203,42 +209,52 @@ function BuilderInner() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const instMeta = instId ? readInstMeta(instId) : null;
+  // Build initial source from URL or store
+  const initialSource: Source = useMemo(() => {
+    if (queryInst) {
+      return { kind: "inst", id: queryInst, meta: readInstMeta(queryInst) };
+    }
+    const bot = queryBot || currentBot || BOT_OPTIONS[0].key;
+    return { kind: "tpl", bot };
+  }, [queryInst, queryBot, currentBot]);
 
+  const [source, setSource] = useState<Source>(initialSource);
+
+  // Derived: bot (base template) and mode based on source
   const initialBot: BotKey =
-    (instMeta?.baseKey as BotKey) ||
-    (urlBot as BotKey) ||
-    ((BOT_OPTIONS[0].key as unknown) as BotKey);
+    source.kind === "tpl"
+      ? source.bot
+      : (source.meta?.baseKey as BotKey) || "LeadQualifier";
 
   const [bot, setBot] = useState<BotKey>(initialBot);
 
   const initialMode: "basic" | "custom" =
-    (instMeta?.mode as "basic" | "custom") ||
-    (getBotSettings(bot).mode as "basic" | "custom") ||
-    "custom";
+    source.kind === "inst"
+      ? (source.meta?.mode as "basic" | "custom") || "custom"
+      : (getBotSettings(initialBot).mode as "basic" | "custom") || "custom";
 
   const [mode, setMode] = useState<"basic" | "custom">(initialMode);
 
-  // Keep global "currentBot" store in sync for templates
+  // Keep admin store in sync when editing a template
   useEffect(() => {
-    if (!instId) {
-      if (setCurrentBot && bot !== currentBot) setCurrentBot(bot as any);
-      const nextMode =
-        (getBotSettings(bot).mode as "basic" | "custom") || "custom";
-      setMode(nextMode);
+    if (source.kind === "tpl") {
+      if (setCurrentBot && bot !== currentBot) setCurrentBot(bot);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bot, instId]);
+  }, [bot, source.kind]);
 
-  function onModeChange(next: "basic" | "custom") {
-    setMode(next);
-    if (instId) {
-      writeInstMeta(instId, { baseKey: bot, mode: next });
-    } else {
-      setBotSettings(bot, { mode: next });
+  // If user changes AdminStore elsewhere, reflect it (only for template editing)
+  useEffect(() => {
+    if (source.kind === "tpl" && currentBot && currentBot !== bot) {
+      setBot(currentBot);
+      setMode(
+        (getBotSettings(currentBot).mode as "basic" | "custom") || "custom"
+      );
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBot]);
 
+  // ReactFlow data (template + overrides)
   const tplKey = `${bot}_${mode}`;
   const base = useMemo(
     () =>
@@ -248,8 +264,10 @@ function BuilderInner() {
     [tplKey]
   );
 
+  const activeInstId = source.kind === "inst" ? source.id : undefined;
+
   const [overrides, setOv] = useState<Record<string, any>>(() =>
-    getOverrides(bot, mode, instId)
+    getOverrides(bot, mode, activeInstId)
   );
 
   const mergeOverrides = useCallback(
@@ -269,14 +287,14 @@ function BuilderInner() {
     base ? base.edges : []
   );
 
-  // Reload template/overrides whenever bot/mode/instId changes
+  // Rebuild when bot/mode/source changes
   useEffect(() => {
     const found =
       (templates as any)[`${bot}_${mode}`] as
         | { nodes: RFNode[]; edges: Edge[] }
         | undefined;
 
-    const nextOv = getOverrides(bot, mode, instId);
+    const nextOv = getOverrides(bot, mode, activeInstId);
     setOv(nextOv);
 
     if (found) {
@@ -286,14 +304,24 @@ function BuilderInner() {
       setNodes([]);
       setEdges([]);
     }
-  }, [bot, mode, instId, setNodes, setEdges, mergeOverrides]);
+  }, [bot, mode, activeInstId, setNodes, setEdges, mergeOverrides]);
+
+  function onModeChange(next: "basic" | "custom") {
+    setMode(next);
+    if (source.kind === "inst") {
+      // persist on instance meta
+      writeInstMeta(source.id, { baseKey: bot, mode: next });
+    } else {
+      setBotSettings(bot, { mode: next });
+    }
+  }
 
   // selection + editor
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValues, setEditorValues] = useState<any>({});
 
   useEffect(() => {
-    if (!selectedId) return setEditorValues({});
+    if (!selectedId) return setEditorValues({}); // clear if nothing selected
     const n = nodes.find((x) => x.id === selectedId);
     setEditorValues(n?.data || {});
   }, [selectedId, nodes]);
@@ -323,10 +351,10 @@ function BuilderInner() {
       [selectedId]: { data: { ...editorValues } },
     };
     setOv(nextOv);
-    saveOverrides(bot, mode, nextOv, instId);
-  }, [selectedId, editorValues, overrides, setNodes, bot, mode, instId]);
+    saveOverrides(bot, mode, nextOv, activeInstId);
+  }, [selectedId, editorValues, overrides, setNodes, bot, mode, activeInstId]);
 
-  // ====== Add / place / delete node ======
+  // ====== Add/Place/Delete Node ======
   const rf = useReactFlow<RFNode, Edge>();
   const [pendingType, setPendingType] = useState<
     null | "message" | "choice" | "input" | "action"
@@ -381,13 +409,23 @@ function BuilderInner() {
 
       const nextOv = { ...overrides, [id]: { data } };
       setOv(nextOv);
-      saveOverrides(bot, mode, nextOv, instId);
+      saveOverrides(bot, mode, nextOv, activeInstId);
 
       setSelectedId(id);
       setPendingType(null);
       setAddMenuOpen(false);
     },
-    [pendingType, rf, selectedId, overrides, bot, mode, instId, setEdges, setNodes]
+    [
+      pendingType,
+      rf,
+      selectedId,
+      overrides,
+      bot,
+      mode,
+      activeInstId,
+      setEdges,
+      setNodes,
+    ]
   );
 
   const deleteSelected = () => {
@@ -401,22 +439,20 @@ function BuilderInner() {
     const nextOv = { ...overrides };
     delete nextOv[selectedId];
     setOv(nextOv);
-    saveOverrides(bot, mode, nextOv, instId);
+    saveOverrides(bot, mode, nextOv, activeInstId);
 
     setSelectedId(null);
   };
 
-  // Prevent ReactFlow from swallowing typing in the editor
+  // Avoid ReactFlow swallowing editor keystrokes
   const editorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
-
     const stop = (e: Event) => {
       e.stopPropagation();
       e.stopImmediatePropagation?.();
     };
-
     ["keydown", "keyup", "keypress"].forEach((evt) =>
       el.addEventListener(evt, stop, true)
     );
@@ -432,22 +468,50 @@ function BuilderInner() {
     [nodes, selectedId]
   );
 
-  // ---- Unified dropdown value & handler ----
-  const selectValue = instId ? `inst:${instId}` : `tpl:${bot}`;
+  // ====== Dropdown with Templates + Client Bots ======
+  // Value is "tpl:LeadQualifier" OR "inst:<id>"
+  const selectValue = sourceToValue(source);
 
-  const onChangeSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    if (val.startsWith("tpl:")) {
-      const nextBot = val.slice(4) as BotKey;
-      // Use React Router navigate so useSearchParams updates correctly.
-      navigate(`/admin/builder?bot=${nextBot}`, { replace: true });
-      setBot(nextBot); // local state follows immediately
-    } else if (val.startsWith("inst:")) {
-      const nextId = val.slice(5);
-      // Navigate to instance; page remount is OK so per-instance meta loads fresh.
-      navigate(`/admin/builder?inst=${nextId}`, { replace: false });
+  function onSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const v = e.target.value;
+
+    if (v.startsWith("inst:")) {
+      const id = v.slice(5);
+      const meta = readInstMeta(id);
+      const baseKey =
+        (meta?.baseKey as BotKey | undefined) || BOT_OPTIONS[0].key;
+      const m = (meta?.mode as "basic" | "custom") || "custom";
+
+      setSource({ kind: "inst", id, meta });
+      setBot(baseKey);
+      setMode(m);
+
+      // reflect in query string for deep-linking
+      setSearch((s) => {
+        s.set("inst", id);
+        s.delete("bot");
+        return s;
+      });
+      return;
     }
-  };
+
+    if (v.startsWith("tpl:")) {
+      const key = v.slice(4) as BotKey;
+      const m =
+        (getBotSettings(key).mode as "basic" | "custom") || ("custom" as const);
+
+      setSource({ kind: "tpl", bot: key });
+      setBot(key);
+      setMode(m);
+
+      setSearch((s) => {
+        s.set("bot", key);
+        s.delete("inst");
+        return s;
+      });
+      return;
+    }
+  }
 
   // UI helpers
   const inputClass =
@@ -559,6 +623,7 @@ function BuilderInner() {
       );
     }
 
+    // default => message
     return (
       <div className="space-y-3">
         <div>
@@ -593,50 +658,51 @@ function BuilderInner() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight">
-              Builder {instId ? "· Instance" : ""}
+              Builder {source.kind === "inst" ? "· Instance" : ""}
             </h1>
             <p className="text-sm text-foreground/70">
               Drag-and-drop flow editor.{" "}
-              {instId
+              {source.kind === "inst"
                 ? "Editing a duplicated bot instance."
                 : "Pick a bot and edit the copy of each node below."}
             </p>
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Unified dropdown (templates + instances) */}
+            {/* Combined dropdown */}
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold uppercase text-foreground/70">
                 Bot
               </label>
               <select
-                className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[260px] whitespace-pre-wrap break-words"
+                className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[260px]"
                 value={selectValue}
-                onChange={onChangeSelect}
-                title="Choose a template or a client bot"
+                onChange={onSelectChange}
+                title="Choose a Template Bot or a Client Bot (instance)"
               >
-                <optgroup label="Bot Templates">
+                <optgroup label="Client Bots (instances)">
+                  {instances.length === 0 ? (
+                    <option value="inst:" disabled>
+                      No client bots yet — duplicate or create one first
+                    </option>
+                  ) : (
+                    instances
+                      .slice()
+                      .sort((a, b) => b.updatedAt - a.updatedAt)
+                      .map((m) => (
+                        <option key={m.id} value={`inst:${m.id}`}>
+                          {m.name || `${m.bot} Instance`} • {m.mode}
+                        </option>
+                      ))
+                  )}
+                </optgroup>
+
+                <optgroup label="Templates">
                   {BOT_OPTIONS.map((b) => (
-                    <option key={`tpl:${b.key}`} value={`tpl:${b.key}`}>
+                    <option key={b.key} value={`tpl:${b.key}`}>
                       {b.label}
                     </option>
                   ))}
-                </optgroup>
-
-                <optgroup label="Client Bots">
-                  {instances
-                    .slice()
-                    .sort((a, b) => b.updatedAt - a.updatedAt)
-                    .map((m) => (
-                      <option key={`inst:${m.id}`} value={`inst:${m.id}`}>
-                        {(m.name || `${m.bot} Instance`) + " • " + m.mode}
-                      </option>
-                    ))}
-                  {instances.length === 0 && (
-                    <option value="" disabled>
-                      No client bots yet — create or duplicate one
-                    </option>
-                  )}
                 </optgroup>
               </select>
             </div>
@@ -667,47 +733,34 @@ function BuilderInner() {
 
             {/* Add Node */}
             <div className="relative">
-  <button
-    onClick={() => setAddMenuOpen((v) => !v)}
-    className="rounded-md px-3 py-2 text-xs font-extrabold ring-1 ring-border bg-white hover:bg-gray-50"
-    aria-expanded={addMenuOpen}
-    aria-haspopup="menu"
-  >
-    + Add Node
-  </button>
-
-  {addMenuOpen && (
-    <div
-      role="menu"
-      className="absolute right-0 mt-2 w-40 rounded-lg border-2 border-black bg-white shadow-xl z-20"
-    >
-      {(["message", "choice", "input", "action"] as const).map((t) => (
-        <button
-          key={t}
-          role="menuitem"
-          onClick={() => {
-            setPendingType(t);
-            setAddMenuOpen(false);
-          }}
-          className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-        >
-          {t[0].toUpperCase() + t.slice(1)} (click to place)
-        </button>
-      ))}
-    </div>
-  )}
-</div>
-                      key={t}
-                      role="menuitem}
-                      onClick={() => {
-                        setPendingType(t);
-                        setAddMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-                    >
-                      {t[0].toUpperCase() + t.slice(1)} (click to place)
-                    </button>
-                  ))}
+              <button
+                onClick={() => setAddMenuOpen((v) => !v)}
+                className="rounded-md px-3 py-2 text-xs font-extrabold ring-1 ring-border bg-white hover:bg-gray-50"
+                aria-expanded={addMenuOpen}
+                aria-haspopup="menu"
+              >
+                + Add Node
+              </button>
+              {addMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-40 rounded-lg border-2 border-black bg-white shadow-xl z-20"
+                >
+                  {(["message", "choice", "input", "action"] as const).map(
+                    (t) => (
+                      <button
+                        key={t}
+                        role="menuitem"
+                        onClick={() => {
+                          setPendingType(t);
+                          setAddMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+                      >
+                        {t[0].toUpperCase() + t.slice(1)} (click to place)
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -744,7 +797,12 @@ function BuilderInner() {
             panOnDrag={true}
             zoomOnScroll={true}
           >
-            <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
+            <Background
+              gap={20}
+              size={1}
+              color="#e9d5ff"
+              style={{ opacity: 0.3 }}
+            />
             <Controls
               showInteractive={false}
               className="bg-white/80 backdrop-blur-sm rounded-lg shadow-lg border border-purple-200"
@@ -803,7 +861,7 @@ function BuilderInner() {
 }
 
 /* =========================================================================
-   5)  Provider wrapper
+   5)  Export with Provider wrapper to satisfy useReactFlow()
    ========================================================================= */
 
 export default function Builder() {
