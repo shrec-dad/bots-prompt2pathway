@@ -28,6 +28,9 @@ export type TemplateDef = {
 const TPL_INDEX_KEY = "botTemplates:index"; // TemplateDef[]
 const TPL_DATA_KEY = (key: string, mode: Mode) => `botTemplates:data:${key}_${mode}`;
 
+// NEW: hidden list for “deleting” built-ins safely
+const TPL_HIDDEN_KEY = "botTemplates:hiddenKeys"; // string[] of keys
+
 /* ---------- Helpers ---------- */
 
 function readJSON<T>(k: string, fallback: T): T {
@@ -44,7 +47,7 @@ function writeJSON<T>(k: string, v: T) {
 const id = (p: string, n: number) => `${p}_${n}`;
 
 /* =========================================================================
-   Built-in 5 Templates (graphs)  — unchanged
+   Built-in 5 Templates (graphs)
    ======================================================================== */
 
 const LeadQualifier_basic: BotTemplate = {
@@ -571,13 +574,22 @@ const builtinGraphs: Record<string, BotTemplate> = {
    Public API
    ======================================================================== */
 
-// Return built-ins + any user-created TemplateDefs
+// Helper: is a key one of the built-ins?
+export function isBuiltInKey(key: BotKey): boolean {
+  return BUILTIN_DEFS.some((d) => d.key === key);
+}
+
+// Return built-ins (minus hidden) + any user-created TemplateDefs
 export function listTemplateDefs(): TemplateDef[] {
   const custom = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
+  const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
+
   // Ensure unique keys (built-ins take precedence if same key somehow exists)
   const mergedMap = new Map<string, TemplateDef>();
   [...BUILTIN_DEFS, ...custom].forEach((d) => mergedMap.set(d.key, d));
-  return Array.from(mergedMap.values());
+
+  // Filter hidden
+  return Array.from(mergedMap.values()).filter((d) => !hidden.includes(d.key));
 }
 
 // Create a new template definition + seed skeleton graphs for both modes
@@ -607,7 +619,7 @@ export function createTemplate(def: {
   index.push(tplDef);
   writeJSON(TPL_INDEX_KEY, index);
 
-  // seed a skeleton graph for both modes (per your Q3=B)
+  // seed a skeleton graph for both modes
   const skeleton: BotTemplate = {
     nodes: [
       {
@@ -633,4 +645,56 @@ export function getTemplate(bot: BotKey, mode: Mode): BotTemplate | undefined {
   const custom = readJSON<BotTemplate | null>(TPL_DATA_KEY(bot, mode), null);
   if (custom) return custom;
   return builtinGraphs[`${bot}_${mode}`];
+}
+
+/* =========================================================================
+   NEW: Delete / Hide APIs for template management
+   ======================================================================== */
+
+/**
+ * For built-ins, we "hide" the key (reversible).
+ * For customs, we remove index entry and both graphs.
+ * Returns an object describing what happened.
+ */
+export function deleteTemplate(key: BotKey): {
+  removed: boolean;
+  kind: "builtin" | "custom";
+} {
+  if (isBuiltInKey(key)) {
+    // hide built-in
+    const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
+    if (!hidden.includes(key)) {
+      hidden.push(key);
+      writeJSON(TPL_HIDDEN_KEY, hidden);
+    }
+    return { removed: true, kind: "builtin" };
+  }
+
+  // remove custom from index
+  const index = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
+  const next = index.filter((d) => d.key !== key);
+  writeJSON(TPL_INDEX_KEY, next);
+
+  // remove both stored graphs
+  try {
+    localStorage.removeItem(TPL_DATA_KEY(key, "basic"));
+    localStorage.removeItem(TPL_DATA_KEY(key, "custom"));
+  } catch {}
+
+  // Optional cleanup for per-bot keys (safe no-ops if missing)
+  try {
+    localStorage.removeItem(`botOverrides:${key}_basic`);
+    localStorage.removeItem(`botOverrides:${key}_custom`);
+    localStorage.removeItem(`botSettings:${key}`);
+    localStorage.removeItem(`botKnowledge:${key}`);
+  } catch {}
+
+  return { removed: true, kind: "custom" };
+}
+
+/** Reverse the hide for a built-in (handy if you change your mind) */
+export function unhideTemplate(key: BotKey) {
+  const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
+  const next = hidden.filter((k) => k !== key);
+  writeJSON(TPL_HIDDEN_KEY, next);
 }
