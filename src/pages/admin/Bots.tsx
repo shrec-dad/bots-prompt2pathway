@@ -5,15 +5,22 @@ import {
   listInstances,
   removeInstance,
   duplicateInstanceFromTemplate,
-  duplicateInstanceFromExisting,
   createInstance,
-  renameInstance,
   type InstanceMeta,
 } from "@/lib/instances";
 import { getJSON, setJSON } from "@/lib/storage";
 
-/* ---------------- types ---------------- */
+/* ---------- shared analytics store ---------- */
+type Metrics = {
+  conversations: number;
+  leads: number;
+  avgResponseSecs?: number;
+  csatPct?: number;
+  // other metrics may be present; we ignore here
+};
+const METRICS_KEY = "analytics:metrics";
 
+/* ---------------- display helpers ---------------- */
 type BotDef = {
   key: BotKey;
   name: string;
@@ -21,15 +28,6 @@ type BotDef = {
   emoji: string;
   description: string;
 };
-
-type ClientRef = {
-  id: string;
-  companyName: string;
-};
-
-const CLIENTS_KEY = "clients:list";
-
-/* ---------------- display helpers ---------------- */
 
 const BOTS: BotDef[] = [
   {
@@ -104,14 +102,13 @@ export default function Bots() {
     listInstances()
   );
 
-  // Clients list for assignment
-  const [clients] = useState<ClientRef[]>(() =>
-    getJSON<ClientRef[]>(CLIENTS_KEY, [])
+  // Analytics metrics used for header stats
+  const [metrics, setMetrics] = useState<Metrics>(() =>
+    getJSON<Metrics>(METRICS_KEY, {
+      conversations: 0,
+      leads: 0,
+    })
   );
-
-  // UI states
-  const [assignId, setAssignId] = useState<string | null>(null);
-  const [selectedClient, setSelectedClient] = useState<string>("");
 
   // keep in sync if storage changes elsewhere
   useEffect(() => {
@@ -124,10 +121,22 @@ export default function Bots() {
       if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
         setInstances(listInstances());
       }
+      if (e.key === METRICS_KEY) {
+        setMetrics(getJSON<Metrics>(METRICS_KEY, { conversations: 0, leads: 0 }));
+      }
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  const resetTopStats = () => {
+    const next = { ...metrics, conversations: 0, leads: 0 };
+    setMetrics(next);
+    setJSON(METRICS_KEY, next);
+  };
+
+  const fmtInt = (n: number) =>
+    Number.isFinite(n) ? Math.max(0, Math.round(n)).toLocaleString() : "0";
 
   // Safely format a title for instances, even if name is missing
   const safeInstanceName = (m: InstanceMeta) => {
@@ -136,50 +145,46 @@ export default function Bots() {
     return base;
   };
 
-  // Sorted list
-  const sortedInstances = useMemo(() => {
-    return [...instances].sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [instances]);
-
-  // Assign bot to client (stored in client.notes for demo)
-  function assignBotToClient(botId: string, clientId: string) {
-  const clientList = getJSON<any[]>(CLIENTS_KEY, []);
-  const updated = clientList.map((c) =>
-    c.id === clientId
-      ? {
-          ...c,
-          assignedBots: [...(c.assignedBots || []), botId],
-        }
-      : c
+  // Tidy, sorted list for display
+  const sortedInstances = useMemo(
+    () => [...instances].sort((a, b) => b.updatedAt - a.updatedAt),
+    [instances]
   );
-  setJSON(CLIENTS_KEY, updated);
-  alert("Bot assigned to client!");
-}
 
   return (
     <div className="w-full h-full">
-      {/* Header + Create button */}
+      {/* Header + Create / Reset buttons */}
       <div className="flex items-center justify-between mb-4">
         <div className="text-xl font-extrabold">Bots</div>
-        <button
-          className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
-          onClick={() => {
-            const first = BOTS[0];
-            const mode = modes[first.key] || "basic";
-            const meta = createInstance(first.key, mode, `${first.name} (New)`);
-            setInstances(listInstances());
-            window.location.href = `/admin/builder?inst=${meta.id}`;
-          }}
-        >
-          + Create New Bot
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30"
+            title="Reset Conversations and Leads"
+            onClick={resetTopStats}
+          >
+            Reset
+          </button>
+          <button
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+            onClick={() => {
+              // Make a blank instance using the first card’s bot & its current mode.
+              const first = BOTS[0];
+              const mode = modes[first.key] || "basic";
+              const meta = createInstance(first.key, mode, `${first.name} (New)`);
+              setInstances(listInstances());
+              window.location.href = `/admin/builder?inst=${meta.id}`;
+            }}
+          >
+            + Create New Bot
+          </button>
+        </div>
       </div>
 
-      {/* Metrics row */}
+      {/* Header metrics row (live, not demo) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
         <Stat label="Active Bots" value={String(sortedInstances.length)} />
-        <Stat label="Conversations (7d)" value="1,284" />
-        <Stat label="Leads / Tickets (7d)" value="312" />
+        <Stat label="Conversations (7d)" value={fmtInt(metrics.conversations)} />
+        <Stat label="Leads / Tickets (7d)" value={fmtInt(metrics.leads)} />
       </div>
 
       {/* Bot catalog */}
@@ -220,29 +225,32 @@ export default function Bots() {
                   setModes((prev) => ({ ...prev, [b.key]: mode }));
                   setBotSettings(b.key, { mode });
                 }}
+                aria-label={`${b.name} plan`}
               >
                 <option value="basic">Basic</option>
                 <option value="custom">Custom</option>
               </select>
 
               <button
-                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20"
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
                 onClick={() =>
                   (window.location.href = `/admin/builder?bot=${b.key}`)
                 }
+                aria-label={`Open ${b.name} in Builder`}
               >
                 Open Builder
               </button>
             </div>
 
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3">
               <button
-                className="rounded-lg border bg-white px-4 py-2 text-sm font-bold hover:bg-muted/40"
+                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-muted/40"
                 onClick={() => {
                   const mode = modes[b.key] || "basic";
                   duplicateInstanceFromTemplate(b.key, mode, `${b.name} (Copy)`);
                   setInstances(listInstances());
                 }}
+                aria-label={`Duplicate ${b.name}`}
               >
                 Duplicate
               </button>
@@ -257,13 +265,14 @@ export default function Bots() {
 
         {sortedInstances.length === 0 ? (
           <div className="rounded-xl border bg-card p-4 text-sm">
-            You don’t have any instances yet.
+            You don’t have any instances yet. Click <b>Duplicate</b> on a card
+            above or use <b>Create New Bot</b>.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {sortedInstances.map((m) => {
               const title = safeInstanceName(m);
-              const sub = `${botKeyToLabel(m.bot)} • ${m.mode}`;
+              const sub = `${botKeyToLabel(m.bot)} • ${m.mode}`.trim();
 
               return (
                 <div
@@ -275,7 +284,7 @@ export default function Bots() {
                   </div>
                   <div className="text-sm text-foreground/80">{sub}</div>
 
-                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <div className="mt-2 flex items-center gap-3">
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
                       onClick={() =>
@@ -283,36 +292,6 @@ export default function Bots() {
                       }
                     >
                       Open
-                    </button>
-                    <button
-                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-indigo-50"
-                      onClick={() => {
-                        const newName = prompt("Rename bot:", m.name);
-                        if (newName) {
-                          renameInstance(m.id, newName);
-                          setInstances(listInstances());
-                        }
-                      }}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-emerald-50"
-                      onClick={() => {
-                        const copy = duplicateInstanceFromExisting(
-                          m.id,
-                          `${m.name} (Copy)`
-                        );
-                        if (copy) setInstances(listInstances());
-                      }}
-                    >
-                      Clone
-                    </button>
-                    <button
-                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-sky-50"
-                      onClick={() => setAssignId(m.id)}
-                    >
-                      Assign
                     </button>
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-rose-50"
@@ -330,48 +309,6 @@ export default function Bots() {
           </div>
         )}
       </div>
-
-      {/* Assign modal */}
-      {assignId && (
-        <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-[400px] max-w-[95vw] shadow-xl border-2 border-black">
-            <h2 className="text-lg font-extrabold mb-4">Assign Bot</h2>
-            <select
-              className="w-full border rounded-lg px-3 py-2 mb-4"
-              value={selectedClient}
-              onChange={(e) => setSelectedClient(e.target.value)}
-            >
-              <option value="">Select client…</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.companyName}
-                </option>
-              ))}
-            </select>
-            <div className="flex justify-end gap-2">
-              <button
-                className="px-4 py-2 rounded-lg border"
-                onClick={() => setAssignId(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-emerald-500 text-white font-bold"
-                onClick={() => {
-                  if (!selectedClient) {
-                    alert("Please choose a client.");
-                    return;
-                  }
-                  assignBotToClient(assignId, selectedClient);
-                  setAssignId(null);
-                }}
-              >
-                Assign
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
