@@ -8,36 +8,35 @@ export type ChatWidgetProps = {
 
   // Bubble controls
   position?: "bottom-right" | "bottom-left";
-  size?: number;                 // base size in px (used by circle/square); oval/badge auto-scale
-  color?: string;                // bubble background color if no image
-  image?: string;                // optional bubble image URL or data: URI
-  imageFit?: "cover" | "contain" | "center";
-  shape?: "circle" | "rounded" | "oval" | "square" | "chat" | "badge";
-  label?: string;                // text on/inside the bubble (e.g., "Chat")
-  labelColor?: string;           // text color for label
+  size?: number; // base size in px (used by circle/square); oval auto-scales
+  color?: string; // bubble background color if no image
+  image?: string; // optional bubble image URL
+  imageFit?: "cover" | "contain";
+  shape?:
+    | "circle"
+    | "rounded"
+    | "oval"
+    | "square"
+    | "speech"          // NEW: round speech bubble
+    | "speech-rounded"; // NEW: rounded-rect speech bubble
+  label?: string; // text on the bubble (e.g., "Chat")
+  labelColor?: string; // text color for label
 
   // Message appearance in the chat transcript
   messageStyle?:
-    | "outlined-black"  // white with bold black outline
-    | "accent-yellow"   // yellow card style
-    | "modern-soft"     // gray soft
-    | "pill"            // fully rounded
-    | "rounded-rect"    // rounded rectangle
-    | "minimal-outline";// subtle gray outline
+    | "outlined-black"
+    | "accent-yellow"
+    | "modern-soft"
+    | "pill"
+    | "rounded-rect"
+    | "minimal-outline";
 
   // Optional avatar (real photo or logo) for BOT messages
   botAvatarUrl?: string;
 
-  // Let the parent intercept bubble clicks (e.g., open a large modal)
-  onBubbleClick?: () => void;
-
   // z-index control for embedding on busy pages
   zIndex?: number;
 };
-
-function toTitle(s: string) {
-  return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 export default function ChatWidget({
   mode = "popup",
@@ -55,39 +54,27 @@ export default function ChatWidget({
   messageStyle = "outlined-black",
   botAvatarUrl,
 
-  onBubbleClick,
-
   zIndex = 2147483000,
 }: ChatWidgetProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const uniqId = useRef(`cw_${Math.random().toString(36).slice(2)}`).current;
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Bubble geometry (includes OVAL fix & support for BADGE and CHAT)
+  // Bubble geometry (oval changes width/height; others are square by size)
   // ─────────────────────────────────────────────────────────────────────────────
   const bubbleDims = useMemo(() => {
-    if (shape === "oval") {
+    if (shape === "oval" || shape === "speech-rounded") {
       return {
-        width: Math.round(size * 1.55),  // wider
-        height: Math.round(size * 0.9),  // shorter
-        radius: Math.round(size * 0.9),  // pill-like
+        width: Math.round(size * 1.55),
+        height: Math.round(size * 0.9),
+        radius: Math.round(size * 0.9),
       };
-    }
-    if (shape === "badge") {
-      return {
-        width: Math.round(size * 2.2),
-        height: size,
-        radius: 9999,
-      };
-    }
-    // "chat" uses rounded rectangle dimensions; we draw the tail separately
-    if (shape === "chat") {
-      return { width: size, height: size, radius: 16 };
     }
     const squareish = { width: size, height: size };
     if (shape === "rounded") return { ...squareish, radius: 14 };
     if (shape === "square") return { ...squareish, radius: 6 };
-    // default circle
+    // default circle & "speech" use radius = half
     return { ...squareish, radius: size / 2 };
   }, [shape, size]);
 
@@ -95,8 +82,6 @@ export default function ChatWidget({
     position === "bottom-left"
       ? { left: 20, right: "auto" as const }
       : { right: 20, left: "auto" as const };
-
-  const bubbleBackground = color; // keep your color even when image is present (image overlays)
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Demo transcript state (until wired to real flow)
@@ -117,7 +102,7 @@ export default function ChatWidget({
     setInput("");
   };
 
-  // Keep the panel fully visible on very small screens (placeholder hook)
+  // Keep the panel fully visible on very small screens
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -134,11 +119,10 @@ export default function ChatWidget({
       botBase: { maxWidth: "80%", padding: "10px 12px", borderWidth: 2 } as React.CSSProperties,
       userBase: { maxWidth: "80%", padding: "10px 12px", borderWidth: 2 } as React.CSSProperties,
     };
-
     switch (messageStyle) {
       case "outlined-black":
         return {
-          bot: { ...common.botBase, background: "#ffffff", color: "#000", border: "2px solid #000", borderRadius: 12 },
+          bot: { ...common.botBase, background: "#fff", color: "#000", border: "2px solid #000", borderRadius: 12 },
           user: { ...common.userBase, background: "#E9F5FF", color: "#000", border: "2px solid #000", borderRadius: 12 },
         };
       case "accent-yellow":
@@ -174,8 +158,12 @@ export default function ChatWidget({
   const BotAvatar = () => (
     <div
       style={{
-        width: 32, height: 32, borderRadius: "50%", border: "2px solid #000",
-        overflow: "hidden", background: "#fff",
+        width: 32,
+        height: 32,
+        borderRadius: "50%",
+        border: "2px solid #000",
+        overflow: "hidden",
+        background: "#fff",
       }}
     >
       {botAvatarUrl ? (
@@ -190,8 +178,7 @@ export default function ChatWidget({
   const Panel: React.FC = () => {
     if (mode === "inline") return renderPanel({ anchored: false, fullHeightRight: false });
     if (mode === "sidebar") return renderPanel({ anchored: false, fullHeightRight: true });
-    // popup (anchored above the bubble)
-    return renderPanel({ anchored: true, fullHeightRight: false });
+    return renderPanel({ anchored: true, fullHeightRight: false }); // popup
   };
 
   function renderPanel(opts: { anchored: boolean; fullHeightRight: boolean }) {
@@ -234,13 +221,18 @@ export default function ChatWidget({
             gap: 8,
           }}
         >
-          <div style={{ fontWeight: 900 }}>{toTitle(botId || "Chat")}</div>
+          <div style={{ fontWeight: 900 }}>Waitlist Bot</div>
           <button
             onClick={() => setOpen(false)}
             aria-label="Close"
             style={{
-              marginLeft: "auto", padding: "4px 10px", fontWeight: 800,
-              border: "2px solid #000", background: "#fff", borderRadius: 8, lineHeight: 1,
+              marginLeft: "auto",
+              padding: "4px 10px",
+              fontWeight: 800,
+              border: "2px solid #000",
+              background: "#fff",
+              borderRadius: 8,
+              lineHeight: 1,
             }}
           >
             ×
@@ -248,19 +240,16 @@ export default function ChatWidget({
         </div>
 
         {/* Transcript */}
-        <div
-          style={{
-            flex: 1, overflow: "auto", padding: 12,
-            display: "flex", flexDirection: "column", gap: 10,
-          }}
-        >
+        <div style={{ flex: 1, overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           {messages.map((m, i) => {
             const isUser = m.role === "user";
             return (
               <div
                 key={i}
                 style={{
-                  display: "flex", alignItems: "flex-start", gap: 8,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
                   justifyContent: isUser ? "flex-end" : "flex-start",
                 }}
               >
@@ -276,17 +265,13 @@ export default function ChatWidget({
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") send();
+            }}
             placeholder="Type a message…"
             style={{ flex: 1, padding: "12px", fontWeight: 600, outline: "none" }}
           />
-          <button
-            onClick={send}
-            style={{
-              padding: "12px 16px", fontWeight: 800,
-              borderLeft: "2px solid #000", background: color, color: "#fff",
-            }}
-          >
+          <button onClick={send} style={{ padding: "12px 16px", fontWeight: 800, borderLeft: "2px solid #000", background: color, color: "#fff" }}>
             Send
           </button>
         </div>
@@ -294,17 +279,160 @@ export default function ChatWidget({
     );
   }
 
-  const handleBubbleClick = () => {
-    if (onBubbleClick) return onBubbleClick(); // delegate to parent (e.g., Preview modal)
-    setOpen((v) => !v);
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Bubble renderers
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** SVG speech bubbles with optional image fill via clipPath */
+  const SpeechBubble = ({
+    variant, // "round" | "rounded"
+  }: {
+    variant: "round" | "rounded";
+  }) => {
+    const w = bubbleDims.width;
+    const h = bubbleDims.height;
+    const tailW = Math.max(10, Math.round(w * 0.18));
+    const tailH = Math.max(10, Math.round(h * 0.26));
+    const roundR = variant === "round" ? Math.min(w, h) / 2 : Math.min(16, bubbleDims.radius);
+
+    // Tail points toward page interior (so it looks like it points at the page)
+    const tailOnLeft = position === "bottom-right";
+
+    // Body path
+    const bodyId = `${uniqId}_clip`;
+
+    // For "round": main is a circle; for "rounded": main is a rounded rect
+    const body = variant === "round"
+      ? <circle cx={w / 2} cy={h / 2} r={Math.min(w, h) / 2 - 3} />
+      : <rect x={3} y={3} width={w - 6} height={h - 6} rx={Math.min(18, roundR)} ry={Math.min(18, roundR)} />;
+
+    // Tail path (little curved triangle)
+    const tailX = tailOnLeft ? 8 : w - 8;
+    const tipX = tailOnLeft ? -tailW : w + tailW;
+    const tail = (
+      <path
+        d={`M ${tailX} ${h - 18}
+           Q ${tailOnLeft ? tailX - tailW * 0.2 : tailX + tailW * 0.2} ${h - 8},
+             ${tailX} ${h - 6}
+           L ${tipX} ${h + tailH}
+           Z`}
+      />
+    );
+
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ position: "absolute", inset: 0 }}>
+        <defs>
+          <clipPath id={bodyId}>
+            {body}
+            {tail}
+          </clipPath>
+        </defs>
+
+        {/* fill (color or image) */}
+        {image ? (
+          <>
+            <image
+              href={image}
+              width={w}
+              height={h}
+              preserveAspectRatio={imageFit === "cover" ? "xMidYMid slice" : "xMidYMid meet"}
+              clipPath={`url(#${bodyId})`}
+            />
+            <g fill="none" stroke="#000" strokeWidth="2">
+              {body}
+              {tail}
+            </g>
+          </>
+        ) : (
+          <>
+            <g clipPath={`url(#${bodyId})`}>
+              <rect x="0" y="0" width={w} height={h} fill={color} />
+            </g>
+            <g fill="none" stroke="#000" strokeWidth="2">
+              {body}
+              {tail}
+            </g>
+          </>
+        )}
+      </svg>
+    );
   };
+
+  const BubbleInner = () => {
+    // label
+    return (
+      <span
+        style={{
+          position: "relative",
+          zIndex: 1,
+          color: labelColor,
+          fontWeight: 900,
+          padding: "0 8px",
+          userSelect: "none",
+        }}
+      >
+        {label}
+      </span>
+    );
+  };
+
+  const BoxBubble = () => (
+    <>
+      {/* optional image fill */}
+      {image && (
+        <img
+          src={image}
+          alt="bubble"
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: imageFit,
+            position: "absolute",
+            inset: 0,
+            borderRadius: bubbleDims.radius,
+          }}
+        />
+      )}
+      {!image && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: bubbleDims.radius,
+            background: color,
+          }}
+        />
+      )}
+      <BubbleInner />
+    </>
+  );
+
+  const SpeechBubbleWrapper = ({ variant }: { variant: "round" | "rounded" }) => (
+    <>
+      <SpeechBubble variant={variant} />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "grid",
+          placeItems: "center",
+          width: "100%",
+          height: "100%",
+          paddingInline: 6,
+          textAlign: "center",
+        }}
+      >
+        <BubbleInner />
+      </div>
+    </>
+  );
 
   return (
     <div ref={containerRef}>
       {/* Bubble (always rendered for popup mode; optional for others) */}
       {mode === "popup" && (
         <button
-          onClick={handleBubbleClick}
+          onClick={() => setOpen((v) => !v)}
           aria-label="Open chat"
           style={{
             position: "fixed",
@@ -312,76 +440,26 @@ export default function ChatWidget({
             ...bubbleSideStyle,
             width: bubbleDims.width,
             height: bubbleDims.height,
-            borderRadius: bubbleDims.radius,
+            borderRadius: shape.startsWith("speech") ? undefined : bubbleDims.radius,
             border: "2px solid #000",
-            background: bubbleBackground,
+            background: "transparent",
             overflow: "hidden",
+            // single shadow (no double bubbles)
             boxShadow: "6px 6px 0 #000",
             zIndex,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            paddingInline: shape === "badge" ? 12 : 0,
           }}
         >
-          {/* Image (if provided) */}
-          {image ? (
-            <img
-              src={image}
-              alt="bubble"
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: imageFit === "center" ? "none" : imageFit,
-                objectPosition: "center",
-                position: "absolute",
-                inset: 0,
-              }}
-            />
-          ) : null}
-
-          {/* Label */}
-          {label && (
-            <span
-              style={{
-                position: "relative",
-                zIndex: 1,
-                color: labelColor,
-                fontWeight: 900,
-                fontSize: shape === "badge" ? 14 : 12,
-                lineHeight: 1,
-                textAlign: "center",
-                paddingInline: shape === "badge" ? 4 : 0,
-              }}
-            >
-              {label}
-            </span>
-          )}
-
-          {/* Chat “tail” */}
-          {shape === "chat" && (
-            <span
-              aria-hidden
-              style={{
-                position: "absolute",
-                bottom: -6,
-                // tail should point toward the corner
-                ...(position === "bottom-left" ? { left: 14 } : { right: 14 }),
-                width: 0,
-                height: 0,
-                borderLeft: "8px solid transparent",
-                borderRight: "8px solid transparent",
-                borderTop: "10px solid #000",
-                // inner color (overlay) to match background, slightly offset
-                filter: "drop-shadow(0 -2px 0 #000)",
-              }}
-            />
-          )}
+          {shape === "speech" && <SpeechBubbleWrapper variant="round" />}
+          {shape === "speech-rounded" && <SpeechBubbleWrapper variant="rounded" />}
+          {shape !== "speech" && shape !== "speech-rounded" && <BoxBubble />}
         </button>
       )}
 
       {/* Panels */}
-      {open && !onBubbleClick && <Panel />}
+      {open && <Panel />}
       {mode === "inline" && !open && (
         <div style={{ margin: "12px 0" }}>
           <Panel />
