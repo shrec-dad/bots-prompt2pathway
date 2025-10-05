@@ -338,8 +338,8 @@ export default function Preview() {
               <option value="rounded">rounded</option>
               <option value="square">square</option>
               <option value="oval">oval</option>
-              <option value="chat">chat (speech)</option>
-              <option value="badge">badge</option>
+              <option value="speech">speech (round)</option>
+              <option value="speech-rounded">speech (rounded)</option>
             </select>
           </div>
 
