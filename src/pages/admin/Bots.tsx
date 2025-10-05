@@ -15,6 +15,7 @@ import {
   createTemplate,
   deleteTemplate,
   isBuiltInKey,
+  unhideTemplate,
 } from "@/lib/templates";
 
 /* ---------- shared analytics store ---------- */
@@ -26,7 +27,10 @@ type Metrics = {
 };
 const METRICS_KEY = "analytics:metrics";
 
-/* ---------------- display helpers ---------------- */
+/* ---------- Hidden templates storage key ---------- */
+const HIDDEN_TEMPLATES_KEY = "botTemplates:hiddenKeys";
+
+/* ---------- display helpers ---------- */
 type BotKey = string;
 
 function botKeyToLabel(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
@@ -38,6 +42,43 @@ function botKeyToGradient(defs: ReturnType<typeof listTemplateDefs>, key: BotKey
 function botKeyToEmoji(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
   return defs.find((b) => b.key === key)?.emoji || "🤖";
 }
+
+/* Built-in metadata (for nice cards when they’re hidden) */
+const BUILTIN_META: Record<
+  string,
+  { name: string; emoji: string; gradient: string; description: string }
+> = {
+  LeadQualifier: {
+    name: "Lead Qualifier",
+    emoji: "🎯",
+    gradient: "from-purple-500/20 via-fuchsia-400/20 to-pink-500/20",
+    description: "Qualify leads with scoring, validation and routing. Best for sales intake.",
+  },
+  AppointmentBooking: {
+    name: "Appointment Booking",
+    emoji: "📅",
+    gradient: "from-emerald-500/20 via-teal-400/20 to-cyan-500/20",
+    description: "Offer services, show availability, confirm and remind automatically.",
+  },
+  CustomerSupport: {
+    name: "Customer Support",
+    emoji: "🛟",
+    gradient: "from-indigo-500/20 via-blue-400/20 to-sky-500/20",
+    description: "Answer FAQs, create tickets, route priority issues and hand off to humans.",
+  },
+  Waitlist: {
+    name: "Waitlist",
+    emoji: "⏳",
+    gradient: "from-amber-500/25 via-orange-400/20 to-rose-500/20",
+    description: "Collect interest, show queue status and notify customers.",
+  },
+  SocialMedia: {
+    name: "Social Media",
+    emoji: "📣",
+    gradient: "from-pink-500/20 via-rose-400/20 to-red-500/20",
+    description: "Auto-DM replies, comment handling, and engagement prompts across platforms.",
+  },
+};
 
 /* ---------------- main page ---------------- */
 
@@ -65,6 +106,12 @@ export default function Bots() {
     })
   );
 
+  // Hidden templates UI
+  const [showHidden, setShowHidden] = useState(false);
+  const [hiddenKeys, setHiddenKeys] = useState<string[]>(
+    () => getJSON<string[]>(HIDDEN_TEMPLATES_KEY, [])
+  );
+
   // keep in sync if storage changes elsewhere
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -82,9 +129,10 @@ export default function Bots() {
       if (
         e.key === "botTemplates:index" ||
         (e.key && e.key.startsWith("botTemplates:data:")) ||
-        e.key === "botTemplates:hiddenKeys"
+        e.key === HIDDEN_TEMPLATES_KEY
       ) {
         setDefs(listTemplateDefs());
+        setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
       }
     };
     window.addEventListener("storage", onStorage);
@@ -120,12 +168,25 @@ export default function Bots() {
       .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
       .join("");
 
+  // Derive pretty cards for hidden built-ins
+  const hiddenCards = hiddenKeys
+    .filter((k) => BUILTIN_META[k]) // only built-ins are hidable
+    .map((k) => ({ key: k, ...BUILTIN_META[k] }));
+
   return (
     <div className="w-full h-full">
       {/* Header + Create / Reset buttons */}
       <div className="flex items-center justify-between mb-4">
         <div className="text-xl font-extrabold">Bots</div>
         <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-sm font-semibold mr-2">
+            <input
+              type="checkbox"
+              checked={showHidden}
+              onChange={(e) => setShowHidden(e.target.checked)}
+            />
+            Show Hidden Templates
+          </label>
           <button
             className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30"
             title="Reset Conversations and Leads"
@@ -139,19 +200,65 @@ export default function Bots() {
               const name = prompt("Name your new bot template:", "New Template")?.trim();
               if (!name) return;
               const key = toKey(name);
-              // prevent duplicate
               if (defs.some((d) => d.key === key)) {
                 alert("A template with this name/key already exists. Please choose a different name.");
                 return;
               }
               createTemplate({ name, key });
-              setDefs(listTemplateDefs()); // refresh list in-place
+              setDefs(listTemplateDefs());
             }}
           >
             + Create New Bot
           </button>
         </div>
       </div>
+
+      {/* If toggle is on, show Hidden Templates section */}
+      {showHidden && (
+        <div className="mb-8">
+          <div className="text-lg font-extrabold mb-3">Hidden Templates</div>
+          {hiddenCards.length === 0 ? (
+            <div className="rounded-xl border bg-card p-4 text-sm">
+              No hidden templates right now.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {hiddenCards.map((b) => (
+                <div
+                  key={b.key}
+                  className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
+                >
+                  <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
+                        {b.emoji}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-extrabold tracking-tight">{b.name}</h3>
+                        <p className="text-sm font-semibold text-foreground/80">{b.description}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-emerald-50"
+                      onClick={() => {
+                        unhideTemplate(b.key);
+                        setDefs(listTemplateDefs());
+                        setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
+                      }}
+                      aria-label={`Unhide ${b.name}`}
+                    >
+                      Unhide
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Header metrics row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
@@ -222,22 +329,20 @@ export default function Bots() {
                 Duplicate
               </button>
 
-              {/* NEW: Delete for ALL templates (built-in = hide; custom = remove) */}
+              {/* Delete for ALL templates (built-in = hide; custom = remove) */}
               <button
                 className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-rose-50"
                 onClick={() => {
                   const builtin = isBuiltInKey(b.key);
                   const ok = confirm(
                     builtin
-                      ? `Hide "${b.name}" (built-in) from your Templates? 
-This does NOT delete existing instances and can be restored later.`
-                      : `Delete custom template "${b.name}"? 
-This removes it from your Templates and deletes its stored graphs. 
-Existing instances remain intact.`
+                      ? `Hide "${b.name}" (built-in) from your Templates?\n\nThis does NOT delete existing instances and can be restored later.`
+                      : `Delete custom template "${b.name}"?\n\nThis removes it from your Templates and deletes its stored graphs.\nExisting instances remain intact.`
                   );
                   if (!ok) return;
                   deleteTemplate(b.key);
                   setDefs(listTemplateDefs());
+                  setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
                 }}
                 aria-label={`Delete ${b.name}`}
                 title="Delete (built-ins are hidden; customs are removed)"
@@ -296,7 +401,7 @@ Existing instances remain intact.`
                       Nurture
                     </button>
 
-                    {/* one-liner rename via helper */}
+                    {/* Rename via helper */}
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
                       onClick={() => {
