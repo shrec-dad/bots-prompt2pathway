@@ -2,16 +2,28 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
-import { listTemplateDefs, type BotKey } from "@/lib/templates";
-
-/* -------------------------------- Types -------------------------------- */
+import { listTemplateDefs } from "@/lib/templates";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
 type Shape = "circle" | "rounded" | "square" | "oval" | "chat" | "badge";
 type ImageFit = "cover" | "contain" | "center";
 
-/* ----------------------- Branding (persisted locally) ------------------- */
+/* ---------- Small helpers ---------- */
+
+const BOT_TITLES: Record<string, string> = {
+  LeadQualifier: "Lead Qualifier",
+  AppointmentBooking: "Appointment Booking",
+  CustomerSupport: "Customer Support",
+  Waitlist: "Waitlist",
+  SocialMedia: "Social Media",
+};
+
+function titleCaseSlug(s: string) {
+  return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/* ---------- Branding storage ---------- */
 
 const BRAND_KEY = "brandingSettings";
 
@@ -20,8 +32,7 @@ type Branding = {
   primaryColor: string;
   secondaryColor: string;
   fontFamily: string;
-
-  chatBubbleImage?: string;      // URL or data: URI
+  chatBubbleImage?: string;   // may be a URL or a data: URI
   chatBubbleColor: string;
   chatBubbleSize: number;
   chatBubblePosition: Pos;
@@ -31,7 +42,7 @@ type Branding = {
   chatBubbleImageFit?: ImageFit;
 };
 
-function readBranding(): Branding {
+function getBranding(): Branding {
   try {
     const raw = localStorage.getItem(BRAND_KEY);
     if (raw) return JSON.parse(raw);
@@ -50,79 +61,44 @@ function readBranding(): Branding {
   };
 }
 
-function writeBranding(next: Partial<Branding>) {
-  const prev = readBranding();
+function setBranding(next: Partial<Branding>) {
+  const prev = getBranding();
   const merged = { ...prev, ...next };
   localStorage.setItem(BRAND_KEY, JSON.stringify(merged));
   return merged as Branding;
 }
 
-/* --------------------------- Helper dictionaries ------------------------ */
-
-// Friendly headings per base bot
-const BOT_HEADING: Record<string, string> = {
-  LeadQualifier: "Lead Qualifier",
-  AppointmentBooking: "Appointment Booking",
-  CustomerSupport: "Customer Support",
-  Waitlist: "Waitlist",
-  SocialMedia: "Social Media",
-};
-
-function toTitle(s: string) {
-  return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/* =======================================================================
-   Component
-   ======================================================================= */
-
 export default function Preview() {
-  // live data
-  const [templates] = useState(() => listTemplateDefs());       // for labels
+  /* ---------- sources (instances + templates) ---------- */
   const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
+  const [defs] = useState(() => listTemplateDefs());
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
-      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
+      if (e.key.startsWith("botInstances:") || e.key === "botInstances:index") {
         setInstances(listInstances());
-      }
-      if (e.key === BRAND_KEY) {
-        const b = readBranding();
-        setPos(b.chatBubblePosition);
-        setSize(b.chatBubbleSize);
-        setColor(b.chatBubbleColor);
-        setImg(b.chatBubbleImage || "");
-        setShape(b.chatBubbleShape || "circle");
-        setImageFit(b.chatBubbleImageFit || "cover");
-        setLabel(b.chatBubbleLabel || "Chat");
-        setLabelColor(b.chatBubbleLabelColor || "#ffffff");
       }
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // ---- selection state ----
-  const [selectedInstId, setSelectedInstId] = useState<string>("");
-  const [selectedBotKey, setSelectedBotKey] = useState<BotKey>("Waitlist"); // fallback
+  /* ---------- selection state ---------- */
+  const [instId, setInstId] = useState<string>("");
+  const [botKey, setBotKey] = useState<string>(defs[0]?.key ?? "Waitlist"); // fallback
 
-  // determine the *effective* base bot (instance wins)
-  const effectiveBaseKey: string = useMemo(() => {
-    if (selectedInstId) {
-      try {
-        const raw = localStorage.getItem(`botSettingsInst:${selectedInstId}`);
-        if (raw) {
-          const meta = JSON.parse(raw) as { baseKey?: string } | null;
-          if (meta?.baseKey) return meta.baseKey;
-        }
-      } catch {}
-    }
-    return selectedBotKey;
-  }, [selectedInstId, selectedBotKey]);
+  const activeInst = useMemo(
+    () => instances.find((m) => m.id === instId),
+    [instances, instId]
+  );
 
-  // ---- widget visual controls (persisted) ----
-  const b = useMemo(readBranding, []);
+  // The bot that actually drives copy/labels
+  const activeBotKey =
+    activeInst?.bot || botKey; // instance baseKey wins if instance is chosen
+
+  /* ---------- widget look state ---------- */
+  const b = useMemo(getBranding, []);
   const [mode, setMode] = useState<Mode>("popup");
   const [pos, setPos] = useState<Pos>(b.chatBubblePosition ?? "bottom-left");
   const [size, setSize] = useState<number>(b.chatBubbleSize ?? 56);
@@ -133,17 +109,31 @@ export default function Preview() {
   const [label, setLabel] = useState<string>(b.chatBubbleLabel ?? "Chat");
   const [labelColor, setLabelColor] = useState<string>(b.chatBubbleLabelColor ?? "#ffffff");
 
-  // ---- modal control (and “bubble opens modal” behavior) ----
-  const [modalOpen, setModalOpen] = useState(false);
+  /* ---------- modal demo state ---------- */
+  const [openModal, setOpenModal] = useState(false);
+  const [step, setStep] = useState(0);
+  const next = () => setStep((s) => Math.min(s + 1, 3));
+  const back = () => setStep((s) => Math.max(s - 1, 0));
 
-  // headline (uses effective base bot)
-  const headline = `Welcome to ${BOT_HEADING[effectiveBaseKey] ?? toTitle(effectiveBaseKey)}`;
+  // Modal header (title bar): instance name if present, otherwise bot name
+  const modalHeader = activeInst
+    ? activeInst.name
+    : (BOT_TITLES[botKey] ?? titleCaseSlug(botKey));
 
-  // Instance-aware /widget URL preview
+  // Headline “Welcome to …” based on the *active* bot (instance > bot)
+  const headline = `Welcome to ${BOT_TITLES[activeBotKey] ?? "Chat"}`;
+
+  // Demo subtext varies slightly at “done”
+  const subtext =
+    step === 3
+      ? "Thanks! You’re on the list — we’ll be in touch."
+      : "I’ll ask a few quick questions to help our team help you.";
+
+  // Embed URL preview (uses inst if chosen, else bot)
   const widgetSrc = useMemo(() => {
     const qp = new URLSearchParams();
-    if (selectedInstId) qp.set("inst", selectedInstId);
-    else qp.set("bot", effectiveBaseKey);
+    if (activeInst) qp.set("inst", activeInst.id);
+    else qp.set("bot", botKey);
 
     qp.set("position", pos);
     qp.set("size", String(size));
@@ -155,9 +145,16 @@ export default function Preview() {
     if (img.trim()) qp.set("image", img.trim());
 
     return `/widget?${qp.toString()}`;
-  }, [selectedInstId, effectiveBaseKey, pos, size, color, img, label, labelColor, shape, imageFit]);
+  }, [activeInst, botKey, pos, size, shape, imageFit, label, labelColor, color, img]);
 
-  // Save / Reset
+  const embedIframe = `<iframe
+  src="${widgetSrc}"
+  style="border:0;width:100%;height:560px"
+  loading="lazy"
+  referrerpolicy="no-referrer-when-downgrade"
+></iframe>`;
+
+  /* ---------- save/reset ---------- */
   const [savedNote, setSavedNote] = useState<null | string>(null);
   useEffect(() => {
     if (!savedNote) return;
@@ -166,7 +163,7 @@ export default function Preview() {
   }, [savedNote]);
 
   const onSave = () => {
-    writeBranding({
+    setBranding({
       chatBubblePosition: pos,
       chatBubbleSize: size,
       chatBubbleColor: color,
@@ -180,20 +177,20 @@ export default function Preview() {
   };
 
   const onReset = () => {
-    const d: Branding = {
+    const d = {
       primaryColor: "#7aa8ff",
       secondaryColor: "#76c19a",
       fontFamily: "Inter, system-ui, Arial, sans-serif",
       chatBubbleColor: "#7aa8ff",
       chatBubbleSize: 56,
-      chatBubblePosition: "bottom-left",
-      chatBubbleShape: "circle",
+      chatBubblePosition: "bottom-left" as Pos,
+      chatBubbleShape: "circle" as Shape,
       chatBubbleLabel: "Chat",
       chatBubbleLabelColor: "#ffffff",
-      chatBubbleImageFit: "cover",
+      chatBubbleImageFit: "cover" as ImageFit,
       chatBubbleImage: "",
     };
-    writeBranding(d);
+    setBranding(d);
     setPos(d.chatBubblePosition);
     setSize(d.chatBubbleSize);
     setColor(d.chatBubbleColor);
@@ -205,16 +202,16 @@ export default function Preview() {
     setSavedNote("Reset");
   };
 
-  // file upload → data: URI
-  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
+  /* ---------- file upload -> data URL for bubble image ---------- */
+  async function onPickBubbleImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      setImg((reader.result as string) || "");
-    };
-    reader.readAsDataURL(file);
-  };
+    reader.onload = () => setImg(String(reader.result || ""));
+    reader.readAsDataURL(f);
+  }
+
+  /* ---------- UI ---------- */
 
   const gradientHeader =
     "bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white";
@@ -233,16 +230,14 @@ export default function Preview() {
             </div>
             <div className="flex gap-2">
               <button
-                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
+                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
                 onClick={onSave}
-                aria-label="Save widget look"
               >
                 Save
               </button>
               <button
-                className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
+                className="rounded-2xl px-3 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
                 onClick={onReset}
-                aria-label="Reset to defaults"
               >
                 Reset
               </button>
@@ -252,14 +247,13 @@ export default function Preview() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-          {/* Instance (optional) */}
+          {/* Instance select (optional) */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Instance (optional)</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
-              value={selectedInstId}
-              onChange={(e) => setSelectedInstId(e.target.value)}
-              title="If an instance is chosen, it overrides the Bot."
+              value={instId}
+              onChange={(e) => setInstId(e.target.value)}
             >
               <option value="">— none —</option>
               {instances
@@ -267,7 +261,7 @@ export default function Preview() {
                 .sort((a, b) => b.updatedAt - a.updatedAt)
                 .map((m) => (
                   <option key={m.id} value={m.id}>
-                    {(m.name || `${m.bot} Instance`).toString()} • {m.mode}
+                    {m.name} • {m.mode}
                   </option>
                 ))}
             </select>
@@ -276,21 +270,17 @@ export default function Preview() {
             </div>
           </div>
 
-          {/* Base bot (only used when no instance is selected) */}
+          {/* Bot dropdown (disabled when instance selected) */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Bot</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
-              value={selectedBotKey}
-              onChange={(e) => {
-                setSelectedBotKey(e.target.value as BotKey);
-                // In case the user previously picked an instance, clear it to avoid “lingering”
-                setSelectedInstId("");
-              }}
-              disabled={!!selectedInstId}
-              title={selectedInstId ? "Instance selected — Bot is ignored." : "Base bot"}
+              value={botKey}
+              onChange={(e) => setBotKey(e.target.value)}
+              disabled={!!activeInst}
+              title={activeInst ? "Instance selected — Bot is ignored" : "Pick a base bot"}
             >
-              {templates.map((d) => (
+              {defs.map((d) => (
                 <option key={d.key} value={d.key}>
                   {d.name} ({d.key})
                 </option>
@@ -353,23 +343,28 @@ export default function Preview() {
             </select>
           </div>
 
-          {/* Image & Fit (URL OR upload) */}
+          {/* Image & Fit (with upload) */}
           <div className="space-y-2 md:col-span-2">
             <label className="text-sm font-semibold">Bubble Image (optional)</label>
-            <div className="flex gap-2 items-center">
+            <div className="flex items-center gap-3">
               <input
-                className="flex-1 rounded-lg border px-3 py-2"
-                placeholder="https://example.com/icon.png or data:image/png;base64,…"
+                className="w-full rounded-lg border px-3 py-2"
+                placeholder="https://example.com/icon.png  — or use Upload"
                 value={img}
                 onChange={(e) => setImg(e.target.value)}
               />
-              <input
-                type="file"
-                accept="image/*"
-                onChange={onPickFile}
-                className="rounded-lg border px-3 py-2"
-                title="Upload image instead of URL"
-              />
+              <label className="rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white">
+                Upload
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={onPickBubbleImage}
+                />
+              </label>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              You can paste a URL or upload an image (stored in this browser as a data URL).
             </div>
           </div>
 
@@ -417,11 +412,11 @@ export default function Preview() {
             />
           </div>
 
-          {/* Open modal + embed url */}
+          {/* Open modal + embed url (copy) */}
           <div className="md:col-span-2 flex items-center gap-3">
             <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
-              onClick={() => setModalOpen(true)}
+              className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
+              onClick={() => { setStep(0); setOpenModal(true); }}
             >
               Open Preview Modal
             </button>
@@ -435,17 +430,29 @@ export default function Preview() {
               aria-label="Embed URL"
             />
           </div>
+
+          {/* Full iframe code (copyable) */}
+          <div className="md:col-span-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold">Embed (iframe)</label>
+            </div>
+            <textarea
+              readOnly
+              className="w-full rounded-lg border px-3 py-2 text-xs font-mono"
+              rows={4}
+              value={embedIframe}
+              onFocus={(e) => e.currentTarget.select()}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Live area: the floating bubble opens our modal */}
+      {/* Live area: bubble + modal */}
       <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
         {mode === "popup" && (
           <ChatWidget
             mode="popup"
-            // if instance selected, ChatWidget receives inst via query in /widget demo,
-            // but here we only need its bubble — when clicked, open the big modal:
-            onBubbleClick={() => setModalOpen(true)}
+            botId={activeInst ? activeInst.bot : botKey}
             position={pos}
             size={size}
             color={color || undefined}
@@ -454,10 +461,11 @@ export default function Preview() {
             imageFit={imageFit}
             label={label}
             labelColor={labelColor}
+            onBubbleClick={() => { setStep(0); setOpenModal(true); }} // << open same modal
           />
         )}
 
-        {modalOpen && (
+        {openModal && (
           <div
             className="absolute inset-0 grid place-items-center"
             style={{ pointerEvents: "none" }}
@@ -465,35 +473,58 @@ export default function Preview() {
             <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto">
               <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
                 <div className="text-lg font-extrabold">
-                  {/* header = instance name or bot name */}
-                  {selectedInstId
-                    ? (instances.find((i) => i.id === selectedInstId)?.name || "Client Bot")
-                    : (BOT_HEADING[effectiveBaseKey] ?? toTitle(effectiveBaseKey))}
+                  {modalHeader}
                 </div>
               </div>
 
               <div className="p-6 space-y-6">
                 <div className="grid place-items-center text-5xl">👋</div>
+
                 <div className="text-center">
                   <h2 className="text-2xl font-extrabold">{headline}</h2>
                   <p className="mt-2 text-muted-foreground">
-                    Thanks! You’re on the list — we’ll be in touch.
+                    {subtext}
+                    {step < 3 && (
+                      <>
+                        <br />
+                        Press <span className="font-bold">Continue</span> to proceed.
+                      </>
+                    )}
                   </p>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <button
                     className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-                    onClick={() => setModalOpen(false)}
+                    onClick={() => setOpenModal(false)}
                   >
                     Close
                   </button>
-                  <button
-                    className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                    onClick={() => setModalOpen(false)}
-                  >
-                    Done
-                  </button>
+                  <div className="flex gap-2">
+                    {step > 0 && step < 3 && (
+                      <button
+                        className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                        onClick={back}
+                      >
+                        Back
+                      </button>
+                    )}
+                    {step < 3 ? (
+                      <button
+                        className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                        onClick={next}
+                      >
+                        Continue
+                      </button>
+                    ) : (
+                      <button
+                        className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                        onClick={() => setOpenModal(false)}
+                      >
+                        Done
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
