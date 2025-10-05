@@ -1,6 +1,9 @@
 // src/pages/admin/Preview.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
+import { useSearchParams } from "react-router-dom";
+import { useAdminStore } from "@/lib/AdminStore";
+import { listInstances, type InstanceMeta } from "@/lib/instances";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
@@ -75,9 +78,29 @@ function setBranding(next: Partial<Branding>) {
 }
 
 export default function Preview() {
-  // ---- Demo bot/instance controls ----
-  const [botId, setBotId] = useState("waitlist-bot");
-  const [instId, setInstId] = useState<string>("");
+  const [search] = useSearchParams();
+
+  // ---- List of base bots (id + name) for a friendly dropdown ----
+  const { bots } = useAdminStore(); // from AdminStore (Lead Qualifier, Appointment, etc.)
+
+  // ---- List of client bot instances for a second dropdown ----
+  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
+        setInstances(listInstances());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // ---- Demo bot/instance controls (now with dropdowns) ----
+  const urlInst = search.get("inst") || "";
+  const urlBot  = search.get("bot")  || "";
+  const [instId, setInstId] = useState<string>(urlInst);
+  const [botId, setBotId]   = useState<string>(urlBot || (bots[0]?.id ?? "waitlist-bot"));
 
   // ---- Bubble/Widget visual controls (persisted) ----
   const b = useMemo(getBranding, []);
@@ -186,6 +209,9 @@ export default function Preview() {
     setSavedNote("Reset");
   };
 
+  // helpers
+  const fieldLabel = "text-sm font-semibold";
+
   return (
     <div className="p-6 space-y-6">
       {/* Controls */}
@@ -215,40 +241,54 @@ export default function Preview() {
               </button>
             </div>
           </div>
-          {savedNote && (
-            <div className="mt-2 text-xs font-bold">{savedNote}</div>
-          )}
+          {savedNote && <div className="mt-2 text-xs font-bold">{savedNote}</div>}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-          {/* Instance (optional) & Bot ID */}
+          {/* Instance selector (optional) */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Instance ID (optional)</label>
-            <input
+            <label className={fieldLabel}>Instance (optional)</label>
+            <select
               className="w-full rounded-lg border px-3 py-2"
-              placeholder="inst_abc123…"
               value={instId}
               onChange={(e) => setInstId(e.target.value)}
-            />
+            >
+              <option value="">(none)</option>
+              {instances
+                .slice()
+                .sort((a, b) => b.updatedAt - a.updatedAt)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {(m.name || `${m.bot} Instance`).toString()} • {m.mode}
+                  </option>
+                ))}
+            </select>
             <div className="text-xs text-muted-foreground">
-              If provided, the instance overrides the Bot ID.
+              If an instance is chosen, it overrides the Bot.
             </div>
           </div>
 
+          {/* Bot selector (friendly dropdown of base bots) */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Bot ID</label>
-            <input
+            <label className={fieldLabel}>Bot</label>
+            <select
               className="w-full rounded-lg border px-3 py-2"
               value={botId}
               onChange={(e) => setBotId(e.target.value)}
               disabled={!!instId.trim()}
-              title={instId.trim() ? "Instance is set; Bot ID ignored" : "Enter a bot id"}
-            />
+              title={instId.trim() ? "Instance is set; Bot is ignored" : "Choose a bot"}
+            >
+              {bots.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} ({b.id})
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Mode & Position */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Mode</label>
+            <label className={fieldLabel}>Mode</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
               value={mode}
@@ -261,7 +301,7 @@ export default function Preview() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Position</label>
+            <label className={fieldLabel}>Position</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
               value={pos}
@@ -274,7 +314,7 @@ export default function Preview() {
 
           {/* Size & Shape */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Size (px)</label>
+            <label className={fieldLabel}>Size (px)</label>
             <input
               type="number"
               min={40}
@@ -286,7 +326,7 @@ export default function Preview() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Bubble Shape</label>
+            <label className={fieldLabel}>Bubble Shape</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
               value={shape}
@@ -303,7 +343,7 @@ export default function Preview() {
 
           {/* Image & Fit */}
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-semibold">Bubble Image URL (optional)</label>
+            <label className={fieldLabel}>Bubble Image URL (optional)</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
               placeholder="https://example.com/icon.png"
@@ -313,7 +353,7 @@ export default function Preview() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Image Fit</label>
+            <label className={fieldLabel}>Image Fit</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
               value={imageFit}
@@ -327,7 +367,7 @@ export default function Preview() {
 
           {/* Label & Colors */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Bubble Label</label>
+            <label className={fieldLabel}>Bubble Label</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
               placeholder="Chat"
@@ -338,7 +378,7 @@ export default function Preview() {
 
           {/* Accent Color now with picker */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Accent Color</label>
+            <label className={fieldLabel}>Accent Color</label>
             <input
               type="color"
               className="h-10 w-full rounded-lg border"
@@ -348,7 +388,7 @@ export default function Preview() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Label Color</label>
+            <label className={fieldLabel}>Label Color</label>
             <input
               type="color"
               className="h-10 w-full rounded-lg border"
@@ -357,7 +397,7 @@ export default function Preview() {
             />
           </div>
 
-          {/* Open modal + embed url (now with Copy) */}
+          {/* Open modal + embed url (with Copy) */}
           <div className="md:col-span-2 flex items-center gap-3">
             <button
               className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
@@ -380,7 +420,7 @@ export default function Preview() {
           {/* Full iframe code (copyable) */}
           <div className="md:col-span-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold">Embed (iframe)</label>
+              <label className={fieldLabel}>Embed (iframe)</label>
               <CopyButton getText={() => embedIframe} />
             </div>
             <textarea
@@ -419,7 +459,15 @@ export default function Preview() {
             <div className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto">
               <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
                 <div className="text-lg font-extrabold">
-                  {botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())}
+                  {(instId
+                    ? (instances.find((x) => x.id === instId)?.name ||
+                       instances.find((x) => x.id === instId)?.bot ||
+                       "Instance")
+                    : bots.find((b) => b.id === botId)?.name || botId
+                  )
+                    .toString()
+                    .replace(/-/g, " ")
+                    .replace(/\b\w/g, (s) => s.toUpperCase())}
                 </div>
               </div>
 
