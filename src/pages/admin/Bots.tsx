@@ -4,17 +4,11 @@ import {
   listInstances,
   removeInstance,
   duplicateInstanceFromTemplate,
-  createInstance,
   renameInstance,
   type InstanceMeta,
 } from "@/lib/instances";
 import { getJSON, setJSON } from "@/lib/storage";
-import {
-  listTemplateDefs,
-  createTemplate,
-  removeTemplate,
-  isBuiltinTemplate,
-} from "@/lib/templates";
+import { listTemplateDefs, createTemplate, deleteTemplate, isBuiltInKey } from "@/lib/templates";
 
 /* ---------- shared analytics store ---------- */
 type Metrics = {
@@ -53,29 +47,18 @@ function Stat({ label, value }: { label: string; value: string }) {
 /* ---------------- main page ---------------- */
 
 export default function Bots() {
-  // Dynamic template catalog
   const [defs, setDefs] = useState(() => listTemplateDefs());
-
-  // Plan mode per template key
   const [modes, setModes] = useState<Record<string, "basic" | "custom">>(() =>
     Object.fromEntries(defs.map((b) => [b.key, getBotSettings(b.key).mode || "basic"])) as Record<
       string,
       "basic" | "custom"
     >
   );
-
-  // Instances list (My Bots)
   const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
-
-  // Analytics metrics used for header stats
   const [metrics, setMetrics] = useState<Metrics>(() =>
-    getJSON<Metrics>(METRICS_KEY, {
-      conversations: 0,
-      leads: 0,
-    })
+    getJSON<Metrics>(METRICS_KEY, { conversations: 0, leads: 0 })
   );
 
-  // keep in sync if storage changes elsewhere
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
@@ -89,7 +72,7 @@ export default function Bots() {
       if (e.key === METRICS_KEY) {
         setMetrics(getJSON<Metrics>(METRICS_KEY, { conversations: 0, leads: 0 }));
       }
-      if (e.key === "botTemplates:index" || e.key?.startsWith("botTemplates:data:")) {
+      if (e.key === "botTemplates:index" || e.key.startsWith("botTemplates:data:")) {
         setDefs(listTemplateDefs());
       }
     };
@@ -106,17 +89,14 @@ export default function Bots() {
   const fmtInt = (n: number) =>
     Number.isFinite(n) ? Math.max(0, Math.round(n)).toLocaleString() : "0";
 
-  // safely format a title
   const safeInstanceName = (m: InstanceMeta) =>
     (m.name && String(m.name)) || `${botKeyToLabel(defs, m.bot)} Instance`;
 
-  // Tidy, sorted list for display
   const sortedInstances = useMemo(
     () => [...instances].sort((a, b) => b.updatedAt - a.updatedAt),
     [instances]
   );
 
-  // Utility: simple slug/key from a name
   const toKey = (name: string) =>
     name
       .trim()
@@ -149,7 +129,6 @@ export default function Bots() {
                 alert("A template with this name/key already exists. Please choose a different name.");
                 return;
               }
-              createInstance(key, "basic", `${name} (New)`); // optional: seed a blank instance if desired
               createTemplate({ name, key });
               setDefs(listTemplateDefs());
             }}
@@ -166,20 +145,15 @@ export default function Bots() {
         <Stat label="Leads / Tickets (7d)" value={fmtInt(metrics.leads)} />
       </div>
 
-      {/* Template catalog (dynamic) */}
+      {/* Template catalog */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {defs.map((b) => {
-          const builtin = isBuiltinTemplate(b.key);
+          const builtin = isBuiltInKey(b.key);
           return (
-            <div
-              key={b.key}
-              className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
-            >
+            <div key={b.key} className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col">
               <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}>
                 <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
-                    {b.emoji}
-                  </div>
+                  <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">{b.emoji}</div>
                   <div>
                     <h3 className="text-xl font-extrabold tracking-tight">{b.name}</h3>
                     <p className="text-sm font-semibold text-foreground/80">{b.description}</p>
@@ -230,13 +204,13 @@ export default function Bots() {
                   Duplicate
                 </button>
 
-                {/* Delete template — only for custom templates */}
+                {/* Delete custom templates */}
                 {!builtin && (
                   <button
                     className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-rose-50"
                     onClick={() => {
                       if (!confirm(`Delete template “${b.name}”? This cannot be undone.`)) return;
-                      removeTemplate(b.key);
+                      deleteTemplate(b.key);
                       setDefs(listTemplateDefs());
                     }}
                     aria-label={`Delete ${b.name}`}
@@ -251,7 +225,7 @@ export default function Bots() {
         })}
       </div>
 
-      {/* My Bots (colorful & with Nurture button) */}
+      {/* My Bots */}
       <div className="mt-10">
         <div className="text-lg font-extrabold mb-3">My Bots</div>
 
@@ -272,9 +246,7 @@ export default function Bots() {
                 <div key={m.id} className="rounded-2xl border bg-card overflow-hidden flex flex-col">
                   <div className={`p-4 ring-1 ring-border bg-gradient-to-br ${grad}`}>
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 grid place-items-center rounded-xl bg-white/70 ring-1 ring-border text-xl">
-                        {emoji}
-                      </div>
+                      <div className="h-10 w-10 grid place-items-center rounded-xl bg-white/70 ring-1 ring-border text-xl">{emoji}</div>
                       <div>
                         <div className="text-lg font-extrabold leading-tight">{title}</div>
                         <div className="text-sm text-foreground/80">{sub}</div>
@@ -303,7 +275,7 @@ export default function Bots() {
                       onClick={() => {
                         const next = prompt("Rename this bot instance:", title)?.trim();
                         if (!next) return;
-                        renameInstance(m.id, next); // one-liner helper
+                        renameInstance(m.id, next);
                         setInstances(listInstances());
                       }}
                     >
