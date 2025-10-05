@@ -49,11 +49,11 @@ type Metrics = {
   conversionPct: number;   // 0–100
 
   // pro five
-  dropoffPct: number;        // 0–100
-  qualifiedLeads: number;    // count
+  dropoffPct: number;         // 0–100
+  qualifiedLeads: number;     // count
   avgConversationSecs: number; // seconds
-  handoffRatePct: number;    // 0–100
-  peakChatTime: string;      // e.g., "2–3 PM"
+  handoffRatePct: number;     // 0–100
+  peakChatTime: string;       // e.g., "2–3 PM"
 };
 
 const defaultMetrics: Metrics = {
@@ -75,7 +75,7 @@ const defaultMetrics: Metrics = {
  * Small UI helpers
  * ------------------------------------------------------------ */
 const sectionCls =
-  "rounded-2xl border-2 border-black bg-gradient-to-r from-violet-100 via-sky-100 to-emerald-100 p-5";
+  "rounded-2xl border-2 border-black bg-gradient-to-r from-violet-100 via-sky-100 to-emerald-100 p-4 md:p-5";
 
 const Card = ({
   title,
@@ -84,9 +84,9 @@ const Card = ({
   title: React.ReactNode;
   value: React.ReactNode;
 }) => (
-  <div className="rounded-2xl border-2 border-black bg-white p-5 shadow-sm">
-    <div className="text-lg font-extrabold leading-tight">{title}</div>
-    <div className="mt-2 text-4xl font-black">{value}</div>
+  <div className="rounded-xl border-2 border-black bg-white p-4 md:p-3 shadow-sm">
+    <div className="text-base md:text-sm font-extrabold leading-tight">{title}</div>
+    <div className="mt-1.5 text-3xl md:text-2xl font-black">{value}</div>
   </div>
 );
 
@@ -171,17 +171,17 @@ export default function Analytics() {
 
   return (
     <div
-      className="p-6 rounded-2xl border-2 border-purple-200 shadow-lg"
+      className="p-5 md:p-6 rounded-2xl border-2 border-purple-200 shadow-lg"
       style={{
         background:
           "linear-gradient(135deg,#ffeef8 0%,#f3e7fc 25%,#e7f0ff 50%,#e7fcf7 75%,#fff9e7 100%)",
       }}
     >
       {/* Header */}
-      <div className="rounded-2xl border-2 border-black bg-white p-5 shadow mb-6">
+      <div className="rounded-2xl border-2 border-black bg-white p-4 md:p-5 shadow mb-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-3xl font-extrabold">Analytics</div>
+            <div className="text-2xl md:text-3xl font-extrabold">Analytics</div>
             <div className="text-foreground/80 mt-1">
               Track performance, usage, and engagement metrics.
             </div>
@@ -191,7 +191,7 @@ export default function Analytics() {
           <div className="flex items-center gap-2">
             <button
               onClick={exportXLSX}
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40 disabled:opacity-60"
+              className="rounded-xl px-3.5 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40 disabled:opacity-60"
               title="Download as Excel (.xlsx)"
               disabled={exporting}
             >
@@ -199,14 +199,14 @@ export default function Analytics() {
             </button>
             <button
               onClick={save}
-              className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+              className="rounded-xl px-3.5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
               title="Save metrics to your browser"
             >
               Save
             </button>
             <button
               onClick={reset}
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+              className="rounded-xl px-3.5 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
               title="Reset all metrics"
             >
               Reset
@@ -217,10 +217,10 @@ export default function Analytics() {
 
       {/* Metric Cards (display-only) */}
       <div className={sectionCls}>
-        <div className="text-2xl font-extrabold mb-4">Metrics</div>
+        <div className="text-xl md:text-2xl font-extrabold mb-3">Metrics</div>
 
         {/* Core six */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-3">
           <Card title="Conversations" value={m.conversations} />
           <Card title="Leads Captured" value={m.leads} />
           <Card title="Appointments Booked" value={m.appointments} />
@@ -231,7 +231,7 @@ export default function Analytics() {
         </div>
 
         {/* Pro five */}
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
           <Card title="Drop-off Rate" value={`${m.dropoffPct}%`} />
           <Card title="Qualified Leads" value={m.qualifiedLeads} />
           <Card title="Avg Conversation Length" value={`${m.avgConversationSecs}s`} />
@@ -241,10 +241,6 @@ export default function Analytics() {
           <div className="hidden md:block" />
         </div>
       </div>
-
-      {/* Note: values are display-only here.
-         When you wire a backend or event tracker, update state `m` via effects
-         or props and then `Save` will persist locally; `Export XLSX` will reflect it. */}
     </div>
   );
 }
