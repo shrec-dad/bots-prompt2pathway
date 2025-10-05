@@ -1,10 +1,7 @@
 // src/lib/botSettings.ts
-export type BotKey =
-  | "LeadQualifier"
-  | "AppointmentBooking"
-  | "CustomerSupport"
-  | "Waitlist"
-  | "SocialMedia";
+// Widened BotKey so built-in + custom template keys both work.
+
+export type BotKey = string; // e.g., "Waitlist", "LeadQualifier", or any custom key
 
 export type BotSettings = {
   mode: "basic" | "custom";
