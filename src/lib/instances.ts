@@ -2,7 +2,13 @@
 // Lightweight “instances” persistence in localStorage.
 // Each Instance = { meta, data } with an index for quick listing.
 
-export type BotKey = string; // allow custom template keys beyond the 5
+/**
+ * IMPORTANT:
+ * - BotKey is widened to `string` so built-ins and your new custom templates work.
+ * - Keys match what you already had (do not change existing storage).
+ */
+
+export type BotKey = string;                 // e.g. "LeadQualifier" | "Waitlist" | "MyCustomKey"
 export type Mode = "basic" | "custom";
 
 export type InstanceMeta = {
@@ -23,12 +29,16 @@ export type InstanceData = {
   knowledge: Array<any>;
 };
 
+/* ---------------- storage keys (unchanged) ---------------- */
+
 const INDEX_KEY = "botInstances:index";
 const DATA_KEY = (id: string) => `botInstances:data:${id}`;
 
 // These keys mirror how your Builder / Settings already store data:
 const OV_KEY = (bot: BotKey, mode: Mode) => `botOverrides:${bot}_${mode}`;
 const BOT_SETTINGS_KEY = (bot: BotKey) => `botSettings:${bot}`;
+// NOTE: keeping your previous key, even though Knowledge page also uses `knowledge:*`.
+// We won't change it here to avoid breaking existing data.
 const BOT_KNOWLEDGE_KEY = (bot: BotKey) => `botKnowledge:${bot}`;
 
 /* ---------------- helpers ---------------- */
@@ -52,28 +62,35 @@ function newId() {
 }
 
 function botToLabel(bot: BotKey): string {
-  // Try to resolve name from dynamic template defs if present
-  try {
-    const defs = JSON.parse(localStorage.getItem("botTemplates:index") || "[]") as Array<{ key: string; name: string }>;
-    const found = defs.find((d) => d.key === bot);
-    if (found?.name) return found.name;
-  } catch {}
-  // fallback labels for known built-ins
-  switch (bot) {
-    case "LeadQualifier":
-      return "Lead Qualifier";
-    case "AppointmentBooking":
-      return "Appointment Booking";
-    case "CustomerSupport":
-      return "Customer Support";
-    case "Waitlist":
-      return "Waitlist";
-    case "SocialMedia":
-      return "Social Media";
-    default:
-      // best-effort prettify
-      return String(bot);
+  // Best-effort pretty label: split on case/underscores/dashes and title-case.
+  if (!bot) return "Bot";
+  if (
+    bot === "LeadQualifier" ||
+    bot === "AppointmentBooking" ||
+    bot === "CustomerSupport" ||
+    bot === "Waitlist" ||
+    bot === "SocialMedia"
+  ) {
+    switch (bot) {
+      case "LeadQualifier":
+        return "Lead Qualifier";
+      case "AppointmentBooking":
+        return "Appointment Booking";
+      case "CustomerSupport":
+        return "Customer Support";
+      case "Waitlist":
+        return "Waitlist";
+      case "SocialMedia":
+        return "Social Media";
+    }
   }
+  // Fallback formatting for custom keys
+  return String(bot)
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /* ---------------- public API ---------------- */
@@ -167,9 +184,9 @@ export function createInstance(
 
 /**
  * Duplicate from current template context:
- * - carries over per-bot+mode overrides (botOverrides:Bot_Mode)
- * - carries over bot settings (botSettings:Bot)
- * - carries over any bot knowledge list (botKnowledge:Bot) if present
+ * - carries over per-bot+mode overrides (botOverrides:<Bot>_<mode>)
+ * - carries over bot settings (botSettings:<Bot>)
+ * - carries over any bot knowledge list (botKnowledge:<Bot>) if present
  */
 export function duplicateInstanceFromTemplate(
   bot: BotKey,
@@ -204,7 +221,7 @@ export function duplicateInstanceFromTemplate(
 }
 
 /**
- * NEW: Duplicate from an EXISTING instance ID (clone its meta+data into a new instance).
+ * Duplicate from an EXISTING instance ID (clone its meta+data into a new instance).
  * Useful when you want to copy a working bot as-is for a new client.
  */
 export function duplicateInstanceFromExisting(
