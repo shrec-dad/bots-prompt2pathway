@@ -1,4 +1,3 @@
-// src/pages/admin/Bots.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { getBotSettings, setBotSettings } from "@/lib/botSettings";
 import {
@@ -10,7 +9,12 @@ import {
   type InstanceMeta,
 } from "@/lib/instances";
 import { getJSON, setJSON } from "@/lib/storage";
-import { listTemplateDefs, createTemplate } from "@/lib/templates";
+import {
+  listTemplateDefs,
+  createTemplate,
+  removeTemplate,
+  isBuiltinTemplate,
+} from "@/lib/templates";
 
 /* ---------- shared analytics store ---------- */
 type Metrics = {
@@ -34,6 +38,18 @@ function botKeyToEmoji(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
   return defs.find((b) => b.key === key)?.emoji || "🤖";
 }
 
+/* ---------- Small Stat component ---------- */
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border bg-card px-4 py-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+        {label}
+      </div>
+      <div className="text-xl font-extrabold leading-tight">{value}</div>
+    </div>
+  );
+}
+
 /* ---------------- main page ---------------- */
 
 export default function Bots() {
@@ -49,9 +65,7 @@ export default function Bots() {
   );
 
   // Instances list (My Bots)
-  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
-    listInstances()
-  );
+  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
 
   // Analytics metrics used for header stats
   const [metrics, setMetrics] = useState<Metrics>(() =>
@@ -75,7 +89,7 @@ export default function Bots() {
       if (e.key === METRICS_KEY) {
         setMetrics(getJSON<Metrics>(METRICS_KEY, { conversations: 0, leads: 0 }));
       }
-      if (e.key === "botTemplates:index") {
+      if (e.key === "botTemplates:index" || e.key?.startsWith("botTemplates:data:")) {
         setDefs(listTemplateDefs());
       }
     };
@@ -131,14 +145,13 @@ export default function Bots() {
               const name = prompt("Name your new bot template:", "New Template")?.trim();
               if (!name) return;
               const key = toKey(name);
-              // prevent duplicate
               if (defs.some((d) => d.key === key)) {
                 alert("A template with this name/key already exists. Please choose a different name.");
                 return;
               }
+              createInstance(key, "basic", `${name} (New)`); // optional: seed a blank instance if desired
               createTemplate({ name, key });
-              setDefs(listTemplateDefs()); // refresh list in-place
-              // Stay on Bots page; the new card will appear below
+              setDefs(listTemplateDefs());
             }}
           >
             + Create New Bot
@@ -155,79 +168,87 @@ export default function Bots() {
 
       {/* Template catalog (dynamic) */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {defs.map((b) => (
-          <div
-            key={b.key}
-            className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
-          >
+        {defs.map((b) => {
+          const builtin = isBuiltinTemplate(b.key);
+          return (
             <div
-              className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}
+              key={b.key}
+              className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
             >
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
-                  {b.emoji}
-                </div>
-                <div>
-                  <h3 className="text-xl font-extrabold tracking-tight">
-                    {b.name}
-                  </h3>
-                  <p className="text-sm font-semibold text-foreground/80">
-                    {b.description}
-                  </p>
+              <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
+                    {b.emoji}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-extrabold tracking-tight">{b.name}</h3>
+                    <p className="text-sm font-semibold text-foreground/80">{b.description}</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-4 flex items-center gap-3">
-              <div className="text-sm font-semibold text-foreground/80">
-                Plan:
+              <div className="mt-4 flex items-center gap-3">
+                <div className="text-sm font-semibold text-foreground/80">Plan:</div>
+
+                <select
+                  className="ml-auto rounded-lg border bg-card px-3 py-2 text-sm font-bold shadow-sm"
+                  value={modes[b.key] || "basic"}
+                  onChange={(e) => {
+                    const mode = e.target.value as "basic" | "custom";
+                    setModes((prev) => ({ ...prev, [b.key]: mode }));
+                    setBotSettings(b.key, { mode });
+                  }}
+                  aria-label={`${b.name} plan`}
+                >
+                  <option value="basic">Basic</option>
+                  <option value="custom">Custom</option>
+                </select>
+
+                <button
+                  className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+                  onClick={() => (window.location.href = `/admin/builder?bot=${b.key}`)}
+                  aria-label={`Open ${b.name} in Builder`}
+                >
+                  Open Builder
+                </button>
               </div>
 
-              <select
-                className="ml-auto rounded-lg border bg-card px-3 py-2 text-sm font-bold shadow-sm"
-                value={modes[b.key] || "basic"}
-                onChange={(e) => {
-                  const mode = e.target.value as "basic" | "custom";
-                  setModes((prev) => ({ ...prev, [b.key]: mode }));
-                  setBotSettings(b.key as any, { mode });
-                }}
-                aria-label={`${b.name} plan`}
-              >
-                <option value="basic">Basic</option>
-                <option value="custom">Custom</option>
-              </select>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-muted/40"
+                  onClick={() => {
+                    const mode = (modes[b.key] || "basic") as "basic" | "custom";
+                    const defaultName = `${b.name} (Copy)`;
+                    const desired =
+                      prompt("Name this new client bot:", defaultName)?.trim() || defaultName;
 
-              <button
-                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
-                onClick={() =>
-                  (window.location.href = `/admin/builder?bot=${b.key}`)
-                }
-                aria-label={`Open ${b.name} in Builder`}
-              >
-                Open Builder
-              </button>
+                    duplicateInstanceFromTemplate(b.key as any, mode, desired);
+                    setInstances(listInstances());
+                  }}
+                  aria-label={`Duplicate ${b.name}`}
+                >
+                  Duplicate
+                </button>
+
+                {/* Delete template — only for custom templates */}
+                {!builtin && (
+                  <button
+                    className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-rose-50"
+                    onClick={() => {
+                      if (!confirm(`Delete template “${b.name}”? This cannot be undone.`)) return;
+                      removeTemplate(b.key);
+                      setDefs(listTemplateDefs());
+                    }}
+                    aria-label={`Delete ${b.name}`}
+                    title="Delete this custom template"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
-
-            <div className="mt-3">
-              <button
-                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-muted/40"
-                onClick={() => {
-                  const mode = (modes[b.key] || "basic") as "basic" | "custom";
-                  const defaultName = `${b.name} (Copy)`;
-                  const desired =
-                    prompt("Name this new client bot:", defaultName)?.trim() ||
-                    defaultName;
-
-                  duplicateInstanceFromTemplate(b.key as any, mode, desired);
-                  setInstances(listInstances());
-                }}
-                aria-label={`Duplicate ${b.name}`}
-              >
-                Duplicate
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* My Bots (colorful & with Nurture button) */}
@@ -248,21 +269,14 @@ export default function Bots() {
               const emoji = botKeyToEmoji(defs, m.bot);
 
               return (
-                <div
-                  key={m.id}
-                  className="rounded-2xl border bg-card overflow-hidden flex flex-col"
-                >
-                  <div
-                    className={`p-4 ring-1 ring-border bg-gradient-to-br ${grad}`}
-                  >
+                <div key={m.id} className="rounded-2xl border bg-card overflow-hidden flex flex-col">
+                  <div className={`p-4 ring-1 ring-border bg-gradient-to-br ${grad}`}>
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 grid place-items-center rounded-xl bg-white/70 ring-1 ring-border text-xl">
                         {emoji}
                       </div>
                       <div>
-                        <div className="text-lg font-extrabold leading-tight">
-                          {title}
-                        </div>
+                        <div className="text-lg font-extrabold leading-tight">{title}</div>
                         <div className="text-sm text-foreground/80">{sub}</div>
                       </div>
                     </div>
@@ -271,18 +285,14 @@ export default function Bots() {
                   <div className="p-4 flex items-center gap-3">
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
-                      onClick={() =>
-                        (window.location.href = `/admin/builder?inst=${m.id}`)
-                      }
+                      onClick={() => (window.location.href = `/admin/builder?inst=${m.id}`)}
                     >
                       Open
                     </button>
 
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
-                      onClick={() =>
-                        (window.location.href = `/admin/nurture?inst=${m.id}`)
-                      }
+                      onClick={() => (window.location.href = `/admin/nurture?inst=${m.id}`)}
                       title="Open nurture schedule for this client bot"
                     >
                       Nurture
@@ -293,7 +303,7 @@ export default function Bots() {
                       onClick={() => {
                         const next = prompt("Rename this bot instance:", title)?.trim();
                         if (!next) return;
-                        renameInstance(m.id, next);
+                        renameInstance(m.id, next); // one-liner helper
                         setInstances(listInstances());
                       }}
                     >
@@ -303,6 +313,7 @@ export default function Bots() {
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-rose-50"
                       onClick={() => {
+                        if (!confirm(`Remove client bot “${title}”?`)) return;
                         removeInstance(m.id);
                         setInstances(listInstances());
                       }}
@@ -316,18 +327,6 @@ export default function Bots() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-/* ---------- Small Stat component (unchanged) ---------- */
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border bg-card px-4 py-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
-        {label}
-      </div>
-      <div className="text-xl font-extrabold leading-tight">{value}</div>
     </div>
   );
 }
