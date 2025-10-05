@@ -1,11 +1,7 @@
-// src/pages/admin/Embed.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useAdminStore } from "@/lib/AdminStore";
 import { listInstances } from "@/lib/instances";
 
-/**
- * Small copy button with success/fail feedback
- */
 function CopyButton({ getText }: { getText: () => string }) {
   const [label, setLabel] = useState("Copy");
   async function onCopy() {
@@ -31,7 +27,13 @@ function CopyButton({ getText }: { getText: () => string }) {
 }
 
 type Pos = "bottom-right" | "bottom-left";
-type Shape = "circle" | "rounded" | "square" | "oval";
+type Shape =
+  | "circle"
+  | "rounded"
+  | "square"
+  | "oval"
+  | "speech"
+  | "speech-rounded";
 type Fit = "cover" | "contain" | "fill" | "center" | "none";
 type Mode = "popup" | "inline" | "sidebar";
 
@@ -52,10 +54,39 @@ type SavedInstance = {
   avatar?: string;
 };
 
+const BRAND_KEY = "brandingSettings";
+
+type Branding = {
+  chatBubbleImage?: string;
+  chatBubbleColor: string;
+  chatBubbleSize: number;
+  chatBubblePosition: Pos;
+  chatBubbleShape?: Shape;
+  chatBubbleLabel?: string;
+  chatBubbleLabelColor?: string;
+  chatBubbleImageFit?: Fit | "cover" | "contain" | "center";
+  hideLabelWhenImage?: boolean;
+};
+
+function readBranding(): Branding {
+  try {
+    const raw = localStorage.getItem(BRAND_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {
+    chatBubbleColor: "#7aa8ff",
+    chatBubbleSize: 56,
+    chatBubblePosition: "bottom-right",
+    chatBubbleShape: "circle",
+    chatBubbleLabel: "Chat",
+    chatBubbleLabelColor: "#ffffff",
+    chatBubbleImageFit: "cover",
+    hideLabelWhenImage: false,
+  };
+}
+
 export default function Embed() {
-  /* ------------------------------------------------------------------ */
-  /* Data sources                                                        */
-  /* ------------------------------------------------------------------ */
+  /* Data sources */
   const { bots } = useAdminStore();
   const [instances, setInstances] = useState<SavedInstance[]>([]);
 
@@ -85,94 +116,153 @@ export default function Embed() {
     }
   }, []);
 
-  /* ------------------------------------------------------------------ */
-  /* Controls                                                            */
-  /* ------------------------------------------------------------------ */
+  /* Selection */
   const defaultBot = bots?.[0]?.id ?? "waitlist-bot";
-
-  // Selection: Instance overrides Bot when set
   const [instId, setInstId] = useState<string>("");
   const [botId, setBotId] = useState<string>(defaultBot);
 
-  // Placement/visuals (mirrors Widget options)
-  const [mode, setMode] = useState<Mode>("popup"); // embed supports any, widget will read query
+  /* Sync with Preview (brandingSettings) */
+  const [syncWithPreview, setSyncWithPreview] = useState(true);
+  const [branding, setBranding] = useState<Branding>(() => readBranding());
+
+  // keep in sync if Preview saves
+  useEffect(() => {
+    if (!syncWithPreview) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === BRAND_KEY) setBranding(readBranding());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [syncWithPreview]);
+
+  /* Local overrides (used when syncWithPreview = false) */
+  const [mode, setMode] = useState<Mode>("popup");
   const [position, setPosition] = useState<Pos>("bottom-right");
   const [size, setSize] = useState(64);
   const [color, setColor] = useState("#8b5cf6");
   const [image, setImage] = useState("");
-
   const [shape, setShape] = useState<Shape>("circle");
   const [imageFit, setImageFit] = useState<Fit>("cover");
   const [label, setLabel] = useState("Chat");
   const [labelColor, setLabelColor] = useState("#ffffff");
   const [avatar, setAvatar] = useState("");
+  const [hideLabelWhenImage, setHideLabelWhenImage] = useState(false);
 
-  // If you want to load visual defaults from a selected instance:
+  // Load instance visuals as a convenience (does not persist)
   useEffect(() => {
     if (!instId) return;
     const found = instances.find((i) => i.id === instId);
     if (!found) return;
-    // Pre-fill visuals if present (non-destructive)
     if (found.position) setPosition(found.position);
     if (typeof found.size === "number") setSize(found.size!);
     if (found.color) setColor(found.color);
     if (found.image) setImage(found.image);
-    if (found.shape) setShape(found.shape);
+    if (found.shape) setShape(found.shape as Shape);
     if (found.imageFit) setImageFit(found.imageFit);
     if (found.label) setLabel(found.label);
     if (found.labelColor) setLabelColor(found.labelColor);
     if (found.avatar) setAvatar(found.avatar);
   }, [instId, instances]);
 
-  /* ------------------------------------------------------------------ */
-  /* URL (for iframe/src)                                                */
-  /* ------------------------------------------------------------------ */
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  /* Helpers to read the “active” visual state */
+  const active = useMemo(() => {
+    if (syncWithPreview) {
+      const b = branding;
+      return {
+        position: b.chatBubblePosition ?? "bottom-right",
+        size: b.chatBubbleSize ?? 56,
+        color: b.chatBubbleColor ?? "#7aa8ff",
+        image: b.chatBubbleImage ?? "",
+        shape: (b.chatBubbleShape as Shape) ?? "circle",
+        imageFit: (b.chatBubbleImageFit as Fit) ?? "cover",
+        label: b.chatBubbleLabel ?? "Chat",
+        labelColor: b.chatBubbleLabelColor ?? "#ffffff",
+        avatar: "", // optional; Preview doesn’t manage this today
+        hideLabelWhenImage: !!b.hideLabelWhenImage,
+      };
+    }
+    return {
+      position,
+      size,
+      color,
+      image,
+      shape,
+      imageFit,
+      label,
+      labelColor,
+      avatar,
+      hideLabelWhenImage,
+    };
+  }, [
+    syncWithPreview,
+    branding,
+    position,
+    size,
+    color,
+    image,
+    shape,
+    imageFit,
+    label,
+    labelColor,
+    avatar,
+    hideLabelWhenImage,
+  ]);
 
+  /* Upload/Clear handlers (local only; Preview already persists uploads) */
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => !syncWithPreview && setImage(String(reader.result || ""));
+    reader.readAsDataURL(f);
+  }
+  function onClearImage() {
+    if (!syncWithPreview) setImage("");
+  }
+
+  /* URL for iframe/src */
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
   const widgetPath = useMemo(() => {
     const qp = new URLSearchParams();
     if (instId.trim()) qp.set("inst", instId.trim());
     else qp.set("bot", botId);
 
-    qp.set("position", position);
-    qp.set("size", String(size));
-    if (color) qp.set("color", color);
-    if (image) qp.set("image", image);
-    if (shape) qp.set("shape", shape);
-    if (imageFit) qp.set("imageFit", imageFit);
-    if (label) qp.set("label", label);
-    if (labelColor) qp.set("labelColor", labelColor);
-    if (avatar) qp.set("avatar", avatar);
+    qp.set("position", active.position);
+    qp.set("size", String(active.size));
+    if (active.color) qp.set("color", active.color);
+    if (active.image) qp.set("image", active.image);
+    if (active.shape) qp.set("shape", active.shape);
+    if (active.imageFit) qp.set("imageFit", active.imageFit);
+    if (!(active.image && active.hideLabelWhenImage)) {
+      if (active.label) qp.set("label", active.label);
+      if (active.labelColor) qp.set("labelColor", active.labelColor);
+    }
+    if (active.avatar) qp.set("avatar", active.avatar);
 
-    // mode is a rendering hint; /widget currently drives popup UI. Keeping it in case you branch later.
     qp.set("mode", mode);
-
     return `/widget?${qp.toString()}`;
-  }, [instId, botId, position, size, color, image, shape, imageFit, label, labelColor, avatar, mode]);
+  }, [instId, botId, active, mode]);
 
   const embedUrl = `${origin}${widgetPath}`;
 
-  /* ------------------------------------------------------------------ */
-  /* Snippets                                                            */
-  /* ------------------------------------------------------------------ */
+  /* Snippets */
   const iframeSnippet = useMemo(
     () =>
       `<!-- Paste near the end of <body> -->
 <iframe
   src="${embedUrl}"
   title="Bot Widget"
-  style="position: fixed; bottom: 24px; ${position === "bottom-right" ? "right" : "left"}: 24px;
-         width: ${mode === "sidebar" ? "360px" : `${size}px`};
-         height: ${mode === "sidebar" ? "100vh" : `${size}px`};
-         border: 0; border-radius: ${mode === "sidebar" ? "0" : shape === "circle" ? "50%" : shape === "rounded" ? "16px" : shape === "square" ? "8px" : "9999px"}; 
+  style="position: fixed; bottom: 24px; ${active.position === "bottom-right" ? "right" : "left"}: 24px;
+         width: ${mode === "sidebar" ? "360px" : `${active.size}px`};
+         height: ${mode === "sidebar" ? "100vh" : `${active.size}px`};
+         border: 0; border-radius: ${mode === "sidebar" ? "0" : active.shape === "circle" ? "50%" : active.shape === "rounded" ? "16px" : active.shape === "square" ? "8px" : "9999px"};
          z-index: 999999; overflow: hidden;"
   loading="lazy"
   allow="clipboard-read; clipboard-write"
 ></iframe>`,
-    [embedUrl, position, size, mode, shape]
+    [embedUrl, active.position, active.size, active.shape, mode]
   );
 
-  // Script embed injects the iframe dynamically (great for CMS, page builders)
   const scriptSnippet = useMemo(
     () =>
       `<!-- Drop anywhere in <body> -->
@@ -183,23 +273,21 @@ export default function Embed() {
   iframe.title = 'Bot Widget';
   iframe.style.position = 'fixed';
   iframe.style.bottom = '24px';
-  iframe.style.${position === "bottom-right" ? "right" : "left"} = '24px';
-  iframe.style.width = '${mode === "sidebar" ? "360px" : `${size}px`}';
-  iframe.style.height = '${mode === "sidebar" ? "100vh" : `${size}px`}';
+  iframe.style.${active.position === "bottom-right" ? "right" : "left"} = '24px';
+  iframe.style.width = '${mode === "sidebar" ? "360px" : `${active.size}px`}';
+  iframe.style.height = '${mode === "sidebar" ? "100vh" : `${active.size}px`}';
   iframe.style.border = '0';
-  iframe.style.borderRadius = '${mode === "sidebar" ? "0" : shape === "circle" ? "50%" : shape === "rounded" ? "16px" : shape === "square" ? "8px" : "9999px"}';
+  iframe.style.borderRadius = '${mode === "sidebar" ? "0" : active.shape === "circle" ? "50%" : active.shape === "rounded" ? "16px" : active.shape === "square" ? "8px" : "9999px"}';
   iframe.style.zIndex = '999999';
   iframe.style.overflow = 'hidden';
   iframe.loading = 'lazy';
   document.body.appendChild(iframe);
 })();
 </script>`,
-    [embedUrl, position, size, mode, shape]
+    [embedUrl, active.position, active.size, active.shape, mode]
   );
 
-  /* ------------------------------------------------------------------ */
-  /* UI styling helpers                                                  */
-  /* ------------------------------------------------------------------ */
+  /* UI helpers */
   const headerCard =
     "rounded-2xl border bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-6";
   const sectionCard = "rounded-2xl border bg-white/90 p-4 md:p-5 shadow-sm";
@@ -213,22 +301,36 @@ export default function Embed() {
     bots?.find((b) => b.id === botId)?.name ??
     botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase());
 
-  /* ------------------------------------------------------------------ */
-  /* Render                                                              */
-  /* ------------------------------------------------------------------ */
+  const controlsDisabled = syncWithPreview;
+
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className={headerCard}>
         <h1 className="text-3xl font-extrabold">Embed Code</h1>
         <p className="mt-2 text-muted-foreground">
-          Choose your bot or a saved instance, set visual options, then copy a snippet.
-          The <strong>iframe</strong> works everywhere. The <strong>script embed</strong> is great for CMS/landing pages.
+          Choose your bot or a saved instance, then copy a snippet. By default,
+          this page <strong>uses the look you saved on Preview</strong>. Toggle
+          off to override visuals just for this snippet.
         </p>
       </div>
 
-      {/* Selection + Controls */}
       <div className={sectionCard}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-semibold">Sync with Preview look</label>
+            <input
+              type="checkbox"
+              checked={syncWithPreview}
+              onChange={(e) => setSyncWithPreview(e.target.checked)}
+            />
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {syncWithPreview
+              ? "Reading from brandingSettings (Preview)."
+              : "Overrides are local to this page and not saved."}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Instance */}
           <div>
@@ -285,10 +387,10 @@ export default function Embed() {
             <div className={labelCls}>Position</div>
             <select
               className={inputCls}
-              value={position}
+              value={active.position}
               onChange={(e) => setPosition(e.target.value as Pos)}
-              disabled={mode === "inline"}
-              title={mode === "inline" ? "Position is not used for inline mode" : ""}
+              disabled={controlsDisabled}
+              title={controlsDisabled ? "Controlled by Preview" : ""}
             >
               <option value="bottom-right">bottom-right</option>
               <option value="bottom-left">bottom-left</option>
@@ -304,10 +406,10 @@ export default function Embed() {
               max={160}
               step={2}
               className={inputCls}
-              value={size}
+              value={active.size}
               onChange={(e) => setSize(Number(e.target.value || 64))}
-              disabled={mode === "sidebar"}
-              title={mode === "sidebar" ? "Size is not used for sidebar mode" : ""}
+              disabled={controlsDisabled || mode === "sidebar"}
+              title={controlsDisabled ? "Controlled by Preview" : mode === "sidebar" ? "Not used for sidebar" : ""}
             />
           </div>
 
@@ -317,20 +419,46 @@ export default function Embed() {
             <input
               type="color"
               className="h-10 w-full rounded-lg border border-purple-200"
-              value={color}
+              value={active.color}
               onChange={(e) => setColor(e.target.value)}
+              disabled={controlsDisabled}
+              title={controlsDisabled ? "Controlled by Preview" : ""}
             />
           </div>
 
-          {/* Image */}
+          {/* Image + upload/clear */}
           <div className="md:col-span-3">
-            <div className={labelCls}>Bubble Image URL (optional)</div>
-            <input
-              className={inputCls}
-              placeholder="https://example.com/icon.png"
-              value={image}
-              onChange={(e) => setImage(e.target.value)}
-            />
+            <div className={labelCls}>Bubble Image (optional)</div>
+            <div className="flex items-center gap-3">
+              <input
+                className={inputCls + " flex-1"}
+                placeholder="https://example.com/icon.png  — or use Upload"
+                value={active.image}
+                onChange={(e) => setImage(e.target.value)}
+                disabled={controlsDisabled}
+              />
+              <label className={"rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white " + (controlsDisabled ? "opacity-50 cursor-not-allowed" : "")}>
+                Upload
+                <input type="file" accept="image/*" className="hidden" onChange={onUpload} disabled={controlsDisabled} />
+              </label>
+              <button
+                className="rounded-lg border px-3 py-2 font-semibold bg-white"
+                onClick={onClearImage}
+                disabled={controlsDisabled}
+                title={controlsDisabled ? "Controlled by Preview" : "Clear image"}
+              >
+                Clear
+              </button>
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={active.hideLabelWhenImage}
+                onChange={(e) => setHideLabelWhenImage(e.target.checked)}
+                disabled={controlsDisabled}
+              />
+              Hide label when an image is used
+            </label>
           </div>
 
           {/* Shape / Fit / Label / Label Color / Avatar */}
@@ -338,13 +466,16 @@ export default function Embed() {
             <div className={labelCls}>Bubble Shape</div>
             <select
               className={inputCls}
-              value={shape}
+              value={active.shape}
               onChange={(e) => setShape(e.target.value as Shape)}
+              disabled={controlsDisabled}
             >
               <option value="circle">circle</option>
               <option value="rounded">rounded</option>
               <option value="square">square</option>
               <option value="oval">oval</option>
+              <option value="speech">speech (round)</option>
+              <option value="speech-rounded">speech (rounded)</option>
             </select>
           </div>
 
@@ -352,8 +483,9 @@ export default function Embed() {
             <div className={labelCls}>Image Fit</div>
             <select
               className={inputCls}
-              value={imageFit}
+              value={active.imageFit}
               onChange={(e) => setImageFit(e.target.value as Fit)}
+              disabled={controlsDisabled}
             >
               <option value="cover">cover (fill bubble)</option>
               <option value="contain">contain</option>
@@ -367,8 +499,10 @@ export default function Embed() {
             <div className={labelCls}>Bubble Label</div>
             <input
               className={inputCls}
-              value={label}
+              value={active.label}
               onChange={(e) => setLabel(e.target.value)}
+              disabled={controlsDisabled || (!!active.image && active.hideLabelWhenImage)}
+              title={controlsDisabled ? "Controlled by Preview" : ""}
             />
           </div>
 
@@ -377,8 +511,10 @@ export default function Embed() {
             <input
               type="color"
               className="h-10 w-full rounded-lg border"
-              value={labelColor}
+              value={active.labelColor}
               onChange={(e) => setLabelColor(e.target.value)}
+              disabled={controlsDisabled || (!!active.image && active.hideLabelWhenImage)}
+              title={controlsDisabled ? "Controlled by Preview" : ""}
             />
           </div>
 
@@ -387,15 +523,16 @@ export default function Embed() {
             <input
               className={inputCls}
               placeholder="https://example.com/avatar.jpg"
-              value={avatar}
+              value={active.avatar}
               onChange={(e) => setAvatar(e.target.value)}
+              disabled={syncWithPreview}
             />
           </div>
 
           {/* Preview URL */}
           <div className="md:col-span-3">
             <div className={labelCls}>Preview URL</div>
-            <input className={inputCls} value={embedUrl} readOnly onFocus={(e)=>e.currentTarget.select()} />
+            <input className={inputCls} value={embedUrl} readOnly onFocus={(e) => e.currentTarget.select()} />
           </div>
         </div>
       </div>
@@ -410,8 +547,8 @@ export default function Embed() {
           <code>{iframeSnippet}</code>
         </pre>
         <p className="text-xs text-muted-foreground mt-2">
-          Paste near the end of <code>&lt;body&gt;</code>. This renders the floating bubble using{" "}
-          <code>/widget</code> with your selected options.
+          Paste near the end of <code>&lt;body&gt;</code>. This renders the floating bubble using
+          <code> /widget</code> with your selected options.
         </p>
       </div>
 
