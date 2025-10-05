@@ -5,10 +5,10 @@
 /**
  * IMPORTANT:
  * - BotKey is widened to `string` so built-ins and your new custom templates work.
- * - Keys match what you already had (do not change existing storage).
+ * - Writes botSettingsInst:<id> so Builder knows which template an instance came from.
  */
 
-export type BotKey = string;                 // e.g. "LeadQualifier" | "Waitlist" | "MyCustomKey"
+export type BotKey = string;
 export type Mode = "basic" | "custom";
 
 export type InstanceMeta = {
@@ -21,25 +21,23 @@ export type InstanceMeta = {
 };
 
 export type InstanceData = {
-  // A place to store per-node text overrides, etc.
   overrides: Record<string, any>;
-  // A place to store UI/settings you want to carry over
   settings: Record<string, any>;
-  // Simple placeholder for uploaded knowledge docs
   knowledge: Array<any>;
 };
 
-/* ---------------- storage keys (unchanged) ---------------- */
+/* ---------------- storage keys ---------------- */
 
 const INDEX_KEY = "botInstances:index";
 const DATA_KEY = (id: string) => `botInstances:data:${id}`;
 
-// These keys mirror how your Builder / Settings already store data:
+// Mirrors Builder/Settings conventions
 const OV_KEY = (bot: BotKey, mode: Mode) => `botOverrides:${bot}_${mode}`;
 const BOT_SETTINGS_KEY = (bot: BotKey) => `botSettings:${bot}`;
-// NOTE: keeping your previous key, even though Knowledge page also uses `knowledge:*`.
-// We won't change it here to avoid breaking existing data.
 const BOT_KNOWLEDGE_KEY = (bot: BotKey) => `botKnowledge:${bot}`;
+
+// NEW: instance meta for Builder (baseKey + mode)
+const INST_META_KEY = (id: string) => `botSettingsInst:${id}`;
 
 /* ---------------- helpers ---------------- */
 
@@ -62,35 +60,26 @@ function newId() {
 }
 
 function botToLabel(bot: BotKey): string {
-  // Best-effort pretty label: split on case/underscores/dashes and title-case.
   if (!bot) return "Bot";
-  if (
-    bot === "LeadQualifier" ||
-    bot === "AppointmentBooking" ||
-    bot === "CustomerSupport" ||
-    bot === "Waitlist" ||
-    bot === "SocialMedia"
-  ) {
-    switch (bot) {
-      case "LeadQualifier":
-        return "Lead Qualifier";
-      case "AppointmentBooking":
-        return "Appointment Booking";
-      case "CustomerSupport":
-        return "Customer Support";
-      case "Waitlist":
-        return "Waitlist";
-      case "SocialMedia":
-        return "Social Media";
-    }
+  switch (bot) {
+    case "LeadQualifier":
+      return "Lead Qualifier";
+    case "AppointmentBooking":
+      return "Appointment Booking";
+    case "CustomerSupport":
+      return "Customer Support";
+    case "Waitlist":
+      return "Waitlist";
+    case "SocialMedia":
+      return "Social Media";
+    default:
+      return String(bot)
+        .replace(/[_-]+/g, " ")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
   }
-  // Fallback formatting for custom keys
-  return String(bot)
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /* ---------------- public API ---------------- */
@@ -99,7 +88,6 @@ export function listInstances(): InstanceMeta[] {
   return readJSON<InstanceMeta[]>(INDEX_KEY, []);
 }
 
-/** Convenience: same as listInstances but newest updated first */
 export function listInstancesSorted(): InstanceMeta[] {
   const list = listInstances();
   return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -128,12 +116,8 @@ export function saveInstance(id: string, patch: Partial<InstanceData>) {
     knowledge: [],
   });
 
-  writeJSON(DATA_KEY(id), {
-    ...current,
-    ...patch,
-  });
+  writeJSON(DATA_KEY(id), { ...current, ...patch });
 
-  // bump updatedAt
   const updated: InstanceMeta[] = index.map((m) =>
     m.id === id ? { ...m, updatedAt: now } : m
   );
@@ -144,11 +128,11 @@ export function removeInstance(id: string) {
   const index = listInstances().filter((m) => m.id !== id);
   writeJSON(INDEX_KEY, index);
   localStorage.removeItem(DATA_KEY(id));
+  localStorage.removeItem(INST_META_KEY(id)); // also clear instance meta
 }
 
 /**
- * Create a brand-new EMPTY instance.
- * Useful when you want a fresh canvas without copying overrides/settings.
+ * Create a brand-new EMPTY instance (fresh canvas).
  */
 export function createInstance(
   bot: BotKey,
@@ -168,12 +152,15 @@ export function createInstance(
   };
 
   const data: InstanceData = {
-    overrides: {},     // blank
-    settings: { mode },// minimal seed
-    knowledge: [],     // blank
+    overrides: {},
+    settings: { mode },
+    knowledge: [],
   };
 
   writeJSON(DATA_KEY(id), data);
+
+  // ✨ critical for Builder instance view
+  writeJSON(INST_META_KEY(id), { baseKey: bot, mode });
 
   const index = listInstances();
   index.push(meta);
@@ -183,10 +170,7 @@ export function createInstance(
 }
 
 /**
- * Duplicate from current template context:
- * - carries over per-bot+mode overrides (botOverrides:<Bot>_<mode>)
- * - carries over bot settings (botSettings:<Bot>)
- * - carries over any bot knowledge list (botKnowledge:<Bot>) if present
+ * Duplicate from current template (copies bot-level overrides/settings/knowledge).
  */
 export function duplicateInstanceFromTemplate(
   bot: BotKey,
@@ -196,7 +180,6 @@ export function duplicateInstanceFromTemplate(
   const id = newId();
   const now = Date.now();
 
-  // Pull existing per-bot+mode overrides/settings/knowledge (if any)
   const overrides = readJSON<Record<string, any>>(OV_KEY(bot, mode), {});
   const settings = readJSON<Record<string, any>>(BOT_SETTINGS_KEY(bot), { mode });
   const knowledge = readJSON<any[]>(BOT_KNOWLEDGE_KEY(bot), []);
@@ -213,6 +196,9 @@ export function duplicateInstanceFromTemplate(
   const data: InstanceData = { overrides, settings, knowledge };
   writeJSON(DATA_KEY(id), data);
 
+  // ✨ critical for Builder instance view
+  writeJSON(INST_META_KEY(id), { baseKey: bot, mode });
+
   const index = listInstances();
   index.push(meta);
   writeJSON(INDEX_KEY, index);
@@ -221,8 +207,7 @@ export function duplicateInstanceFromTemplate(
 }
 
 /**
- * Duplicate from an EXISTING instance ID (clone its meta+data into a new instance).
- * Useful when you want to copy a working bot as-is for a new client.
+ * Duplicate from an existing instance (clone meta+data).
  */
 export function duplicateInstanceFromExisting(
   sourceId: string,
@@ -243,7 +228,6 @@ export function duplicateInstanceFromExisting(
     updatedAt: now,
   };
 
-  // Deep-ish clone to avoid accidental shared references
   const data: InstanceData = JSON.parse(
     JSON.stringify({
       overrides: source.data.overrides || {},
@@ -253,6 +237,13 @@ export function duplicateInstanceFromExisting(
   );
 
   writeJSON(DATA_KEY(id), data);
+
+  // Copy or derive instance meta for Builder
+  const srcInstMeta = readJSON(INST_META_KEY(sourceId), {
+    baseKey: source.meta.bot,
+    mode: source.meta.mode,
+  });
+  writeJSON(INST_META_KEY(id), srcInstMeta);
 
   const index = listInstances();
   index.push(meta);
@@ -276,19 +267,20 @@ export function setInstanceMode(id: string, mode: Mode) {
   const inst = getInstance(id);
   if (!inst) return;
 
-  // update data
   const newData: InstanceData = {
     ...inst.data,
     settings: { ...(inst.data.settings || {}), mode },
   };
   writeJSON(DATA_KEY(id), newData);
 
-  // update meta
   const now = Date.now();
   const index = listInstances().map((m) =>
     m.id === id ? { ...m, mode, updatedAt: now } : m
   );
   writeJSON(INDEX_KEY, index);
+
+  // keep Builder meta aligned
+  writeJSON(INST_META_KEY(id), { baseKey: inst.meta.bot, mode });
 }
 
 /** Change instance bot (meta only; use carefully) */
@@ -298,4 +290,9 @@ export function setInstanceBot(id: string, bot: BotKey) {
     m.id === id ? { ...m, bot, updatedAt: now } : m
   );
   writeJSON(INDEX_KEY, index);
+
+  // keep Builder meta aligned (preserve prior mode)
+  const inst = getInstance(id);
+  const mode = inst?.meta.mode ?? "basic";
+  writeJSON(INST_META_KEY(id), { baseKey: bot, mode });
 }
