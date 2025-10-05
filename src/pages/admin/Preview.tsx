@@ -5,13 +5,7 @@ import { listTemplateDefs } from "@/lib/templates";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
-type Shape =
-  | "circle"
-  | "rounded"
-  | "square"
-  | "oval"
-  | "speechCircle"   // NEW
-  | "speechOval";    // NEW
+type Shape = "circle" | "rounded" | "square" | "oval" | "chat" | "badge" | "speech" | "speech-rounded";
 type ImageFit = "cover" | "contain" | "center";
 
 /* ---------- Small helpers ---------- */
@@ -45,6 +39,7 @@ type Branding = {
   chatBubbleLabel?: string;
   chatBubbleLabelColor?: string;
   chatBubbleImageFit?: ImageFit;
+  chatHideLabelWhenImage?: boolean;
 };
 
 function getBranding(): Branding {
@@ -63,6 +58,7 @@ function getBranding(): Branding {
     chatBubbleLabel: "Chat",
     chatBubbleLabelColor: "#ffffff",
     chatBubbleImageFit: "cover",
+    chatHideLabelWhenImage: false,
   };
 }
 
@@ -98,7 +94,7 @@ export default function Preview() {
     [instances, instId]
   );
 
-  // The bot that actually drives copy/labels (instance > bot)
+  // The bot that actually drives copy/labels
   const activeBotKey = activeInst?.bot || botKey;
 
   /* ---------- widget look state ---------- */
@@ -112,6 +108,7 @@ export default function Preview() {
   const [imageFit, setImageFit] = useState<ImageFit>(b.chatBubbleImageFit ?? "cover");
   const [label, setLabel] = useState<string>(b.chatBubbleLabel ?? "Chat");
   const [labelColor, setLabelColor] = useState<string>(b.chatBubbleLabelColor ?? "#ffffff");
+  const [hideLabelWhenImage, setHideLabelWhenImage] = useState<boolean>(!!b.chatHideLabelWhenImage);
 
   /* ---------- modal demo state ---------- */
   const [openModal, setOpenModal] = useState(false);
@@ -120,18 +117,18 @@ export default function Preview() {
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   // Modal header (title bar): instance name if present, otherwise bot name
-  const modalHeader = activeInst
-    ? activeInst.name
-    : (BOT_TITLES[botKey] ?? titleCaseSlug(botKey));
+  const modalHeader = activeInst ? activeInst.name : (BOT_TITLES[botKey] ?? titleCaseSlug(botKey));
 
   // Headline “Welcome to …” based on the *active* bot (instance > bot)
   const headline = `Welcome to ${BOT_TITLES[activeBotKey] ?? "Chat"}`;
 
-  // Demo subtext varies slightly at “done”
-  const subtext =
-    step === 3
-      ? "Thanks! You’re on the list — we’ll be in touch."
-      : "I’ll ask a few quick questions to help our team help you.";
+  // Demo subtext varies slightly per step
+  const subtext = (() => {
+    if (step === 0) return "I’ll ask a few quick questions to help our team help you.";
+    if (step === 1) return "What’s the best email to reach you?";
+    if (step === 2) return "Choose your interest level.";
+    return "Thanks! You’re on the list — we’ll be in touch.";
+  })();
 
   // Embed URL preview (uses inst if chosen, else bot)
   const widgetSrc = useMemo(() => {
@@ -176,6 +173,7 @@ export default function Preview() {
       chatBubbleImageFit: imageFit,
       chatBubbleLabel: label,
       chatBubbleLabelColor: labelColor,
+      chatHideLabelWhenImage: hideLabelWhenImage,
     });
     setSavedNote("Saved!");
   };
@@ -193,6 +191,7 @@ export default function Preview() {
       chatBubbleLabelColor: "#ffffff",
       chatBubbleImageFit: "cover" as ImageFit,
       chatBubbleImage: "",
+      chatHideLabelWhenImage: false,
     };
     setBranding(d);
     setPos(d.chatBubblePosition);
@@ -203,18 +202,18 @@ export default function Preview() {
     setImageFit(d.chatBubbleImageFit);
     setLabel(d.chatBubbleLabel);
     setLabelColor(d.chatBubbleLabelColor);
+    setHideLabelWhenImage(!!d.chatHideLabelWhenImage);
     setSavedNote("Reset");
   };
 
-  /* ---------- file upload -> data URL for bubble image (with Clear) ---------- */
+  /* ---------- file upload -> data URL for bubble image ---------- */
   async function onPickBubbleImage(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     const reader = new FileReader();
     reader.onload = () => setImg(String(reader.result || ""));
     reader.readAsDataURL(f);
-    // allow re-choosing the same file later
-    e.currentTarget.value = "";
+    e.currentTarget.value = ""; // allow re-upload of same file
   }
 
   /* ---------- UI ---------- */
@@ -344,48 +343,42 @@ export default function Preview() {
               <option value="rounded">rounded</option>
               <option value="square">square</option>
               <option value="oval">oval</option>
-              {/* NEW */}
-              <option value="speechCircle">speech bubble (circle)</option>
-              <option value="speechOval">speech bubble (oval)</option>
+              <option value="speech">speech (round)</option>
+              <option value="speech-rounded">speech (rounded)</option>
             </select>
           </div>
 
-          {/* Image & Fit (with upload + clear, readOnly for data URLs) */}
+          {/* Image & Fit (with upload + clear) */}
           <div className="space-y-2 md:col-span-2">
             <label className="text-sm font-semibold">Bubble Image (optional)</label>
             <div className="flex items-center gap-3">
               <input
                 className="w-full rounded-lg border px-3 py-2"
-                placeholder="https://example.com/icon.png  — or upload a file"
+                placeholder="https://example.com/icon.png  — or use Upload"
                 value={img}
                 onChange={(e) => setImg(e.target.value)}
-                readOnly={img.startsWith("data:")}
-                title={
-                  img.startsWith("data:")
-                    ? "Image is stored as a data URL. Use Clear to remove."
-                    : "Enter a URL, or click Upload to choose a file."
-                }
               />
               <label className="rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white">
                 Upload
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={onPickBubbleImage}
-                />
+                <input type="file" accept="image/*" className="hidden" onChange={onPickBubbleImage} />
               </label>
               <button
-                type="button"
                 className="rounded-lg border px-3 py-2 font-semibold bg-white"
                 onClick={() => setImg("")}
-                aria-label="Clear image"
+                title="Clear bubble image"
               >
                 Clear
               </button>
             </div>
-            <div className="text-xs text-muted-foreground">
-              You can paste a URL or upload an image (stored in this browser as a data URL). Use <b>Clear</b> to switch back to a color bubble with a text label.
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                id="hideLabel"
+                type="checkbox"
+                className="h-3 w-3"
+                checked={hideLabelWhenImage}
+                onChange={(e) => setHideLabelWhenImage(e.target.checked)}
+              />
+              <label htmlFor="hideLabel">Hide label when an image is used</label>
             </div>
           </div>
 
@@ -478,20 +471,18 @@ export default function Preview() {
             size={size}
             color={color || undefined}
             image={img || undefined}
-            shape={shape}
+            shape={shape as any}
             imageFit={imageFit}
             label={label}
             labelColor={labelColor}
-            onBubbleClick={() => { setStep(0); setOpenModal(true); }} // open same modal
+            hideLabelWhenImage={hideLabelWhenImage}
+            onBubbleClick={() => { setStep(0); setOpenModal(true); }} // open the same modal instead of internal panel
           />
         )}
 
         {openModal && (
-          <div
-            className="absolute inset-0 grid place-items-center"
-            style={{ pointerEvents: "none" }}
-          >
-            <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto">
+          <div className="absolute inset-0 grid place-items-center">
+            <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl">
               <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
                 <div className="text-lg font-extrabold">
                   {modalHeader}
@@ -503,15 +494,29 @@ export default function Preview() {
 
                 <div className="text-center">
                   <h2 className="text-2xl font-extrabold">{headline}</h2>
-                  <p className="mt-2 text-muted-foreground">
-                    {subtext}
-                    {step < 3 && (
-                      <>
-                        <br />
-                        Press <span className="font-bold">Continue</span> to proceed.
-                      </>
-                    )}
-                  </p>
+                  <p className="mt-2 text-muted-foreground">{subtext}</p>
+
+                  {step === 1 && (
+                    <div className="mt-4">
+                      <input
+                        className="w-full rounded-lg border px-3 py-2"
+                        placeholder="you@domain.com"
+                      />
+                    </div>
+                  )}
+
+                  {step === 2 && (
+                    <div className="mt-4 grid gap-2">
+                      {["Curious", "Very interested", "VIP"].map((o) => (
+                        <button
+                          key={o}
+                          className="rounded-lg border px-3 py-2 hover:bg-muted/50"
+                        >
+                          {o}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -555,3 +560,4 @@ export default function Preview() {
     </div>
   );
 }
+
