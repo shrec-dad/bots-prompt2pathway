@@ -1,4 +1,3 @@
-// src/widgets/ChatWidget.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 /** Public props you can pass from Preview/Embed */
@@ -8,19 +7,19 @@ export type ChatWidgetProps = {
 
   // Bubble controls
   position?: "bottom-right" | "bottom-left";
-  size?: number; // base size in px (used by circle/square); oval auto-scales
-  color?: string; // bubble background color if no image
-  image?: string; // optional bubble image URL
-  imageFit?: "cover" | "contain";
+  size?: number;                 // base size in px (used by circle/square); oval auto-scales
+  color?: string;                // bubble background color if no image
+  image?: string;                // optional bubble image URL (URL or data:)
+  imageFit?: "cover" | "contain" | "center";
   shape?:
     | "circle"
     | "rounded"
     | "oval"
     | "square"
-    | "speech"          // NEW: round speech bubble
-    | "speech-rounded"; // NEW: rounded-rect speech bubble
-  label?: string; // text on the bubble (e.g., "Chat")
-  labelColor?: string; // text color for label
+    | "speechCircle"   // NEW: round speech bubble
+    | "speechOval";    // NEW: oval/rounded-rect speech bubble
+  label?: string;                // text on the bubble (e.g., "Chat")
+  labelColor?: string;           // text color for label
 
   // Message appearance in the chat transcript
   messageStyle?:
@@ -33,6 +32,9 @@ export type ChatWidgetProps = {
 
   // Optional avatar (real photo or logo) for BOT messages
   botAvatarUrl?: string;
+
+  // Let parent handle bubble click (e.g., open Preview modal)
+  onBubbleClick?: () => void;
 
   // z-index control for embedding on busy pages
   zIndex?: number;
@@ -54,6 +56,7 @@ export default function ChatWidget({
   messageStyle = "outlined-black",
   botAvatarUrl,
 
+  onBubbleClick,
   zIndex = 2147483000,
 }: ChatWidgetProps) {
   const [open, setOpen] = useState(false);
@@ -64,7 +67,8 @@ export default function ChatWidget({
   // Bubble geometry (oval changes width/height; others are square by size)
   // ─────────────────────────────────────────────────────────────────────────────
   const bubbleDims = useMemo(() => {
-    if (shape === "oval" || shape === "speech-rounded") {
+    // Wider/shorter for oval-ish bodies (oval & speechOval)
+    if (shape === "oval" || shape === "speechOval") {
       return {
         width: Math.round(size * 1.55),
         height: Math.round(size * 0.9),
@@ -74,7 +78,7 @@ export default function ChatWidget({
     const squareish = { width: size, height: size };
     if (shape === "rounded") return { ...squareish, radius: 14 };
     if (shape === "square") return { ...squareish, radius: 6 };
-    // default circle & "speech" use radius = half
+    // default circle & speechCircle use radius = half
     return { ...squareish, radius: size / 2 };
   }, [shape, size]);
 
@@ -112,7 +116,7 @@ export default function ChatWidget({
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Message style maps (unchanged)
+  // Message style maps
   // ─────────────────────────────────────────────────────────────────────────────
   const msgStyles = useMemo(() => {
     const common = {
@@ -285,30 +289,31 @@ export default function ChatWidget({
 
   /** SVG speech bubbles with optional image fill via clipPath */
   const SpeechBubble = ({
-    variant, // "round" | "rounded"
+    variant, // "circle" | "oval"
   }: {
-    variant: "round" | "rounded";
+    variant: "circle" | "oval";
   }) => {
     const w = bubbleDims.width;
     const h = bubbleDims.height;
     const tailW = Math.max(10, Math.round(w * 0.18));
     const tailH = Math.max(10, Math.round(h * 0.26));
-    const roundR = variant === "round" ? Math.min(w, h) / 2 : Math.min(16, bubbleDims.radius);
 
-    // Tail points toward page interior (so it looks like it points at the page)
+    // Tail points toward page interior (so it looks anchored to page edge)
     const tailOnLeft = position === "bottom-right";
-
-    // Body path
-    const bodyId = `${uniqId}_clip`;
-
-    // For "round": main is a circle; for "rounded": main is a rounded rect
-    const body = variant === "round"
-      ? <circle cx={w / 2} cy={h / 2} r={Math.min(w, h) / 2 - 3} />
-      : <rect x={3} y={3} width={w - 6} height={h - 6} rx={Math.min(18, roundR)} ry={Math.min(18, roundR)} />;
-
-    // Tail path (little curved triangle)
-    const tailX = tailOnLeft ? 8 : w - 8;
+    const tailX = tailOnLeft ? 10 : w - 10;
     const tipX = tailOnLeft ? -tailW : w + tailW;
+
+    const clipId = `${uniqId}_clip`;
+
+    const body =
+      variant === "circle" ? (
+        // circular body
+        <circle cx={w / 2} cy={h / 2} r={Math.min(w, h) / 2 - 3} />
+      ) : (
+        // rounded-rect / oval-like body
+        <rect x={3} y={3} width={w - 6} height={h - 6} rx={Math.min(18, bubbleDims.radius)} ry={Math.min(18, bubbleDims.radius)} />
+      );
+
     const tail = (
       <path
         d={`M ${tailX} ${h - 18}
@@ -319,10 +324,13 @@ export default function ChatWidget({
       />
     );
 
+    const preserve =
+      imageFit === "cover" ? "xMidYMid slice" : imageFit === "contain" ? "xMidYMid meet" : "none";
+
     return (
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ position: "absolute", inset: 0 }}>
         <defs>
-          <clipPath id={bodyId}>
+          <clipPath id={clipId}>
             {body}
             {tail}
           </clipPath>
@@ -331,13 +339,7 @@ export default function ChatWidget({
         {/* fill (color or image) */}
         {image ? (
           <>
-            <image
-              href={image}
-              width={w}
-              height={h}
-              preserveAspectRatio={imageFit === "cover" ? "xMidYMid slice" : "xMidYMid meet"}
-              clipPath={`url(#${bodyId})`}
-            />
+            <image href={image} width={w} height={h} preserveAspectRatio={preserve} clipPath={`url(#${clipId})`} />
             <g fill="none" stroke="#000" strokeWidth="2">
               {body}
               {tail}
@@ -345,7 +347,7 @@ export default function ChatWidget({
           </>
         ) : (
           <>
-            <g clipPath={`url(#${bodyId})`}>
+            <g clipPath={`url(#${clipId})`}>
               <rect x="0" y="0" width={w} height={h} fill={color} />
             </g>
             <g fill="none" stroke="#000" strokeWidth="2">
@@ -358,9 +360,8 @@ export default function ChatWidget({
     );
   };
 
-  const BubbleInner = () => {
-    // label
-    return (
+  const BubbleLabel = () =>
+    label ? (
       <span
         style={{
           position: "relative",
@@ -373,8 +374,7 @@ export default function ChatWidget({
       >
         {label}
       </span>
-    );
-  };
+    ) : null;
 
   const BoxBubble = () => (
     <>
@@ -382,11 +382,12 @@ export default function ChatWidget({
       {image && (
         <img
           src={image}
-          alt="bubble"
+          alt=""
           style={{
             width: "100%",
             height: "100%",
-            objectFit: imageFit,
+            objectFit: imageFit === "center" ? "none" : imageFit,
+            objectPosition: "center",
             position: "absolute",
             inset: 0,
             borderRadius: bubbleDims.radius,
@@ -403,11 +404,11 @@ export default function ChatWidget({
           }}
         />
       )}
-      <BubbleInner />
+      <BubbleLabel />
     </>
   );
 
-  const SpeechBubbleWrapper = ({ variant }: { variant: "round" | "rounded" }) => (
+  const SpeechBubbleWrapper = ({ variant }: { variant: "circle" | "oval" }) => (
     <>
       <SpeechBubble variant={variant} />
       <div
@@ -422,17 +423,26 @@ export default function ChatWidget({
           textAlign: "center",
         }}
       >
-        <BubbleInner />
+        <BubbleLabel />
       </div>
     </>
   );
+
+  // Click handler: allow parent to intercept (Preview opens modal)
+  const handleBubbleClick = () => {
+    if (onBubbleClick) {
+      onBubbleClick();
+      return;
+    }
+    setOpen((v) => !v);
+  };
 
   return (
     <div ref={containerRef}>
       {/* Bubble (always rendered for popup mode; optional for others) */}
       {mode === "popup" && (
         <button
-          onClick={() => setOpen((v) => !v)}
+          onClick={handleBubbleClick}
           aria-label="Open chat"
           style={{
             position: "fixed",
@@ -452,9 +462,9 @@ export default function ChatWidget({
             justifyContent: "center",
           }}
         >
-          {shape === "speech" && <SpeechBubbleWrapper variant="round" />}
-          {shape === "speech-rounded" && <SpeechBubbleWrapper variant="rounded" />}
-          {shape !== "speech" && shape !== "speech-rounded" && <BoxBubble />}
+          {shape === "speechCircle" && <SpeechBubbleWrapper variant="circle" />}
+          {shape === "speechOval" && <SpeechBubbleWrapper variant="oval" />}
+          {shape !== "speechCircle" && shape !== "speechOval" && <BoxBubble />}
         </button>
       )}
 
