@@ -2,41 +2,43 @@
 // Lightweight “instances” persistence in localStorage.
 // Each Instance = { meta, data } with an index for quick listing.
 
-/**
- * IMPORTANT:
- * - BotKey is widened to `string` so built-ins and your new custom templates work.
- * - Writes botSettingsInst:<id> so Builder knows which template an instance came from.
- */
+export type BotKey =
+  | "LeadQualifier"
+  | "AppointmentBooking"
+  | "CustomerSupport"
+  | "Waitlist"
+  | "SocialMedia"
+  | string; // allow custom template keys
 
-export type BotKey = string;
 export type Mode = "basic" | "custom";
 
 export type InstanceMeta = {
   id: string;             // inst_*
   name: string;           // e.g. "Waitlist (Copy)" or "My Bot"
-  bot: BotKey;
+  bot: BotKey;            // base template key (works for built-ins + custom)
   mode: Mode;
   createdAt: number;
   updatedAt: number;
 };
 
 export type InstanceData = {
+  // A place to store per-node text overrides, etc.
   overrides: Record<string, any>;
+  // A place to store UI/settings you want to carry over
   settings: Record<string, any>;
+  // Simple placeholder for uploaded knowledge docs
   knowledge: Array<any>;
 };
-
-/* ---------------- storage keys ---------------- */
 
 const INDEX_KEY = "botInstances:index";
 const DATA_KEY = (id: string) => `botInstances:data:${id}`;
 
-// Mirrors Builder/Settings conventions
+// These keys mirror how your Builder / Settings already store data:
 const OV_KEY = (bot: BotKey, mode: Mode) => `botOverrides:${bot}_${mode}`;
 const BOT_SETTINGS_KEY = (bot: BotKey) => `botSettings:${bot}`;
 const BOT_KNOWLEDGE_KEY = (bot: BotKey) => `botKnowledge:${bot}`;
 
-// NEW: instance meta for Builder (baseKey + mode)
+// Instance-specific meta used by Builder.readInstMeta():
 const INST_META_KEY = (id: string) => `botSettingsInst:${id}`;
 
 /* ---------------- helpers ---------------- */
@@ -60,7 +62,6 @@ function newId() {
 }
 
 function botToLabel(bot: BotKey): string {
-  if (!bot) return "Bot";
   switch (bot) {
     case "LeadQualifier":
       return "Lead Qualifier";
@@ -73,12 +74,7 @@ function botToLabel(bot: BotKey): string {
     case "SocialMedia":
       return "Social Media";
     default:
-      return String(bot)
-        .replace(/[_-]+/g, " ")
-        .replace(/([a-z])([A-Z])/g, "$1 $2")
-        .replace(/\s+/g, " ")
-        .trim()
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+      return typeof bot === "string" && bot.trim() ? bot : "Bot";
   }
 }
 
@@ -88,6 +84,7 @@ export function listInstances(): InstanceMeta[] {
   return readJSON<InstanceMeta[]>(INDEX_KEY, []);
 }
 
+/** Convenience: same as listInstances but newest updated first */
 export function listInstancesSorted(): InstanceMeta[] {
   const list = listInstances();
   return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -116,8 +113,12 @@ export function saveInstance(id: string, patch: Partial<InstanceData>) {
     knowledge: [],
   });
 
-  writeJSON(DATA_KEY(id), { ...current, ...patch });
+  writeJSON(DATA_KEY(id), {
+    ...current,
+    ...patch,
+  });
 
+  // bump updatedAt
   const updated: InstanceMeta[] = index.map((m) =>
     m.id === id ? { ...m, updatedAt: now } : m
   );
@@ -128,11 +129,12 @@ export function removeInstance(id: string) {
   const index = listInstances().filter((m) => m.id !== id);
   writeJSON(INDEX_KEY, index);
   localStorage.removeItem(DATA_KEY(id));
-  localStorage.removeItem(INST_META_KEY(id)); // also clear instance meta
+  localStorage.removeItem(INST_META_KEY(id)); // also drop the per-instance meta the Builder reads
 }
 
 /**
- * Create a brand-new EMPTY instance (fresh canvas).
+ * Create a brand-new EMPTY instance.
+ * Useful when you want a fresh canvas without copying overrides/settings.
  */
 export function createInstance(
   bot: BotKey,
@@ -152,25 +154,28 @@ export function createInstance(
   };
 
   const data: InstanceData = {
-    overrides: {},
-    settings: { mode },
-    knowledge: [],
+    overrides: {},     // blank
+    settings: { mode },// minimal seed
+    knowledge: [],     // blank
   };
 
   writeJSON(DATA_KEY(id), data);
-
-  // ✨ critical for Builder instance view
-  writeJSON(INST_META_KEY(id), { baseKey: bot, mode });
 
   const index = listInstances();
   index.push(meta);
   writeJSON(INDEX_KEY, index);
 
+  // IMPORTANT: write the instance meta that Builder.readInstMeta() expects
+  writeJSON(INST_META_KEY(id), { baseKey: bot, mode });
+
   return meta;
 }
 
 /**
- * Duplicate from current template (copies bot-level overrides/settings/knowledge).
+ * Duplicate from current template context:
+ * - carries over per-bot+mode overrides (botOverrides:Bot_Mode)
+ * - carries over bot settings (botSettings:Bot)
+ * - carries over any bot knowledge list (botKnowledge:Bot) if present
  */
 export function duplicateInstanceFromTemplate(
   bot: BotKey,
@@ -180,6 +185,7 @@ export function duplicateInstanceFromTemplate(
   const id = newId();
   const now = Date.now();
 
+  // Pull existing per-bot+mode overrides/settings/knowledge (if any)
   const overrides = readJSON<Record<string, any>>(OV_KEY(bot, mode), {});
   const settings = readJSON<Record<string, any>>(BOT_SETTINGS_KEY(bot), { mode });
   const knowledge = readJSON<any[]>(BOT_KNOWLEDGE_KEY(bot), []);
@@ -196,18 +202,19 @@ export function duplicateInstanceFromTemplate(
   const data: InstanceData = { overrides, settings, knowledge };
   writeJSON(DATA_KEY(id), data);
 
-  // ✨ critical for Builder instance view
-  writeJSON(INST_META_KEY(id), { baseKey: bot, mode });
-
   const index = listInstances();
   index.push(meta);
   writeJSON(INDEX_KEY, index);
+
+  // ALSO write the per-instance meta for Builder
+  writeJSON(INST_META_KEY(id), { baseKey: bot, mode });
 
   return meta;
 }
 
 /**
- * Duplicate from an existing instance (clone meta+data).
+ * Duplicate from an EXISTING instance ID (clone its meta+data into a new instance).
+ * Useful when you want to copy a working bot as-is for a new client.
  */
 export function duplicateInstanceFromExisting(
   sourceId: string,
@@ -228,6 +235,7 @@ export function duplicateInstanceFromExisting(
     updatedAt: now,
   };
 
+  // Deep-ish clone to avoid accidental shared references
   const data: InstanceData = JSON.parse(
     JSON.stringify({
       overrides: source.data.overrides || {},
@@ -238,16 +246,12 @@ export function duplicateInstanceFromExisting(
 
   writeJSON(DATA_KEY(id), data);
 
-  // Copy or derive instance meta for Builder
-  const srcInstMeta = readJSON(INST_META_KEY(sourceId), {
-    baseKey: source.meta.bot,
-    mode: source.meta.mode,
-  });
-  writeJSON(INST_META_KEY(id), srcInstMeta);
-
   const index = listInstances();
   index.push(meta);
   writeJSON(INDEX_KEY, index);
+
+  // make the Builder dropdown/source correct for the new copy
+  writeJSON(INST_META_KEY(id), { baseKey: source.meta.bot, mode: source.meta.mode });
 
   return meta;
 }
@@ -267,19 +271,21 @@ export function setInstanceMode(id: string, mode: Mode) {
   const inst = getInstance(id);
   if (!inst) return;
 
+  // update data
   const newData: InstanceData = {
     ...inst.data,
     settings: { ...(inst.data.settings || {}), mode },
   };
   writeJSON(DATA_KEY(id), newData);
 
+  // update meta
   const now = Date.now();
   const index = listInstances().map((m) =>
     m.id === id ? { ...m, mode, updatedAt: now } : m
   );
   writeJSON(INDEX_KEY, index);
 
-  // keep Builder meta aligned
+  // keep the Builder's per-instance meta in sync too
   writeJSON(INST_META_KEY(id), { baseKey: inst.meta.bot, mode });
 }
 
@@ -291,8 +297,7 @@ export function setInstanceBot(id: string, bot: BotKey) {
   );
   writeJSON(INDEX_KEY, index);
 
-  // keep Builder meta aligned (preserve prior mode)
+  // Update the per-instance meta that Builder reads
   const inst = getInstance(id);
-  const mode = inst?.meta.mode ?? "basic";
-  writeJSON(INST_META_KEY(id), { baseKey: bot, mode });
+  if (inst) writeJSON(INST_META_KEY(id), { baseKey: bot, mode: inst.meta.mode });
 }
