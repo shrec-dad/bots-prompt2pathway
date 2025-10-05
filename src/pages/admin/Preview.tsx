@@ -1,9 +1,7 @@
 // src/pages/admin/Preview.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import ChatWidget from "@/widgets/ChatWidget";
-import { useSearchParams } from "react-router-dom";
-import { useAdminStore } from "@/lib/AdminStore";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
+import { listTemplateDefs, type TemplateDef } from "@/lib/templates";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
@@ -33,7 +31,7 @@ function CopyButton({ getText }: { getText: () => string }) {
   );
 }
 
-// Branding store (used by /widget)
+/* ---------- Branding store (used by look & feel controls) ---------- */
 const BRAND_KEY = "brandingSettings";
 
 type Branding = {
@@ -69,7 +67,6 @@ function getBranding(): Branding {
     chatBubbleImageFit: "cover",
   };
 }
-
 function setBranding(next: Partial<Branding>) {
   const prev = getBranding();
   const merged = { ...prev, ...next };
@@ -77,17 +74,32 @@ function setBranding(next: Partial<Branding>) {
   return merged as Branding;
 }
 
+/* ---------- Helpers ---------- */
+// Pretty “Bot ID” (slug) from a template key (e.g., LeadQualifier -> lead-qualifier)
+const keyToId = (key: string) =>
+  key
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/\s+/g, "-")
+    .toLowerCase();
+
+// Friendly instance title
+const instanceTitle = (m: InstanceMeta, defs: TemplateDef[]) => {
+  const def = defs.find((d) => d.key === m.bot);
+  const base = def?.name || m.bot;
+  return (m.name || `${base} Instance`).toString();
+};
+
 export default function Preview() {
-  const [search] = useSearchParams();
+  /* ---------- Data sources for dropdowns ---------- */
+  const [defs, setDefs] = useState<TemplateDef[]>(() => listTemplateDefs());
+  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
+    listInstances()
+  );
 
-  // ---- List of base bots (id + name) for a friendly dropdown ----
-  const { bots } = useAdminStore(); // from AdminStore (Lead Qualifier, Appointment, etc.)
-
-  // ---- List of client bot instances for a second dropdown ----
-  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
+      if (e.key === "botTemplates:index") setDefs(listTemplateDefs());
       if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
         setInstances(listInstances());
       }
@@ -96,13 +108,24 @@ export default function Preview() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // ---- Demo bot/instance controls (now with dropdowns) ----
-  const urlInst = search.get("inst") || "";
-  const urlBot  = search.get("bot")  || "";
-  const [instId, setInstId] = useState<string>(urlInst);
-  const [botId, setBotId]   = useState<string>(urlBot || (bots[0]?.id ?? "waitlist-bot"));
+  /* ---------- Selection state ---------- */
+  const [selectedInst, setSelectedInst] = useState<string>("");
+  const [selectedBotKey, setSelectedBotKey] = useState<string>(
+    defs[0]?.key || "Waitlist"
+  );
 
-  // ---- Bubble/Widget visual controls (persisted) ----
+  // Resolved bot id & friendly name used in UI
+  const resolvedBotId = useMemo(() => keyToId(selectedBotKey), [selectedBotKey]);
+  const friendlyBotName = useMemo(
+    () => defs.find((d) => d.key === selectedBotKey)?.name || selectedBotKey,
+    [defs, selectedBotKey]
+  );
+  const selectedInstance = useMemo(
+    () => instances.find((i) => i.id === selectedInst),
+    [instances, selectedInst]
+  );
+
+  /* ---------- Bubble/Widget visual controls (persisted) ---------- */
   const b = useMemo(getBranding, []);
   const [mode, setMode] = useState<Mode>("popup");
   const [pos, setPos] = useState<Pos>(b.chatBubblePosition ?? "bottom-left");
@@ -114,7 +137,7 @@ export default function Preview() {
   const [label, setLabel] = useState<string>(b.chatBubbleLabel ?? "Chat");
   const [labelColor, setLabelColor] = useState<string>(b.chatBubbleLabelColor ?? "#ffffff");
 
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(true); // show modal by default
   const [step, setStep] = useState(0);
   const [savedNote, setSavedNote] = useState<null | string>(null);
 
@@ -130,24 +153,17 @@ export default function Preview() {
   const next = () => setStep((s) => Math.min(s + 1, 3));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
-  const title = useMemo(() => {
-    switch (step) {
-      case 0:
-        return "Welcome to the Waitlist";
-      case 1:
-        return "Your email";
-      case 2:
-        return "Interest level";
-      default:
-        return "All set!";
-    }
-  }, [step]);
+  // Welcome line now based on selected bot (no more “Waitlist” hard-code)
+  const welcomeLine = useMemo(
+    () => `Welcome to ${friendlyBotName}`,
+    [friendlyBotName]
+  );
 
-  // Instance-aware /widget URL preview
+  /* ---------- Instance-aware /widget URL preview ---------- */
   const widgetSrc = useMemo(() => {
     const qp = new URLSearchParams();
-    if (instId.trim()) qp.set("inst", instId.trim());
-    else qp.set("bot", botId);
+    if (selectedInstance) qp.set("inst", selectedInstance.id);
+    else qp.set("bot", resolvedBotId);
 
     qp.set("position", pos);
     qp.set("size", String(size));
@@ -159,7 +175,7 @@ export default function Preview() {
     if (img.trim()) qp.set("image", img.trim());
 
     return `/widget?${qp.toString()}`;
-  }, [instId, botId, pos, size, color, img, label, labelColor, shape, imageFit]);
+  }, [selectedInstance, resolvedBotId, pos, size, color, img, label, labelColor, shape, imageFit]);
 
   const embedIframe = `<iframe
   src="${widgetSrc}"
@@ -168,7 +184,7 @@ export default function Preview() {
   referrerpolicy="no-referrer-when-downgrade"
 ></iframe>`;
 
-  // ---- Save / Reset ----
+  /* ---------- Save / Reset ---------- */
   const onSave = () => {
     setBranding({
       chatBubblePosition: pos,
@@ -209,14 +225,42 @@ export default function Preview() {
     setSavedNote("Reset");
   };
 
-  // helpers
-  const fieldLabel = "text-sm font-semibold";
+  /* ---------- Floating “bubble” button that opens the modal ---------- */
+  const bubbleStyle: React.CSSProperties = {
+    position: "fixed",
+    zIndex: 40,
+    [pos === "bottom-left" ? "left" : "right"]: 20,
+    bottom: 20,
+    width: size,
+    height: size,
+    borderRadius:
+      shape === "circle"
+        ? "9999px"
+        : shape === "rounded"
+        ? "14px"
+        : shape === "square"
+        ? "4px"
+        : shape === "oval"
+        ? `${Math.max(24, Math.round(size / 2))}px / ${Math.max(
+            24,
+            Math.round(size / 2.5)
+          )}px`
+        : shape === "badge"
+        ? "9999px"
+        : "16px",
+    background: color || "#7aa8ff",
+    border: "2px solid #000",
+    boxShadow: "0 10px 18px rgba(0,0,0,0.15)",
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+  } as any;
 
   return (
     <div className="p-6 space-y-6">
       {/* Controls */}
       <div className="rounded-2xl border bg-white shadow-sm">
-        <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
+        <div className={`rounded-t-2xl p-4 bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white`}>
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xl font-extrabold">Widget Preview</div>
@@ -241,25 +285,26 @@ export default function Preview() {
               </button>
             </div>
           </div>
-          {savedNote && <div className="mt-2 text-xs font-bold">{savedNote}</div>}
+          {savedNote && (
+            <div className="mt-2 text-xs font-bold">{savedNote}</div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
           {/* Instance selector (optional) */}
           <div className="space-y-2">
-            <label className={fieldLabel}>Instance (optional)</label>
+            <label className="text-sm font-semibold">Instance (optional)</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
-              value={instId}
-              onChange={(e) => setInstId(e.target.value)}
+              value={selectedInst}
+              onChange={(e) => setSelectedInst(e.target.value)}
             >
-              <option value="">(none)</option>
-              {instances
-                .slice()
+              <option value="">— None —</option>
+              {[...instances]
                 .sort((a, b) => b.updatedAt - a.updatedAt)
                 .map((m) => (
                   <option key={m.id} value={m.id}>
-                    {(m.name || `${m.bot} Instance`).toString()} • {m.mode}
+                    {instanceTitle(m, defs)} • {m.mode}
                   </option>
                 ))}
             </select>
@@ -268,19 +313,23 @@ export default function Preview() {
             </div>
           </div>
 
-          {/* Bot selector (friendly dropdown of base bots) */}
+          {/* Bot selector (templates + custom) */}
           <div className="space-y-2">
-            <label className={fieldLabel}>Bot</label>
+            <label className="text-sm font-semibold">Bot</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
-              value={botId}
-              onChange={(e) => setBotId(e.target.value)}
-              disabled={!!instId.trim()}
-              title={instId.trim() ? "Instance is set; Bot is ignored" : "Choose a bot"}
+              value={selectedBotKey}
+              onChange={(e) => setSelectedBotKey(e.target.value)}
+              disabled={!!selectedInst}
+              title={
+                selectedInst
+                  ? "Instance is set; Bot selection is ignored"
+                  : "Choose a bot"
+              }
             >
-              {bots.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.id})
+              {defs.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.name} ({keyToId(d.key)})
                 </option>
               ))}
             </select>
@@ -288,7 +337,7 @@ export default function Preview() {
 
           {/* Mode & Position */}
           <div className="space-y-2">
-            <label className={fieldLabel}>Mode</label>
+            <label className="text-sm font-semibold">Mode</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
               value={mode}
@@ -301,7 +350,7 @@ export default function Preview() {
           </div>
 
           <div className="space-y-2">
-            <label className={fieldLabel}>Position</label>
+            <label className="text-sm font-semibold">Position</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
               value={pos}
@@ -314,7 +363,7 @@ export default function Preview() {
 
           {/* Size & Shape */}
           <div className="space-y-2">
-            <label className={fieldLabel}>Size (px)</label>
+            <label className="text-sm font-semibold">Size (px)</label>
             <input
               type="number"
               min={40}
@@ -326,7 +375,7 @@ export default function Preview() {
           </div>
 
           <div className="space-y-2">
-            <label className={fieldLabel}>Bubble Shape</label>
+            <label className="text-sm font-semibold">Bubble Shape</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
               value={shape}
@@ -343,7 +392,7 @@ export default function Preview() {
 
           {/* Image & Fit */}
           <div className="space-y-2 md:col-span-2">
-            <label className={fieldLabel}>Bubble Image URL (optional)</label>
+            <label className="text-sm font-semibold">Bubble Image URL (optional)</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
               placeholder="https://example.com/icon.png"
@@ -353,7 +402,7 @@ export default function Preview() {
           </div>
 
           <div className="space-y-2">
-            <label className={fieldLabel}>Image Fit</label>
+            <label className="text-sm font-semibold">Image Fit</label>
             <select
               className="w-full rounded-lg border px-3 py-2"
               value={imageFit}
@@ -367,7 +416,7 @@ export default function Preview() {
 
           {/* Label & Colors */}
           <div className="space-y-2">
-            <label className={fieldLabel}>Bubble Label</label>
+            <label className="text-sm font-semibold">Bubble Label</label>
             <input
               className="w-full rounded-lg border px-3 py-2"
               placeholder="Chat"
@@ -376,9 +425,8 @@ export default function Preview() {
             />
           </div>
 
-          {/* Accent Color now with picker */}
           <div className="space-y-2">
-            <label className={fieldLabel}>Accent Color</label>
+            <label className="text-sm font-semibold">Accent Color</label>
             <input
               type="color"
               className="h-10 w-full rounded-lg border"
@@ -388,7 +436,7 @@ export default function Preview() {
           </div>
 
           <div className="space-y-2">
-            <label className={fieldLabel}>Label Color</label>
+            <label className="text-sm font-semibold">Label Color</label>
             <input
               type="color"
               className="h-10 w-full rounded-lg border"
@@ -397,7 +445,7 @@ export default function Preview() {
             />
           </div>
 
-          {/* Open modal + embed url (with Copy) */}
+          {/* Embed utilities */}
           <div className="md:col-span-2 flex items-center gap-3">
             <button
               className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
@@ -417,10 +465,9 @@ export default function Preview() {
             <CopyButton getText={() => widgetSrc} />
           </div>
 
-          {/* Full iframe code (copyable) */}
           <div className="md:col-span-2">
             <div className="flex items-center justify-between">
-              <label className={fieldLabel}>Embed (iframe)</label>
+              <label className="text-sm font-semibold">Embed (iframe)</label>
               <CopyButton getText={() => embedIframe} />
             </div>
             <textarea
@@ -434,23 +481,44 @@ export default function Preview() {
         </div>
       </div>
 
-      {/* Live UI area */}
+      {/* Live area + the only bubble we render (opens the same modal) */}
       <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
+        {/* Floating bubble button */}
         {mode === "popup" && (
-          <ChatWidget
-            mode="popup"
-            botId={botId}
-            position={pos}
-            size={size}
-            color={color || undefined}
-            image={img || undefined}
-            shape={shape}
-            imageFit={imageFit}
-            label={label}
-            labelColor={labelColor}
-          />
+          <div
+            role="button"
+            aria-label="Open chat"
+            onClick={() => setOpen(true)}
+            style={bubbleStyle}
+            title="Open chat"
+          >
+            {img ? (
+              <img
+                src={img}
+                alt=""
+                style={{
+                  width: "70%",
+                  height: "70%",
+                  objectFit: imageFit,
+                  borderRadius: "50%",
+                }}
+              />
+            ) : (
+              <span
+                style={{
+                  color: labelColor || "#fff",
+                  fontWeight: 800,
+                  fontSize: Math.max(11, Math.round(size / 5.2)),
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {label || "Chat"}
+              </span>
+            )}
+          </div>
         )}
 
+        {/* Unified modal chat */}
         {open && (
           <div
             className="absolute inset-0 grid place-items-center"
@@ -459,15 +527,9 @@ export default function Preview() {
             <div className="w-[420px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl pointer-events-auto">
               <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
                 <div className="text-lg font-extrabold">
-                  {(instId
-                    ? (instances.find((x) => x.id === instId)?.name ||
-                       instances.find((x) => x.id === instId)?.bot ||
-                       "Instance")
-                    : bots.find((b) => b.id === botId)?.name || botId
-                  )
-                    .toString()
-                    .replace(/-/g, " ")
-                    .replace(/\b\w/g, (s) => s.toUpperCase())}
+                  {selectedInstance
+                    ? instanceTitle(selectedInstance, defs)
+                    : friendlyBotName}
                 </div>
               </div>
 
@@ -475,7 +537,7 @@ export default function Preview() {
                 <div className="grid place-items-center text-5xl">👋</div>
 
                 <div className="text-center">
-                  <h2 className="text-2xl font-extrabold">{title}</h2>
+                  <h2 className="text-2xl font-extrabold">{welcomeLine}</h2>
 
                   {step === 0 && (
                     <p className="mt-2 text-muted-foreground">
