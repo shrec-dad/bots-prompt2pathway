@@ -1,4 +1,3 @@
-// src/pages/admin/Preview.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
@@ -6,7 +5,13 @@ import { listTemplateDefs } from "@/lib/templates";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
-type Shape = "circle" | "rounded" | "square" | "oval" | "chat" | "badge";
+type Shape =
+  | "circle"
+  | "rounded"
+  | "square"
+  | "oval"
+  | "speechCircle"   // NEW
+  | "speechOval";    // NEW
 type ImageFit = "cover" | "contain" | "center";
 
 /* ---------- Small helpers ---------- */
@@ -93,9 +98,8 @@ export default function Preview() {
     [instances, instId]
   );
 
-  // The bot that actually drives copy/labels
-  const activeBotKey =
-    activeInst?.bot || botKey; // instance baseKey wins if instance is chosen
+  // The bot that actually drives copy/labels (instance > bot)
+  const activeBotKey = activeInst?.bot || botKey;
 
   /* ---------- widget look state ---------- */
   const b = useMemo(getBranding, []);
@@ -202,13 +206,15 @@ export default function Preview() {
     setSavedNote("Reset");
   };
 
-  /* ---------- file upload -> data URL for bubble image ---------- */
+  /* ---------- file upload -> data URL for bubble image (with Clear) ---------- */
   async function onPickBubbleImage(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     const reader = new FileReader();
     reader.onload = () => setImg(String(reader.result || ""));
     reader.readAsDataURL(f);
+    // allow re-choosing the same file later
+    e.currentTarget.value = "";
   }
 
   /* ---------- UI ---------- */
@@ -338,33 +344,48 @@ export default function Preview() {
               <option value="rounded">rounded</option>
               <option value="square">square</option>
               <option value="oval">oval</option>
-              <option value="speech">speech (round)</option>
-              <option value="speech-rounded">speech (rounded)</option>
+              {/* NEW */}
+              <option value="speechCircle">speech bubble (circle)</option>
+              <option value="speechOval">speech bubble (oval)</option>
             </select>
           </div>
 
-          {/* Image & Fit (with upload) */}
+          {/* Image & Fit (with upload + clear, readOnly for data URLs) */}
           <div className="space-y-2 md:col-span-2">
             <label className="text-sm font-semibold">Bubble Image (optional)</label>
             <div className="flex items-center gap-3">
               <input
                 className="w-full rounded-lg border px-3 py-2"
-                placeholder="https://example.com/icon.png  — or use Upload"
+                placeholder="https://example.com/icon.png  — or upload a file"
                 value={img}
                 onChange={(e) => setImg(e.target.value)}
+                readOnly={img.startsWith("data:")}
+                title={
+                  img.startsWith("data:")
+                    ? "Image is stored as a data URL. Use Clear to remove."
+                    : "Enter a URL, or click Upload to choose a file."
+                }
               />
               <label className="rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white">
                 Upload
                 <input
                   type="file"
                   accept="image/*"
-                  className="hidden"
+                  hidden
                   onChange={onPickBubbleImage}
                 />
               </label>
+              <button
+                type="button"
+                className="rounded-lg border px-3 py-2 font-semibold bg-white"
+                onClick={() => setImg("")}
+                aria-label="Clear image"
+              >
+                Clear
+              </button>
             </div>
             <div className="text-xs text-muted-foreground">
-              You can paste a URL or upload an image (stored in this browser as a data URL).
+              You can paste a URL or upload an image (stored in this browser as a data URL). Use <b>Clear</b> to switch back to a color bubble with a text label.
             </div>
           </div>
 
@@ -461,7 +482,7 @@ export default function Preview() {
             imageFit={imageFit}
             label={label}
             labelColor={labelColor}
-            onBubbleClick={() => { setStep(0); setOpenModal(true); }} // << open same modal
+            onBubbleClick={() => { setStep(0); setOpenModal(true); }} // open same modal
           />
         )}
 
