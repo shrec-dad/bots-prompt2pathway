@@ -1,10 +1,10 @@
+// src/pages/admin/Bots.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { getBotSettings, setBotSettings } from "@/lib/botSettings";
 import {
   listInstances,
   removeInstance,
   duplicateInstanceFromTemplate,
-  // createInstance, // (optional) not used; you can delete this import
   renameInstance,
   type InstanceMeta,
 } from "@/lib/instances";
@@ -15,6 +15,7 @@ import {
   deleteTemplate,
   isBuiltInKey,
   unhideTemplate,
+  updateTemplate, // make sure this exists in lib/templates.ts
 } from "@/lib/templates";
 
 /* ---------- shared analytics store ---------- */
@@ -25,13 +26,10 @@ type Metrics = {
   csatPct?: number;
 };
 const METRICS_KEY = "analytics:metrics";
-
-/* ---------- Hidden templates storage key ---------- */
 const HIDDEN_TEMPLATES_KEY = "botTemplates:hiddenKeys";
 
 /* ---------- display helpers ---------- */
 type BotKey = string;
-
 function botKeyToLabel(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
   return defs.find((b) => b.key === key)?.name || (key as string);
 }
@@ -42,7 +40,7 @@ function botKeyToEmoji(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
   return defs.find((b) => b.key === key)?.emoji || "🤖";
 }
 
-/* Built-in metadata (for nice cards when they’re hidden) */
+/* ---------- built-in templates ---------- */
 const BUILTIN_META: Record<
   string,
   { name: string; emoji: string; gradient: string; description: string }
@@ -80,44 +78,33 @@ const BUILTIN_META: Record<
 };
 
 /* ---------------- main page ---------------- */
-
 export default function Bots() {
-  // Dynamic template catalog
   const [defs, setDefs] = useState(() => listTemplateDefs());
-
-  // Plan mode per template key
   const [modes, setModes] = useState<Record<string, "basic" | "custom">>(() =>
-    Object.fromEntries(
-      defs.map((b) => [b.key, getBotSettings(b.key).mode || "basic"])
-    ) as Record<string, "basic" | "custom">
+    Object.fromEntries(defs.map((b) => [b.key, getBotSettings(b.key).mode || "basic"])) as Record<
+      string,
+      "basic" | "custom"
+    >
   );
-
-  // Instances list (My Bots)
-  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
-    listInstances()
-  );
-
-  // Analytics metrics used for header stats
+  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
   const [metrics, setMetrics] = useState<Metrics>(() =>
-    getJSON<Metrics>(METRICS_KEY, {
-      conversations: 0,
-      leads: 0,
-    })
+    getJSON<Metrics>(METRICS_KEY, { conversations: 0, leads: 0 })
+  );
+  const [showHidden, setShowHidden] = useState(false);
+  const [hiddenKeys, setHiddenKeys] = useState<string[]>(() =>
+    getJSON<string[]>(HIDDEN_TEMPLATES_KEY, [])
   );
 
-  // Hidden templates UI
-  const [showHidden, setShowHidden] = useState(false);
-
-  // Modal for Create New Bot + Emoji Picker
+  // create modal
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newBotName, setNewBotName] = useState("");
   const [newBotEmoji, setNewBotEmoji] = useState("🤖");
 
-  const [hiddenKeys, setHiddenKeys] = useState<string[]>(
-    () => getJSON<string[]>(HIDDEN_TEMPLATES_KEY, [])
-  );
+  // edit emoji modal
+  const [showEditEmojiModal, setShowEditEmojiModal] = useState(false);
+  const [emojiToEdit, setEmojiToEdit] = useState<string | null>(null);
+  const [selectedEmoji, setSelectedEmoji] = useState("🤖");
 
-  // keep in sync if storage changes elsewhere
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
@@ -125,12 +112,10 @@ export default function Bots() {
         const key = e.key.split(":")[1] as BotKey;
         setModes((prev) => ({ ...prev, [key]: getBotSettings(key).mode }));
       }
-      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
+      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:"))
         setInstances(listInstances());
-      }
-      if (e.key === METRICS_KEY) {
+      if (e.key === METRICS_KEY)
         setMetrics(getJSON<Metrics>(METRICS_KEY, { conversations: 0, leads: 0 }));
-      }
       if (
         e.key === "botTemplates:index" ||
         (e.key && e.key.startsWith("botTemplates:data:")) ||
@@ -152,18 +137,13 @@ export default function Bots() {
 
   const fmtInt = (n: number) =>
     Number.isFinite(n) ? Math.max(0, Math.round(n)).toLocaleString() : "0";
-
-  // safely format a title
   const safeInstanceName = (m: InstanceMeta) =>
     (m.name && String(m.name)) || `${botKeyToLabel(defs, m.bot)} Instance`;
-
-  // Tidy, sorted list for display
   const sortedInstances = useMemo(
     () => [...instances].sort((a, b) => b.updatedAt - a.updatedAt),
     [instances]
   );
 
-  // Utility: simple slug/key from a name
   const toKey = (name: string) =>
     name
       .trim()
@@ -173,14 +153,26 @@ export default function Bots() {
       .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
       .join("");
 
-  // Derive pretty cards for hidden built-ins
   const hiddenCards = hiddenKeys
-    .filter((k) => BUILTIN_META[k]) // only built-ins are hidable
+    .filter((k) => BUILTIN_META[k])
     .map((k) => ({ key: k, ...BUILTIN_META[k] }));
+
+  const emojiOptions = [
+    "🎯",
+    "📅",
+    "💬",
+    "⏳",
+    "📢",
+    "☎️",
+    "🤖",
+    "💼",
+    "🌟",
+    "🧭",
+  ];
 
   return (
     <div className="w-full h-full">
-      {/* Header + Create / Reset buttons */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="text-xl font-extrabold">Bots</div>
         <div className="flex items-center gap-2">
@@ -194,7 +186,6 @@ export default function Bots() {
           </label>
           <button
             className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30"
-            title="Reset Conversations and Leads"
             onClick={resetTopStats}
           >
             Reset
@@ -208,61 +199,7 @@ export default function Bots() {
         </div>
       </div>
 
-      {/* If toggle is on, show Hidden Templates section */}
-      {showHidden && (
-        <div className="mb-8">
-          <div className="text-lg font-extrabold mb-3">Hidden Templates</div>
-          {hiddenCards.length === 0 ? (
-            <div className="rounded-xl border bg-card p-4 text-sm">
-              No hidden templates right now.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {hiddenCards.map((b) => (
-                <div
-                  key={b.key}
-                  className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
-                >
-                  <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
-                        {b.emoji}
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-extrabold tracking-tight">{b.name}</h3>
-                        <p className="text-sm font-semibold text-foreground/80">{b.description}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-emerald-50"
-                      onClick={() => {
-                        unhideTemplate(b.key);
-                        setDefs(listTemplateDefs());
-                        setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
-                      }}
-                      aria-label={`Unhide ${b.name}`}
-                    >
-                      Unhide
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Header metrics row */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
-        <Stat label="Active Bots" value={String(sortedInstances.length)} />
-        <Stat label="Conversations (7d)" value={fmtInt(metrics.conversations)} />
-        <Stat label="Leads / Tickets (7d)" value={fmtInt(metrics.leads)} />
-      </div>
-
-      {/* Template catalog (dynamic) */}
+      {/* Template Catalog */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {defs.map((b) => (
           <div
@@ -271,8 +208,21 @@ export default function Bots() {
           >
             <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}>
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
-                  {b.emoji}
+                <div className="relative">
+                  <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
+                    {b.emoji}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEmojiToEdit(b.key);
+                      setSelectedEmoji(b.emoji || "🤖");
+                      setShowEditEmojiModal(true);
+                    }}
+                    className="absolute -top-2 -right-2 bg-white rounded-full border text-xs p-1 hover:bg-gray-100"
+                    title="Edit Emoji"
+                  >
+                    ✏️
+                  </button>
                 </div>
                 <div>
                   <h3 className="text-xl font-extrabold tracking-tight">{b.name}</h3>
@@ -283,7 +233,6 @@ export default function Bots() {
 
             <div className="mt-4 flex items-center gap-3">
               <div className="text-sm font-semibold text-foreground/80">Plan:</div>
-
               <select
                 className="ml-auto rounded-lg border bg-card px-3 py-2 text-sm font-bold shadow-sm"
                 value={modes[b.key] || "basic"}
@@ -292,153 +241,26 @@ export default function Bots() {
                   setModes((prev) => ({ ...prev, [b.key]: mode }));
                   setBotSettings(b.key, { mode });
                 }}
-                aria-label={`${b.name} plan`}
               >
                 <option value="basic">Basic</option>
                 <option value="custom">Custom</option>
               </select>
-
               <button
                 className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
                 onClick={() => (window.location.href = `/admin/builder?bot=${b.key}`)}
-                aria-label={`Open ${b.name} in Builder`}
               >
                 Open Builder
-              </button>
-            </div>
-
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-muted/40"
-                onClick={() => {
-                  const mode = (modes[b.key] || "basic") as "basic" | "custom";
-                  const defaultName = `${b.name} (Copy)`;
-                  const desired =
-                    prompt("Name this new client bot:", defaultName)?.trim() || defaultName;
-
-                  duplicateInstanceFromTemplate(b.key as any, mode, desired);
-                  setInstances(listInstances());
-                }}
-                aria-label={`Duplicate ${b.name}`}
-              >
-                Duplicate
-              </button>
-
-              {/* Delete for ALL templates (built-in = hide; custom = remove) */}
-              <button
-                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-rose-50"
-                onClick={() => {
-                  const builtin = isBuiltInKey(b.key);
-                  const ok = confirm(
-                    builtin
-                      ? `Hide "${b.name}" (built-in) from your Templates?\n\nThis does NOT delete existing instances and can be restored later.`
-                      : `Delete custom template "${b.name}"?\n\nThis removes it from your Templates and deletes its stored graphs.\nExisting instances remain intact.`
-                  );
-                  if (!ok) return;
-                  deleteTemplate(b.key);
-                  setDefs(listTemplateDefs());
-                  setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
-                }}
-                aria-label={`Delete ${b.name}`}
-                title="Delete (built-ins are hidden; customs are removed)"
-              >
-                Delete
               </button>
             </div>
           </div>
         ))}
       </div>
 
-      {/* My Bots (instances) */}
-      <div className="mt-10">
-        <div className="text-lg font-extrabold mb-3">My Bots</div>
-
-        {sortedInstances.length === 0 ? (
-          <div className="rounded-xl border bg-card p-4 text-sm">
-            You don’t have any instances yet. Click <b>Duplicate</b> on a card
-            above or use <b>Create New Bot</b>.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {sortedInstances.map((m) => {
-              const title = safeInstanceName(m);
-              const sub = `${botKeyToLabel(defs, m.bot)} • ${m.mode}`.trim();
-              const grad = botKeyToGradient(defs, m.bot);
-              const emoji = botKeyToEmoji(defs, m.bot);
-
-              return (
-                <div key={m.id} className="rounded-2xl border bg-card overflow-hidden flex flex-col">
-                  <div className={`p-4 ring-1 ring-border bg-gradient-to-br ${grad}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 grid place-items-center rounded-xl bg-white/70 ring-1 ring-border text-xl">
-                        {emoji}
-                      </div>
-                      <div>
-                        <div className="text-lg font-extrabold leading-tight">{title}</div>
-                        <div className="text-sm text-foreground/80">{sub}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 flex items-center gap-3">
-                    <button
-                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
-                      onClick={() => (window.location.href = `/admin/builder?inst=${m.id}`)}
-                    >
-                      Open
-                    </button>
-
-                    <button
-                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
-                      onClick={() => (window.location.href = `/admin/nurture?inst=${m.id}`)}
-                      title="Open nurture schedule for this client bot"
-                    >
-                      Nurture
-                    </button>
-
-                    {/* Rename via helper */}
-                    <button
-                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
-                      onClick={() => {
-                        const next = prompt("Rename this bot instance:", title)?.trim();
-                        if (!next) return;
-                        renameInstance(m.id, next);
-                        setInstances(listInstances());
-                      }}
-                    >
-                      Rename
-                    </button>
-
-                    <button
-                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-rose-50"
-                      onClick={() => {
-                        if (!confirm(`Remove "${title}" instance? This cannot be undone.`)) return;
-                        removeInstance(m.id);
-                        setInstances(listInstances());
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* -------------------------------------------------------
-       🧠 CREATE NEW BOT MODAL WITH EMOJI PICKER
-      ---------------------------------------------------------- */}
+      {/* CREATE NEW BOT MODAL */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl border-2 border-black p-6 w-full max-w-md shadow-xl">
             <h2 className="text-2xl font-extrabold mb-2">Create New Bot</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Name your new bot template and choose an emoji that represents it.
-            </p>
-
-            {/* Bot name */}
             <label className="font-semibold block mb-1">Bot Name</label>
             <input
               className="w-full rounded-lg border px-3 py-2 font-semibold mb-4"
@@ -446,29 +268,15 @@ export default function Bots() {
               value={newBotName}
               onChange={(e) => setNewBotName(e.target.value)}
             />
-
-            {/* Emoji selector */}
             <label className="font-semibold block mb-2">Choose an Emoji</label>
             <div className="flex flex-wrap gap-3 mb-4">
-              {[
-                "🎯", // Lead Qualifier
-                "📅", // Appointment Booking
-                "💬", // Customer Support
-                "⏳", // Waitlist
-                "📢", // Social Media
-                "☎️", // Receptionist
-                "🤖", // General AI
-                "💼", // Business Bot
-                "🌟", // Premium Bot
-                "🧭", // Guidance Bot
-              ].map((emj) => (
+              {emojiOptions.map((emj) => (
                 <button
                   key={emj}
-                  type="button"
                   onClick={() => setNewBotEmoji(emj)}
-                  className={`text-3xl rounded-xl border-2 p-2 transition-all ${
+                  className={`text-3xl rounded-xl border-2 p-2 ${
                     newBotEmoji === emj
-                      ? "border-black bg-yellow-100 shadow-md scale-110"
+                      ? "border-black bg-yellow-100 scale-110"
                       : "border-gray-200 hover:border-gray-400"
                   }`}
                 >
@@ -476,8 +284,6 @@ export default function Bots() {
                 </button>
               ))}
             </div>
-
-            {/* Buttons */}
             <div className="flex justify-end gap-3">
               <button
                 className="px-4 py-2 font-bold ring-1 ring-border bg-white rounded-xl hover:bg-muted/40"
@@ -486,19 +292,15 @@ export default function Bots() {
                 Cancel
               </button>
               <button
-                className="px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 rounded-xl shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                className="px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 rounded-xl"
                 onClick={() => {
                   const name = newBotName.trim() || "New Template";
                   const key = toKey(name);
                   if (defs.some((d) => d.key === key)) {
-                    alert("A template with this name/key already exists. Please choose a different name.");
+                    alert("A template with this name/key already exists.");
                     return;
                   }
-                  createTemplate({
-                    name,
-                    key,
-                    emoji: newBotEmoji,
-                  });
+                  createTemplate({ name, key, emoji: newBotEmoji });
                   setDefs(listTemplateDefs());
                   setNewBotName("");
                   setNewBotEmoji("🤖");
@@ -511,11 +313,56 @@ export default function Bots() {
           </div>
         </div>
       )}
+
+      {/* EDIT EMOJI MODAL */}
+      {showEditEmojiModal && emojiToEdit && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl border-2 border-black p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-2xl font-extrabold mb-2">Edit Bot Emoji</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Choose a new emoji for your bot.
+            </p>
+            <div className="flex flex-wrap gap-3 mb-4">
+              {emojiOptions.map((emj) => (
+                <button
+                  key={emj}
+                  onClick={() => setSelectedEmoji(emj)}
+                  className={`text-3xl rounded-xl border-2 p-2 ${
+                    selectedEmoji === emj
+                      ? "border-black bg-yellow-100 scale-110"
+                      : "border-gray-200 hover:border-gray-400"
+                  }`}
+                >
+                  {emj}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                className="px-4 py-2 font-bold ring-1 ring-border bg-white rounded-xl hover:bg-muted/40"
+                onClick={() => setShowEditEmojiModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 font-bold text-white bg-gradient-to-r from-indigo-500 via-purple-500 to-teal-500 rounded-xl"
+                onClick={() => {
+                  updateTemplate(emojiToEdit, { emoji: selectedEmoji });
+                  setDefs(listTemplateDefs());
+                  setShowEditEmojiModal(false);
+                }}
+              >
+                Save Emoji
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ---------- Small Stat component ---------- */
+/* ---------- Stat Component ---------- */
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border bg-card px-4 py-3">
