@@ -23,13 +23,13 @@ export type TemplateDef = {
   description: string;
 };
 
-/* ---------- Storage Keys for Custom Templates ---------- */
+/* ---------- Storage Keys ---------- */
 
-const TPL_INDEX_KEY = "botTemplates:index"; // TemplateDef[]
+const TPL_INDEX_KEY = "botTemplates:index"; // TemplateDef[] for CUSTOM templates only
 const TPL_DATA_KEY = (key: string, mode: Mode) => `botTemplates:data:${key}_${mode}`;
 
-// NEW: hidden list for “deleting” built-ins safely
-const TPL_HIDDEN_KEY = "botTemplates:hiddenKeys"; // string[] of keys
+const TPL_HIDDEN_KEY = "botTemplates:hiddenKeys"; // string[] of keys (only affects visibility)
+const TPL_OVERRIDE_KEY = (key: string) => `botTemplates:override:${key}`; // per-key metadata overrides
 
 /* ---------- Helpers ---------- */
 
@@ -574,25 +574,50 @@ const builtinGraphs: Record<string, BotTemplate> = {
    Public API
    ======================================================================== */
 
-// Helper: is a key one of the built-ins?
+// Is a key one of the built-ins?
 export function isBuiltInKey(key: BotKey): boolean {
   return BUILTIN_DEFS.some((d) => d.key === key);
 }
 
-// Return built-ins (minus hidden) + any user-created TemplateDefs
+// Get a single TemplateDef (with overrides applied if present)
+export function getTemplateDef(key: BotKey): TemplateDef | undefined {
+  const custom = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
+  const builtinsMap = new Map(BUILTIN_DEFS.map((d) => [d.key, d]));
+  const customMap = new Map(custom.map((d) => [d.key, d]));
+  const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
+  const base =
+    customMap.get(key) ||
+    (hidden.includes(key) ? undefined : builtinsMap.get(key));
+
+  if (!base) return undefined;
+
+  // Apply overrides if any
+  const ov = readJSON<Partial<TemplateDef> | null>(TPL_OVERRIDE_KEY(key), null);
+  return ov ? { ...base, ...ov, key: base.key } : base;
+}
+
+// Return built-ins (minus hidden) + any user-created TemplateDefs,
+// with per-key overrides applied on top.
 export function listTemplateDefs(): TemplateDef[] {
   const custom = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
   const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
 
   // Ensure unique keys (built-ins take precedence if same key somehow exists)
   const mergedMap = new Map<string, TemplateDef>();
-  [...BUILTIN_DEFS, ...custom].forEach((d) => mergedMap.set(d.key, d));
+  [...BUILTIN_DEFS, ...custom].forEach((d) => {
+    if (!hidden.includes(d.key)) mergedMap.set(d.key, d);
+  });
 
-  // Filter hidden
-  return Array.from(mergedMap.values()).filter((d) => !hidden.includes(d.key));
+  // Apply overrides
+  const out: TemplateDef[] = [];
+  for (const def of mergedMap.values()) {
+    const ov = readJSON<Partial<TemplateDef> | null>(TPL_OVERRIDE_KEY(def.key), null);
+    out.push(ov ? { ...def, ...ov, key: def.key } : def);
+  }
+  return out;
 }
 
-// Create a new template definition + seed skeleton graphs for both modes
+// Create a new custom template definition + seed skeleton graphs for both modes
 export function createTemplate(def: {
   name: string;
   key: string;
@@ -603,9 +628,12 @@ export function createTemplate(def: {
   const trimmedKey = (def.key || def.name || "NewBot").trim();
   if (!trimmedKey) return;
 
-  // prevent duplicate keys
-  const existing = listTemplateDefs().some((d) => d.key === trimmedKey);
-  if (existing) return;
+  // prevent duplicate keys across both built-in + custom
+  const existsAlready =
+    !!getTemplateDef(trimmedKey) ||
+    readJSON<TemplateDef[]>(TPL_INDEX_KEY, []).some((d) => d.key === trimmedKey);
+
+  if (existsAlready) return;
 
   const tplDef: TemplateDef = {
     key: trimmedKey,
@@ -635,7 +663,7 @@ export function createTemplate(def: {
   writeJSON(TPL_DATA_KEY(tplDef.key, "custom"), skeleton);
 }
 
-// Save/replace a template graph for a given key + mode (used later if needed)
+// Save/replace a template graph for a given key + mode (used by Builder)
 export function saveTemplateGraph(key: BotKey, mode: Mode, graph: BotTemplate) {
   writeJSON(TPL_DATA_KEY(key, mode), graph);
 }
@@ -648,20 +676,19 @@ export function getTemplate(bot: BotKey, mode: Mode): BotTemplate | undefined {
 }
 
 /* =========================================================================
-   NEW: Delete / Hide APIs for template management
+   Delete / Hide / Override APIs for template management
    ======================================================================== */
 
 /**
- * For built-ins, we "hide" the key (reversible).
- * For customs, we remove index entry and both graphs.
- * Returns an object describing what happened.
+ * Delete a template:
+ *  - Built-ins: "hide" the key (reversible).
+ *  - Customs: remove index entry and both graphs.
  */
 export function deleteTemplate(key: BotKey): {
   removed: boolean;
   kind: "builtin" | "custom";
 } {
   if (isBuiltInKey(key)) {
-    // hide built-in
     const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
     if (!hidden.includes(key)) {
       hidden.push(key);
@@ -675,7 +702,7 @@ export function deleteTemplate(key: BotKey): {
   const next = index.filter((d) => d.key !== key);
   writeJSON(TPL_INDEX_KEY, next);
 
-  // remove both stored graphs
+  // remove both stored graphs (safe if missing)
   try {
     localStorage.removeItem(TPL_DATA_KEY(key, "basic"));
     localStorage.removeItem(TPL_DATA_KEY(key, "custom"));
@@ -697,4 +724,49 @@ export function unhideTemplate(key: BotKey) {
   const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
   const next = hidden.filter((k) => k !== key);
   writeJSON(TPL_HIDDEN_KEY, next);
+}
+
+/**
+ * Update template metadata (emoji / gradient / name / description).
+ *
+ * - CUSTOM templates: update the entry in TPL_INDEX_KEY.
+ * - BUILT-IN templates: write a per-key override object (does NOT mutate originals).
+ */
+export function updateTemplate(key: BotKey, data: Partial<TemplateDef>) {
+  if (!key) return;
+
+  if (isBuiltInKey(key)) {
+    // Merge with existing override (if any)
+    const current = readJSON<Partial<TemplateDef> | null>(TPL_OVERRIDE_KEY(key), null) || {};
+    const next = { ...current, ...cleanMetaPatch(data) };
+    writeJSON(TPL_OVERRIDE_KEY(key), next);
+    return;
+  }
+
+  // Custom: update index entry
+  const index = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
+  const idx = index.findIndex((t) => t.key === key);
+  if (idx === -1) return;
+
+  index[idx] = { ...index[idx], ...cleanMetaPatch(data), key }; // keep key stable
+  writeJSON(TPL_INDEX_KEY, index);
+}
+
+/** Remove any metadata override for a built-in (revert to default card visuals) */
+export function resetTemplateOverride(key: BotKey) {
+  if (!isBuiltInKey(key)) return;
+  try {
+    localStorage.removeItem(TPL_OVERRIDE_KEY(key));
+  } catch {}
+}
+
+/* ---------- internal: allow only visual/meta fields in patches ---------- */
+function cleanMetaPatch(patch: Partial<TemplateDef>): Partial<TemplateDef> {
+  const out: Partial<TemplateDef> = {};
+  if (typeof patch.name === "string") out.name = patch.name;
+  if (typeof patch.emoji === "string") out.emoji = patch.emoji;
+  if (typeof patch.gradient === "string") out.gradient = patch.gradient;
+  if (typeof patch.description === "string") out.description = patch.description;
+  // never accept a patch that tries to change 'key'
+  return out;
 }
