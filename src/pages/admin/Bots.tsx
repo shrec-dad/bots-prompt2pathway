@@ -530,4 +530,4 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="text-xl font-extrabold leading-tight">{value}</div>
     </div>
   );
-}
+} 
