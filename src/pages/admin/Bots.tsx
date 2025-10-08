@@ -28,6 +28,9 @@ const METRICS_KEY = "analytics:metrics";
 /* ---------- Hidden templates storage key ---------- */
 const HIDDEN_TEMPLATES_KEY = "botTemplates:hiddenKeys";
 
+/* ---------- Emoji overrides (works for built-ins & customs) ---------- */
+const EMOJI_OVERRIDES_KEY = "botTemplates:emojiOverrides"; // Record<botKey, emoji>
+
 /* ---------- display helpers ---------- */
 type BotKey = string;
 
@@ -37,7 +40,7 @@ function botKeyToLabel(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
 function botKeyToGradient(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
   return defs.find((b) => b.key === key)?.gradient || "from-gray-200 to-gray-100";
 }
-function botKeyToEmoji(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
+function rawEmojiFor(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
   return defs.find((b) => b.key === key)?.emoji || "🤖";
 }
 
@@ -53,19 +56,22 @@ const BUILTIN_META: Record<
     name: "Lead Qualifier",
     emoji: "🎯",
     gradient: "from-purple-500/20 via-fuchsia-400/20 to-pink-500/20",
-    description: "Qualify leads with scoring, validation and routing. Best for sales intake.",
+    description:
+      "Qualify leads with scoring, validation and routing. Best for sales intake.",
   },
   AppointmentBooking: {
     name: "Appointment Booking",
     emoji: "📅",
     gradient: "from-emerald-500/20 via-teal-400/20 to-cyan-500/20",
-    description: "Offer services, show availability, confirm and remind automatically.",
+    description:
+      "Offer services, show availability, confirm and remind automatically.",
   },
   CustomerSupport: {
     name: "Customer Support",
     emoji: "🛟",
     gradient: "from-indigo-500/20 via-blue-400/20 to-sky-500/20",
-    description: "Answer FAQs, create tickets, route priority issues and hand off to humans.",
+    description:
+      "Answer FAQs, create tickets, route priority issues and hand off to humans.",
   },
   Waitlist: {
     name: "Waitlist",
@@ -77,16 +83,85 @@ const BUILTIN_META: Record<
     name: "Social Media",
     emoji: "📣",
     gradient: "from-pink-500/20 via-rose-400/20 to-red-500/20",
-    description: "Auto-DM replies, comment handling, and engagement prompts across platforms.",
+    description:
+      "Auto-DM replies, comment handling, and engagement prompts across platforms.",
   },
   // Receptionist appears here when hidden (for the Hidden Templates section)
   Receptionist: {
     name: "Receptionist",
     emoji: "☎️",
     gradient: "from-sky-500/20 via-cyan-400/20 to-emerald-500/20",
-    description: "Greets callers/chats, answers questions, routes, books, and takes messages.",
+    description:
+      "Greets callers/chats, answers questions, routes, books, and takes messages.",
   },
 };
+
+/* ---------- Small inline Emoji Picker Modal ---------- */
+function EmojiPickerModal({
+  onClose,
+  onPick,
+  current,
+}: {
+  onClose: () => void;
+  onPick: (emoji: string) => void;
+  current?: string;
+}) {
+  const emojis = [
+    "🎯", // Lead Qualifier
+    "📅", // Appointment Booking
+    "💬", // Customer Support
+    "⏳", // Waitlist
+    "📣", // Social Media
+    "☎️", // Receptionist
+    "🤖", // General AI
+    "💼", // Business Bot
+    "🌟", // Premium Bot
+    "🧭", // Guidance Bot
+    "🏥",
+    "🛍️",
+    "🧾",
+    "🧰",
+    "🛠️",
+    "💡",
+  ];
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+      <div className="bg-white rounded-2xl border-2 border-black p-5 w-full max-w-sm shadow-xl">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xl font-extrabold">Choose Emoji</h3>
+          <button
+            className="rounded-lg border px-2 py-1 text-sm font-bold hover:bg-muted/40"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+        <div className="text-sm text-foreground/70 mb-3">
+          Pick an emoji to represent this bot template.
+        </div>
+        <div className="grid grid-cols-6 gap-3">
+          {emojis.map((emj) => (
+            <button
+              key={emj}
+              onClick={() => {
+                onPick(emj);
+                onClose();
+              }}
+              className={`text-2xl rounded-xl border-2 p-2 transition ${
+                current === emj
+                  ? "border-black bg-yellow-100 shadow"
+                  : "border-gray-200 hover:border-gray-400"
+              }`}
+              title={emj}
+            >
+              {emj}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ---------------- main page ---------------- */
 
@@ -119,10 +194,23 @@ export default function Bots() {
     () => getJSON<string[]>(HIDDEN_TEMPLATES_KEY, [])
   );
 
-  // Create Template Modal + Emoji Picker
+  // Create Template Modal + Emoji Picker (for new templates)
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newBotName, setNewBotName] = useState("");
   const [newBotEmoji, setNewBotEmoji] = useState("🤖");
+
+  // Inline Emoji Picker state (for editing existing templates)
+  const [showEmojiPickerFor, setShowEmojiPickerFor] = useState<null | { key: string; emoji: string }>(
+    null
+  );
+
+  // Emoji overrides map
+  const [emojiOverrides, setEmojiOverrides] = useState<Record<string, string>>(
+    () => getJSON<Record<string, string>>(EMOJI_OVERRIDES_KEY, {})
+  );
+
+  // computed: emoji taking overrides into account
+  const emojiFor = (key: string) => emojiOverrides[key] || rawEmojiFor(defs, key);
 
   // keep in sync if storage changes elsewhere
   useEffect(() => {
@@ -145,6 +233,9 @@ export default function Bots() {
       ) {
         setDefs(listTemplateDefs());
         setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
+      }
+      if (e.key === EMOJI_OVERRIDES_KEY) {
+        setEmojiOverrides(getJSON<Record<string, string>>(EMOJI_OVERRIDES_KEY, {}));
       }
     };
     window.addEventListener("storage", onStorage);
@@ -184,6 +275,13 @@ export default function Bots() {
   const hiddenCards = hiddenKeys
     .filter((k) => BUILTIN_META[k]) // only built-ins are hidable
     .map((k) => ({ key: k, ...BUILTIN_META[k] }));
+
+  // persist emoji override
+  const setEmojiForKey = (key: string, emoji: string) => {
+    const next = { ...emojiOverrides, [key]: emoji };
+    setEmojiOverrides(next);
+    setJSON(EMOJI_OVERRIDES_KEY, next);
+  };
 
   return (
     <div className="w-full h-full">
@@ -276,8 +374,20 @@ export default function Bots() {
           >
             <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}>
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
-                  {b.emoji}
+                <div className="relative h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
+                  {/* Emoji */}
+                  <span>{emojiFor(b.key)}</span>
+
+                  {/* Pencil (appears on hover) */}
+                  <button
+                    title="Change emoji"
+                    onClick={() => setShowEmojiPickerFor({ key: b.key, emoji: emojiFor(b.key) })}
+                    className="absolute -right-2 -bottom-2 opacity-0 group-hover:opacity-100 transition
+                               rounded-full border bg-white text-xs px-1.5 py-0.5 shadow ring-1 ring-border"
+                    aria-label={`Change emoji for ${b.name}`}
+                  >
+                    ✏️
+                  </button>
                 </div>
                 <div>
                   <h3 className="text-xl font-extrabold tracking-tight">{b.name}</h3>
@@ -369,7 +479,7 @@ export default function Bots() {
               const title = safeInstanceName(m);
               const sub = `${botKeyToLabel(defs, m.bot)} • ${m.mode}`.trim();
               const grad = botKeyToGradient(defs, m.bot);
-              const emoji = botKeyToEmoji(defs, m.bot);
+              const emoji = emojiFor(m.bot);
 
               return (
                 <div key={m.id} className="rounded-2xl border bg-card overflow-hidden flex flex-col">
@@ -433,7 +543,7 @@ export default function Bots() {
       </div>
 
       {/* -------------------------------------------------------
-         🧠 CREATE NEW BOT MODAL WITH EMOJI PICKER
+         🧠 CREATE NEW BOT MODAL WITH EMOJI PICKER (for NEW templates)
       ---------------------------------------------------------- */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -516,6 +626,17 @@ export default function Bots() {
           </div>
         </div>
       )}
+
+      {/* -------------------------------------------------------
+         ✏️ INLINE EMOJI PICKER MODAL (for EXISTING templates)
+      ---------------------------------------------------------- */}
+      {showEmojiPickerFor && (
+        <EmojiPickerModal
+          current={showEmojiPickerFor.emoji}
+          onClose={() => setShowEmojiPickerFor(null)}
+          onPick={(emj) => setEmojiForKey(showEmojiPickerFor.key, emj)}
+        />
+      )}
     </div>
   );
 }
@@ -530,4 +651,4 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="text-xl font-extrabold leading-tight">{value}</div>
     </div>
   );
-} 
+}
