@@ -7,7 +7,7 @@ import type { Edge, Node } from "reactflow";
 
 /* ---------- Types ---------- */
 
-export type BotKey = string; // generalized so we can add custom keys beyond the 5
+export type BotKey = string; // generalized so we can add custom keys beyond the built-ins
 export type Mode = "basic" | "custom";
 
 export type BotTemplate = {
@@ -23,13 +23,13 @@ export type TemplateDef = {
   description: string;
 };
 
-/* ---------- Storage Keys ---------- */
+/* ---------- Storage Keys for Custom Templates ---------- */
 
-const TPL_INDEX_KEY = "botTemplates:index"; // TemplateDef[] for CUSTOM templates only
+const TPL_INDEX_KEY = "botTemplates:index"; // TemplateDef[]
 const TPL_DATA_KEY = (key: string, mode: Mode) => `botTemplates:data:${key}_${mode}`;
 
-const TPL_HIDDEN_KEY = "botTemplates:hiddenKeys"; // string[] of keys (only affects visibility)
-const TPL_OVERRIDE_KEY = (key: string) => `botTemplates:override:${key}`; // per-key metadata overrides
+// Hidden list for “deleting” built-ins safely
+const TPL_HIDDEN_KEY = "botTemplates:hiddenKeys"; // string[] of keys
 
 /* ---------- Helpers ---------- */
 
@@ -47,9 +47,10 @@ function writeJSON<T>(k: string, v: T) {
 const id = (p: string, n: number) => `${p}_${n}`;
 
 /* =========================================================================
-   Built-in 5 Templates (graphs)
+   Built-in Templates (graphs)
    ======================================================================== */
 
+/** ---------------- Lead Qualifier ---------------- */
 const LeadQualifier_basic: BotTemplate = {
   nodes: [
     {
@@ -163,6 +164,7 @@ const LeadQualifier_custom: BotTemplate = {
   ],
 };
 
+/** ---------------- Appointment Booking ---------------- */
 const AppointmentBooking_basic: BotTemplate = {
   nodes: [
     {
@@ -255,6 +257,7 @@ const AppointmentBooking_custom: BotTemplate = {
   ],
 };
 
+/** ---------------- Customer Support ---------------- */
 const CustomerSupport_basic: BotTemplate = {
   nodes: [
     {
@@ -347,6 +350,7 @@ const CustomerSupport_custom: BotTemplate = {
   ],
 };
 
+/** ---------------- Waitlist ---------------- */
 const Waitlist_basic: BotTemplate = {
   nodes: [
     {
@@ -439,6 +443,7 @@ const Waitlist_custom: BotTemplate = {
   ],
 };
 
+/** ---------------- Social Media ---------------- */
 const SocialMedia_basic: BotTemplate = {
   nodes: [
     {
@@ -517,7 +522,93 @@ const SocialMedia_custom: BotTemplate = {
   ],
 };
 
-/* ---------- Built-in registry (metadata for the 5 cards) ---------- */
+/** ---------------- Receptionist (NEW #6) ---------------- */
+const Receptionist_basic: BotTemplate = {
+  nodes: [
+    {
+      id: id("welcome", 1),
+      type: "message",
+      data: { title: "Receptionist", text: "Hello! How may I direct your call or inquiry today?" },
+      position: { x: 60, y: 40 },
+    },
+    {
+      id: id("category", 2),
+      type: "choice",
+      data: { label: "Choose an option", options: ["Schedule Appointment", "Leave Message", "General Question"] },
+      position: { x: 60, y: 190 },
+    },
+    {
+      id: id("name", 3),
+      type: "input",
+      data: { label: "Your name", placeholder: "John Doe" },
+      position: { x: 320, y: 190 },
+    },
+    {
+      id: id("email", 4),
+      type: "input",
+      data: { label: "Your email", placeholder: "name@example.com" },
+      position: { x: 580, y: 190 },
+    },
+    {
+      id: id("message", 5),
+      type: "input",
+      data: { label: "Your message or request", placeholder: "Type your message here…" },
+      position: { x: 60, y: 340 },
+    },
+    {
+      id: id("submit", 6),
+      type: "action",
+      data: { label: "Send to team", to: "mailto:info@example.com" },
+      position: { x: 320, y: 340 },
+    },
+    {
+      id: id("thankyou", 7),
+      type: "message",
+      data: { title: "Thank you!", text: "Your message has been received. We'll get back to you soon." },
+      position: { x: 580, y: 340 },
+    },
+  ],
+  edges: [
+    { id: "e1-2", source: id("welcome", 1), target: id("category", 2), type: "smoothstep" },
+    { id: "e2-3", source: id("category", 2), target: id("name", 3), type: "smoothstep" },
+    { id: "e3-4", source: id("name", 3), target: id("email", 4), type: "smoothstep" },
+    { id: "e4-5", source: id("email", 4), target: id("message", 5), type: "smoothstep" },
+    { id: "e5-6", source: id("message", 5), target: id("submit", 6), type: "smoothstep" },
+    { id: "e6-7", source: id("submit", 6), target: id("thankyou", 7), type: "smoothstep" },
+  ],
+};
+
+const Receptionist_custom: BotTemplate = {
+  nodes: [
+    ...Receptionist_basic.nodes,
+    {
+      id: id("calendar", 8),
+      type: "action",
+      data: { label: "Calendar Booking", to: "webhook://calendar/universal" },
+      position: { x: 840, y: 190 },
+    },
+    {
+      id: id("crm", 9),
+      type: "action",
+      data: { label: "Send to CRM", to: "webhook://crm/universal" },
+      position: { x: 1060, y: 190 },
+    },
+    {
+      id: id("aiassist", 10),
+      type: "action",
+      data: { label: "AI Assistant Routing", to: "system:ai_router" },
+      position: { x: 1280, y: 190 },
+    },
+  ],
+  edges: [
+    ...Receptionist_basic.edges,
+    { id: "e5-8", source: id("message", 5), target: id("calendar", 8), type: "smoothstep" },
+    { id: "e8-9", source: id("calendar", 8), target: id("crm", 9), type: "smoothstep" },
+    { id: "e9-10", source: id("crm", 9), target: id("aiassist", 10), type: "smoothstep" },
+  ],
+};
+
+/* ---------- Built-in registry (metadata for the 6 cards) ---------- */
 const BUILTIN_DEFS: TemplateDef[] = [
   {
     key: "LeadQualifier",
@@ -554,6 +645,13 @@ const BUILTIN_DEFS: TemplateDef[] = [
     gradient: "from-pink-500/20 via-rose-400/20 to-red-500/20",
     description: "Auto-DM replies, comment handling, and engagement prompts across platforms.",
   },
+  {
+    key: "Receptionist",
+    name: "Receptionist",
+    emoji: "☎️",
+    gradient: "from-blue-500/20 via-cyan-400/20 to-emerald-500/20",
+    description: "Acts as a general business receptionist to answer, schedule, and route inquiries.",
+  },
 ];
 
 /* ---------- Built-in graphs map ---------- */
@@ -568,56 +666,33 @@ const builtinGraphs: Record<string, BotTemplate> = {
   Waitlist_custom,
   SocialMedia_basic,
   SocialMedia_custom,
+  Receptionist_basic,
+  Receptionist_custom,
 };
 
 /* =========================================================================
    Public API
    ======================================================================== */
 
-// Is a key one of the built-ins?
+// Helper: is a key one of the built-ins?
 export function isBuiltInKey(key: BotKey): boolean {
   return BUILTIN_DEFS.some((d) => d.key === key);
 }
 
-// Get a single TemplateDef (with overrides applied if present)
-export function getTemplateDef(key: BotKey): TemplateDef | undefined {
-  const custom = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
-  const builtinsMap = new Map(BUILTIN_DEFS.map((d) => [d.key, d]));
-  const customMap = new Map(custom.map((d) => [d.key, d]));
-  const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
-  const base =
-    customMap.get(key) ||
-    (hidden.includes(key) ? undefined : builtinsMap.get(key));
-
-  if (!base) return undefined;
-
-  // Apply overrides if any
-  const ov = readJSON<Partial<TemplateDef> | null>(TPL_OVERRIDE_KEY(key), null);
-  return ov ? { ...base, ...ov, key: base.key } : base;
-}
-
-// Return built-ins (minus hidden) + any user-created TemplateDefs,
-// with per-key overrides applied on top.
+// Return built-ins (minus hidden) + any user-created TemplateDefs
 export function listTemplateDefs(): TemplateDef[] {
   const custom = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
   const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
 
   // Ensure unique keys (built-ins take precedence if same key somehow exists)
   const mergedMap = new Map<string, TemplateDef>();
-  [...BUILTIN_DEFS, ...custom].forEach((d) => {
-    if (!hidden.includes(d.key)) mergedMap.set(d.key, d);
-  });
+  [...BUILTIN_DEFS, ...custom].forEach((d) => mergedMap.set(d.key, d));
 
-  // Apply overrides
-  const out: TemplateDef[] = [];
-  for (const def of mergedMap.values()) {
-    const ov = readJSON<Partial<TemplateDef> | null>(TPL_OVERRIDE_KEY(def.key), null);
-    out.push(ov ? { ...def, ...ov, key: def.key } : def);
-  }
-  return out;
+  // Filter hidden
+  return Array.from(mergedMap.values()).filter((d) => !hidden.includes(d.key));
 }
 
-// Create a new custom template definition + seed skeleton graphs for both modes
+// Create a new template definition + seed skeleton graphs for both modes
 export function createTemplate(def: {
   name: string;
   key: string;
@@ -628,12 +703,9 @@ export function createTemplate(def: {
   const trimmedKey = (def.key || def.name || "NewBot").trim();
   if (!trimmedKey) return;
 
-  // prevent duplicate keys across both built-in + custom
-  const existsAlready =
-    !!getTemplateDef(trimmedKey) ||
-    readJSON<TemplateDef[]>(TPL_INDEX_KEY, []).some((d) => d.key === trimmedKey);
-
-  if (existsAlready) return;
+  // prevent duplicate keys
+  const existing = listTemplateDefs().some((d) => d.key === trimmedKey);
+  if (existing) return;
 
   const tplDef: TemplateDef = {
     key: trimmedKey,
@@ -663,7 +735,7 @@ export function createTemplate(def: {
   writeJSON(TPL_DATA_KEY(tplDef.key, "custom"), skeleton);
 }
 
-// Save/replace a template graph for a given key + mode (used by Builder)
+// Save/replace a template graph for a given key + mode (used later if needed)
 export function saveTemplateGraph(key: BotKey, mode: Mode, graph: BotTemplate) {
   writeJSON(TPL_DATA_KEY(key, mode), graph);
 }
@@ -676,19 +748,20 @@ export function getTemplate(bot: BotKey, mode: Mode): BotTemplate | undefined {
 }
 
 /* =========================================================================
-   Delete / Hide / Override APIs for template management
+   Delete / Hide APIs for template management
    ======================================================================== */
 
 /**
- * Delete a template:
- *  - Built-ins: "hide" the key (reversible).
- *  - Customs: remove index entry and both graphs.
+ * For built-ins, we "hide" the key (reversible).
+ * For customs, we remove index entry and both graphs.
+ * Returns an object describing what happened.
  */
 export function deleteTemplate(key: BotKey): {
   removed: boolean;
   kind: "builtin" | "custom";
 } {
   if (isBuiltInKey(key)) {
+    // hide built-in
     const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
     if (!hidden.includes(key)) {
       hidden.push(key);
@@ -702,7 +775,7 @@ export function deleteTemplate(key: BotKey): {
   const next = index.filter((d) => d.key !== key);
   writeJSON(TPL_INDEX_KEY, next);
 
-  // remove both stored graphs (safe if missing)
+  // remove both stored graphs
   try {
     localStorage.removeItem(TPL_DATA_KEY(key, "basic"));
     localStorage.removeItem(TPL_DATA_KEY(key, "custom"));
@@ -724,49 +797,4 @@ export function unhideTemplate(key: BotKey) {
   const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
   const next = hidden.filter((k) => k !== key);
   writeJSON(TPL_HIDDEN_KEY, next);
-}
-
-/**
- * Update template metadata (emoji / gradient / name / description).
- *
- * - CUSTOM templates: update the entry in TPL_INDEX_KEY.
- * - BUILT-IN templates: write a per-key override object (does NOT mutate originals).
- */
-export function updateTemplate(key: BotKey, data: Partial<TemplateDef>) {
-  if (!key) return;
-
-  if (isBuiltInKey(key)) {
-    // Merge with existing override (if any)
-    const current = readJSON<Partial<TemplateDef> | null>(TPL_OVERRIDE_KEY(key), null) || {};
-    const next = { ...current, ...cleanMetaPatch(data) };
-    writeJSON(TPL_OVERRIDE_KEY(key), next);
-    return;
-  }
-
-  // Custom: update index entry
-  const index = readJSON<TemplateDef[]>(TPL_INDEX_KEY, []);
-  const idx = index.findIndex((t) => t.key === key);
-  if (idx === -1) return;
-
-  index[idx] = { ...index[idx], ...cleanMetaPatch(data), key }; // keep key stable
-  writeJSON(TPL_INDEX_KEY, index);
-}
-
-/** Remove any metadata override for a built-in (revert to default card visuals) */
-export function resetTemplateOverride(key: BotKey) {
-  if (!isBuiltInKey(key)) return;
-  try {
-    localStorage.removeItem(TPL_OVERRIDE_KEY(key));
-  } catch {}
-}
-
-/* ---------- internal: allow only visual/meta fields in patches ---------- */
-function cleanMetaPatch(patch: Partial<TemplateDef>): Partial<TemplateDef> {
-  const out: Partial<TemplateDef> = {};
-  if (typeof patch.name === "string") out.name = patch.name;
-  if (typeof patch.emoji === "string") out.emoji = patch.emoji;
-  if (typeof patch.gradient === "string") out.gradient = patch.gradient;
-  if (typeof patch.description === "string") out.description = patch.description;
-  // never accept a patch that tries to change 'key'
-  return out;
 }
