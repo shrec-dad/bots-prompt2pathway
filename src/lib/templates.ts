@@ -47,10 +47,25 @@ function writeJSON<T>(k: string, v: T) {
 const id = (p: string, n: number) => `${p}_${n}`;
 
 /* =========================================================================
-   Built-in Templates (graphs)
+   Built-in 6 Templates (graphs)
    ======================================================================== */
+/**
+ * NOTE ABOUT ACTION DATA:
+ * For webhook actions we include:
+ *  - data.to: "webhook://calendar/universal" or "webhook://crm/universal"
+ *  - data.payload: JSON-template object (string values can contain {{placeholders}})
+ *  - data.retryOnFail?: boolean (hint for your runner)
+ *  - data.onErrorNext?: string (node id to jump to on failure)
+ *
+ * For email actions we use:
+ *  - data.to: "mailto:{{settings.teamEmail}}"
+ *  - data.subject / data.body templates (optional)
+ *
+ * Tag actions:
+ *  - data.to: "system:tags"
+ *  - data.tags: string[]
+ */
 
-/** ---------------- Lead Qualifier ---------------- */
 const LeadQualifier_basic: BotTemplate = {
   nodes: [
     {
@@ -62,7 +77,7 @@ const LeadQualifier_basic: BotTemplate = {
     {
       id: id("email", 2),
       type: "input",
-      data: { label: "Your email", placeholder: "name@example.com" },
+      data: { label: "Your email", placeholder: "name@example.com", required: true },
       position: { x: 60, y: 190 },
     },
     {
@@ -92,13 +107,25 @@ const LeadQualifier_basic: BotTemplate = {
     {
       id: id("pain", 7),
       type: "input",
-      data: { label: "Main pain point", placeholder: "Briefly describe your challenge…" },
+      data: { label: "Main pain point", placeholder: "Briefly describe your challenge…", multiline: true },
       position: { x: 580, y: 340 },
+    },
+    {
+      id: id("tagLeadQ", 71),
+      type: "action",
+      data: { label: "Tag", to: "system:tags", tags: ["lead-qualifier", "basic"] },
+      position: { x: 320, y: 450 },
     },
     {
       id: id("submitEmail", 8),
       type: "action",
-      data: { label: "Email lead to team", to: "mailto:admin@example.com" },
+      data: {
+        label: "Email lead to team",
+        to: "mailto:{{settings.teamEmail}}",
+        subject: "New Lead ({{company}})",
+        body:
+          "Name: {{email}}\nPhone: {{phone}}\nCompany: {{company}}\nBudget: {{budget}}\nTimeline: {{timeline}}\nNotes: {{pain}}",
+      },
       position: { x: 320, y: 510 },
     },
     {
@@ -115,7 +142,8 @@ const LeadQualifier_basic: BotTemplate = {
     { id: "e4-5", source: id("company", 4), target: id("budget", 5), type: "smoothstep" },
     { id: "e5-6", source: id("budget", 5), target: id("timeline", 6), type: "smoothstep" },
     { id: "e6-7", source: id("timeline", 6), target: id("pain", 7), type: "smoothstep" },
-    { id: "e7-8", source: id("pain", 7), target: id("submitEmail", 8), type: "smoothstep" },
+    { id: "e7-71", source: id("pain", 7), target: id("tagLeadQ", 71), type: "smoothstep" },
+    { id: "e71-8", source: id("tagLeadQ", 71), target: id("submitEmail", 8), type: "smoothstep" },
     { id: "e8-9", source: id("submitEmail", 8), target: id("thanks", 9), type: "smoothstep" },
   ],
 };
@@ -132,13 +160,31 @@ const LeadQualifier_custom: BotTemplate = {
     {
       id: id("tags", 11),
       type: "action",
-      data: { label: "Tag & Categorize", to: "system:apply_tags" },
+      data: { label: "Tag & Categorize", to: "system:tags", tags: ["lead-qualifier", "custom", "scored"] },
       position: { x: 200, y: 650 },
     },
     {
       id: id("crm", 12),
       type: "action",
-      data: { label: "CRM Webhook", to: "webhook://crm/universal" },
+      data: {
+        label: "CRM Webhook",
+        to: "webhook://crm/universal",
+        retryOnFail: true,
+        onErrorNext: id("submitEmail", 8),
+        payload: {
+          type: "lead.create",
+          source: "lead-qualifier",
+          lead: {
+            email: "{{email}}",
+            phone: "{{phone}}",
+            company: "{{company}}",
+            budget: "{{budget}}",
+            timeline: "{{timeline}}",
+            note: "{{pain}}",
+          },
+          instanceId: "{{inst_id}}",
+        },
+      },
       position: { x: 420, y: 650 },
     },
     {
@@ -155,16 +201,17 @@ const LeadQualifier_custom: BotTemplate = {
     },
   ],
   edges: [
-    ...LeadQualifier_basic.edges,
+    ...LeadQualifier_basic.edges.filter((e) => e.id !== "e7-71" && e.id !== "e71-8" && e.id !== "e8-9"),
     { id: "e7-10", source: id("pain", 7), target: id("score", 10), type: "smoothstep" },
     { id: "e10-11", source: id("score", 10), target: id("tags", 11), type: "smoothstep" },
     { id: "e11-12", source: id("tags", 11), target: id("crm", 12), type: "smoothstep" },
     { id: "e12-13", source: id("crm", 12), target: id("abtest", 13), type: "smoothstep" },
     { id: "e13-14", source: id("abtest", 13), target: id("dupcheck", 14), type: "smoothstep" },
+    { id: "e14-8", source: id("dupcheck", 14), target: id("submitEmail", 8), type: "smoothstep" },
+    { id: "e8-9", source: id("submitEmail", 8), target: id("thanks", 9), type: "smoothstep" },
   ],
 };
 
-/** ---------------- Appointment Booking ---------------- */
 const AppointmentBooking_basic: BotTemplate = {
   nodes: [
     {
@@ -194,7 +241,7 @@ const AppointmentBooking_basic: BotTemplate = {
     {
       id: id("contact", 5),
       type: "input",
-      data: { label: "Your email", placeholder: "name@example.com" },
+      data: { label: "Your email", placeholder: "name@example.com", required: true },
       position: { x: 60, y: 340 },
     },
     {
@@ -257,7 +304,6 @@ const AppointmentBooking_custom: BotTemplate = {
   ],
 };
 
-/** ---------------- Customer Support ---------------- */
 const CustomerSupport_basic: BotTemplate = {
   nodes: [
     {
@@ -281,7 +327,7 @@ const CustomerSupport_basic: BotTemplate = {
     {
       id: id("desc", 4),
       type: "input",
-      data: { label: "Describe the problem", placeholder: "What happened?" },
+      data: { label: "Describe the problem", placeholder: "What happened?", multiline: true },
       position: { x: 580, y: 190 },
     },
     {
@@ -299,7 +345,12 @@ const CustomerSupport_basic: BotTemplate = {
     {
       id: id("notify", 7),
       type: "action",
-      data: { label: "Email Notification", to: "mailto:support@example.com" },
+      data: {
+        label: "Email Notification",
+        to: "mailto:{{settings.teamEmail}}",
+        subject: "Support Request ({{category}})",
+        body: "Ref: {{ref}}\nIssue: {{desc}}",
+      },
       position: { x: 580, y: 340 },
     },
   ],
@@ -319,7 +370,7 @@ const CustomerSupport_custom: BotTemplate = {
     {
       id: id("ai", 8),
       type: "action",
-      data: { label: "AI Response (GPT)", to: "system:gpt_suggest" },
+      data: { label: "AI Response (Knowledge)", to: "system:gpt_suggest" },
       position: { x: 840, y: 190 },
     },
     {
@@ -337,7 +388,15 @@ const CustomerSupport_custom: BotTemplate = {
     {
       id: id("crm", 11),
       type: "action",
-      data: { label: "Create CRM Ticket", to: "webhook://crm/ticket" },
+      data: {
+        label: "Create CRM Ticket",
+        to: "webhook://crm/ticket",
+        payload: {
+          type: "ticket.create",
+          source: "customer-support",
+          ticket: { ref: "{{ref}}", desc: "{{desc}}", category: "{{category}}", lang: "{{lang}}" },
+        },
+      },
       position: { x: 1280, y: 340 },
     },
   ],
@@ -350,7 +409,6 @@ const CustomerSupport_custom: BotTemplate = {
   ],
 };
 
-/** ---------------- Waitlist ---------------- */
 const Waitlist_basic: BotTemplate = {
   nodes: [
     {
@@ -362,7 +420,7 @@ const Waitlist_basic: BotTemplate = {
     {
       id: id("email", 2),
       type: "input",
-      data: { label: "Email", placeholder: "name@example.com" },
+      data: { label: "Email", placeholder: "name@example.com", required: true },
       position: { x: 60, y: 190 },
     },
     {
@@ -443,7 +501,6 @@ const Waitlist_custom: BotTemplate = {
   ],
 };
 
-/** ---------------- Social Media ---------------- */
 const SocialMedia_basic: BotTemplate = {
   nodes: [
     {
@@ -461,7 +518,10 @@ const SocialMedia_basic: BotTemplate = {
     {
       id: id("purpose", 3),
       type: "choice",
-      data: { label: "I should…", options: ["Auto-reply DMs", "Manage comments", "Share links", "FAQ replies"] },
+      data: {
+        label: "I should…",
+        options: ["Auto-reply DMs", "Manage comments", "Share links", "FAQ replies"],
+      },
       position: { x: 320, y: 190 },
     },
     {
@@ -522,89 +582,206 @@ const SocialMedia_custom: BotTemplate = {
   ],
 };
 
-/** ---------------- Receptionist (NEW #6) ---------------- */
+/* =========================== RECEPTIONIST ============================== */
+
 const Receptionist_basic: BotTemplate = {
   nodes: [
     {
-      id: id("welcome", 1),
+      id: id("r_welcome", 1),
       type: "message",
-      data: { title: "Receptionist", text: "Hello! How may I direct your call or inquiry today?" },
-      position: { x: 60, y: 40 },
+      data: {
+        title: "Receptionist",
+        text: "Hello! How may I direct your call or inquiry today?",
+      },
+      position: { x: 120, y: 40 },
     },
     {
-      id: id("category", 2),
+      id: id("r_option", 2),
       type: "choice",
-      data: { label: "Choose an option", options: ["Schedule Appointment", "Leave Message", "General Question"] },
-      position: { x: 60, y: 190 },
+      data: {
+        label: "Choose an option",
+        options: ["Schedule Appointment", "Leave Message", "General Question"],
+      },
+      position: { x: 120, y: 200 },
     },
     {
-      id: id("name", 3),
+      id: id("r_name", 3),
       type: "input",
-      data: { label: "Your name", placeholder: "John Doe" },
-      position: { x: 320, y: 190 },
+      data: { label: "Your name", placeholder: "John Doe", required: true },
+      position: { x: 440, y: 200 },
     },
     {
-      id: id("email", 4),
+      id: id("r_email", 4),
       type: "input",
-      data: { label: "Your email", placeholder: "name@example.com" },
-      position: { x: 580, y: 190 },
+      data: { label: "Your email", placeholder: "name@example.com", required: true },
+      position: { x: 760, y: 200 },
     },
     {
-      id: id("message", 5),
+      id: id("r_msg", 5),
       type: "input",
-      data: { label: "Your message or request", placeholder: "Type your message here…" },
-      position: { x: 60, y: 340 },
+      data: {
+        label: "Your message or request",
+        placeholder: "Type your message here...",
+        multiline: true,
+      },
+      position: { x: 120, y: 360 },
     },
     {
-      id: id("submit", 6),
+      id: id("r_tag_main", 6),
       type: "action",
-      data: { label: "Send to team", to: "mailto:info@example.com" },
-      position: { x: 320, y: 340 },
+      data: { label: "Tag", to: "system:tags", tags: ["receptionist", "basic"] },
+      position: { x: 440, y: 360 },
     },
     {
-      id: id("thankyou", 7),
+      id: id("r_sendTeam", 7),
+      type: "action",
+      data: {
+        label: "Send to team",
+        to: "mailto:{{settings.teamEmail}}",
+        subject: "Receptionist Message – {{r_option}}",
+        body:
+          "From: {{r_name}} <{{r_email}}>\nReason: {{r_option}}\n\nMessage:\n{{r_msg}}",
+      },
+      position: { x: 440, y: 460 },
+    },
+    {
+      id: id("r_thanks", 8),
       type: "message",
-      data: { title: "Thank you!", text: "Your message has been received. We'll get back to you soon." },
-      position: { x: 580, y: 340 },
+      data: {
+        title: "Thank you!",
+        text: "Your message has been received. We'll get back to you soon.",
+      },
+      position: { x: 760, y: 460 },
     },
   ],
   edges: [
-    { id: "e1-2", source: id("welcome", 1), target: id("category", 2), type: "smoothstep" },
-    { id: "e2-3", source: id("category", 2), target: id("name", 3), type: "smoothstep" },
-    { id: "e3-4", source: id("name", 3), target: id("email", 4), type: "smoothstep" },
-    { id: "e4-5", source: id("email", 4), target: id("message", 5), type: "smoothstep" },
-    { id: "e5-6", source: id("message", 5), target: id("submit", 6), type: "smoothstep" },
-    { id: "e6-7", source: id("submit", 6), target: id("thankyou", 7), type: "smoothstep" },
+    { id: "re1-2", source: id("r_welcome", 1), target: id("r_option", 2), type: "smoothstep" },
+    { id: "re2-3", source: id("r_option", 2), target: id("r_name", 3), type: "smoothstep" },
+    { id: "re3-4", source: id("r_name", 3), target: id("r_email", 4), type: "smoothstep" },
+    { id: "re2-5", source: id("r_option", 2), target: id("r_msg", 5), type: "smoothstep" },
+    { id: "re5-6", source: id("r_msg", 5), target: id("r_tag_main", 6), type: "smoothstep" },
+    { id: "re6-7", source: id("r_tag_main", 6), target: id("r_sendTeam", 7), type: "smoothstep" },
+    { id: "re7-8", source: id("r_sendTeam", 7), target: id("r_thanks", 8), type: "smoothstep" },
   ],
 };
 
 const Receptionist_custom: BotTemplate = {
   nodes: [
-    ...Receptionist_basic.nodes,
+    // reuse the basic nodes as a base
+    ...Receptionist_basic.nodes.filter(
+      (n) => ![id("r_tag_main", 6), id("r_sendTeam", 7), id("r_thanks", 8)].includes(n.id as string)
+    ),
+
+    // Branch: Calendar Booking (universal webhook)
     {
-      id: id("calendar", 8),
+      id: id("r_book_tag", 20),
       type: "action",
-      data: { label: "Calendar Booking", to: "webhook://calendar/universal" },
-      position: { x: 840, y: 190 },
+      data: { label: "Tag (Booking)", to: "system:tags", tags: ["receptionist", "booking"] },
+      position: { x: 620, y: 360 },
     },
     {
-      id: id("crm", 9),
+      id: id("r_calendar", 21),
       type: "action",
-      data: { label: "Send to CRM", to: "webhook://crm/universal" },
-      position: { x: 1060, y: 190 },
+      data: {
+        label: "Calendar Booking",
+        to: "webhook://calendar/universal",
+        retryOnFail: true,
+        onErrorNext: id("r_sendTeam", 24),
+        payload: {
+          type: "calendar.create",
+          source: "receptionist",
+          customer: { name: "{{r_name}}", email: "{{r_email}}" },
+          service: "{{r_option}}",
+          notes: "{{r_msg}}",
+          instanceId: "{{inst_id}}",
+        },
+      },
+      position: { x: 840, y: 360 },
+    },
+
+    // Branch: CRM (lead)
+    {
+      id: id("r_crm_tag", 22),
+      type: "action",
+      data: { label: "Tag (Lead)", to: "system:tags", tags: ["receptionist", "lead"] },
+      position: { x: 1060, y: 360 },
     },
     {
-      id: id("aiassist", 10),
+      id: id("r_crm", 23),
       type: "action",
-      data: { label: "AI Assistant Routing", to: "system:ai_router" },
-      position: { x: 1280, y: 190 },
+      data: {
+        label: "Send to CRM",
+        to: "webhook://crm/universal",
+        retryOnFail: true,
+        onErrorNext: id("r_sendTeam", 24),
+        payload: {
+          type: "lead.create",
+          source: "receptionist",
+          lead: {
+            name: "{{r_name}}",
+            email: "{{r_email}}",
+            intent: "{{r_option}}",
+            note: "{{r_msg}}",
+          },
+          instanceId: "{{inst_id}}",
+        },
+      },
+      position: { x: 1280, y: 360 },
+    },
+
+    // Smart fallback / human handoff
+    {
+      id: id("r_sendTeam", 24),
+      type: "action",
+      data: {
+        label: "Send to team",
+        to: "mailto:{{settings.teamEmail}}",
+        subject: "Receptionist Handoff – {{r_option}}",
+        body:
+          "Could not auto-complete via webhook.\n\nFrom: {{r_name}} <{{r_email}}>\nReason: {{r_option}}\n\nMessage:\n{{r_msg}}",
+      },
+      position: { x: 780, y: 460 },
+    },
+
+    // AI Router (knowledge fallback)
+    {
+      id: id("r_ai", 25),
+      type: "action",
+      data: {
+        label: "AI Assistant Routing",
+        to: "system:ai_router",
+        hints: ["faq", "pricing", "hours", "location"],
+      },
+      position: { x: 1100, y: 460 },
+    },
+
+    // Final confirmation
+    {
+      id: id("r_done", 26),
+      type: "message",
+      data: { title: "Thank you!", text: "We’ve got it and will follow up shortly." },
+      position: { x: 1280, y: 520 },
     },
   ],
   edges: [
-    ...Receptionist_basic.edges,
-    { id: "e5-8", source: id("message", 5), target: id("calendar", 8), type: "smoothstep" },
-    { id: "e8-9", source: id("calendar", 8), target: id("crm", 9), type: "smoothstep" },
-    { id: "e9-10", source: id("crm", 9), target: id("aiassist", 10), type: "smoothstep" },
+    // Base progression
+    { id: "rc1-2", source: id("r_welcome", 1), target: id("r_option", 2), type: "smoothstep" },
+    { id: "rc2-3", source: id("r_option", 2), target: id("r_name", 3), type: "smoothstep" },
+    { id: "rc3-4", source: id("r_name", 3), target: id("r_email", 4), type: "smoothstep" },
+    { id: "rc2-5", source: id("r_option", 2), target: id("r_msg", 5), type: "smoothstep" },
+
+    // Branching actions (you can condition these in your runner by checking r_option)
+    { id: "rc5-20", source: id("r_msg", 5), target: id("r_book_tag", 20), type: "smoothstep" },
+    { id: "rc20-21", source: id("r_book_tag", 20), target: id("r_calendar", 21), type: "smoothstep" },
+
+    { id: "rc21-22", source: id("r_calendar", 21), target: id("r_crm_tag", 22), type: "smoothstep" },
+    { id: "rc22-23", source: id("r_crm_tag", 22), target: id("r_crm", 23), type: "smoothstep" },
+
+    // Handoff + AI + Done
+    { id: "rc21-24", source: id("r_calendar", 21), target: id("r_sendTeam", 24), type: "smoothstep" },
+    { id: "rc23-24", source: id("r_crm", 23), target: id("r_sendTeam", 24), type: "smoothstep" },
+    { id: "rc24-25", source: id("r_sendTeam", 24), target: id("r_ai", 25), type: "smoothstep" },
+    { id: "rc25-26", source: id("r_ai", 25), target: id("r_done", 26), type: "smoothstep" },
   ],
 };
 
@@ -649,8 +826,9 @@ const BUILTIN_DEFS: TemplateDef[] = [
     key: "Receptionist",
     name: "Receptionist",
     emoji: "☎️",
-    gradient: "from-blue-500/20 via-cyan-400/20 to-emerald-500/20",
-    description: "Acts as a general business receptionist to answer, schedule, and route inquiries.",
+    gradient: "from-sky-500/20 via-cyan-400/20 to-emerald-500/20",
+    description:
+      "Acts as a general business receptionist to answer, schedule, route, and take messages.",
   },
 ];
 
@@ -751,15 +929,7 @@ export function getTemplate(bot: BotKey, mode: Mode): BotTemplate | undefined {
    Delete / Hide APIs for template management
    ======================================================================== */
 
-/**
- * For built-ins, we "hide" the key (reversible).
- * For customs, we remove index entry and both graphs.
- * Returns an object describing what happened.
- */
-export function deleteTemplate(key: BotKey): {
-  removed: boolean;
-  kind: "builtin" | "custom";
-} {
+export function deleteTemplate(key: BotKey): { removed: boolean; kind: "builtin" | "custom" } {
   if (isBuiltInKey(key)) {
     // hide built-in
     const hidden = readJSON<string[]>(TPL_HIDDEN_KEY, []);
