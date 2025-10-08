@@ -1,11 +1,10 @@
-// src/pages/admin/Bots.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { getBotSettings, setBotSettings } from "@/lib/botSettings";
 import {
   listInstances,
   removeInstance,
   duplicateInstanceFromTemplate,
-  createInstance,
+  // createInstance, // (optional) not used; you can delete this import
   renameInstance,
   type InstanceMeta,
 } from "@/lib/instances";
@@ -108,6 +107,7 @@ export default function Bots() {
 
   // Hidden templates UI
   const [showHidden, setShowHidden] = useState(false);
+
   // Modal for Create New Bot + Emoji Picker
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newBotName, setNewBotName] = useState("");
@@ -199,14 +199,12 @@ export default function Bots() {
           >
             Reset
           </button>
-        <button
-  className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
-  onClick={() => setShowCreateModal(true)}
->
-  + Create New Bot
-</button>
-</button>
-
+          <button
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+            onClick={() => setShowCreateModal(true)}
+          >
+            + Create New Bot
+          </button>
         </div>
       </div>
 
@@ -428,90 +426,91 @@ export default function Bots() {
           </div>
         )}
       </div>
-     {/* -------------------------------------------------------
- 🧠 CREATE NEW BOT MODAL WITH EMOJI PICKER
----------------------------------------------------------- */}
-{showCreateModal && (
-  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-    <div className="bg-white rounded-2xl border-2 border-black p-6 w-full max-w-md shadow-xl">
-      <h2 className="text-2xl font-extrabold mb-2">Create New Bot</h2>
-      <p className="text-sm text-gray-600 mb-4">
-        Name your new bot template and choose an emoji that represents it.
-      </p>
 
-      {/* Bot name */}
-      <label className="font-semibold block mb-1">Bot Name</label>
-      <input
-        className="w-full rounded-lg border px-3 py-2 font-semibold mb-4"
-        placeholder="e.g. Receptionist Bot"
-        value={newBotName}
-        onChange={(e) => setNewBotName(e.target.value)}
-      />
+      {/* -------------------------------------------------------
+       🧠 CREATE NEW BOT MODAL WITH EMOJI PICKER
+      ---------------------------------------------------------- */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl border-2 border-black p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-2xl font-extrabold mb-2">Create New Bot</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Name your new bot template and choose an emoji that represents it.
+            </p>
 
-      {/* Emoji selector */}
-      <label className="font-semibold block mb-2">Choose an Emoji</label>
-      <div className="flex flex-wrap gap-3 mb-4">
-        {[
-          "🎯", // Lead Qualifier
-          "📅", // Appointment Booking
-          "💬", // Customer Support
-          "⏳", // Waitlist
-          "📢", // Social Media
-          "☎️", // Receptionist
-          "🤖", // General AI
-          "💼", // Business Bot
-          "🌟", // Premium Bot
-          "🧭", // Guidance Bot
-        ].map((emj) => (
-          <button
-            key={emj}
-            type="button"
-            onClick={() => setNewBotEmoji(emj)}
-            className={`text-3xl rounded-xl border-2 p-2 transition-all ${
-              newBotEmoji === emj
-                ? "border-black bg-yellow-100 shadow-md scale-110"
-                : "border-gray-200 hover:border-gray-400"
-            }`}
-          >
-            {emj}
-          </button>
-        ))}
-      </div>
+            {/* Bot name */}
+            <label className="font-semibold block mb-1">Bot Name</label>
+            <input
+              className="w-full rounded-lg border px-3 py-2 font-semibold mb-4"
+              placeholder="e.g. Receptionist Bot"
+              value={newBotName}
+              onChange={(e) => setNewBotName(e.target.value)}
+            />
 
-      {/* Buttons */}
-      <div className="flex justify-end gap-3">
-        <button
-          className="px-4 py-2 font-bold ring-1 ring-border bg-white rounded-xl hover:bg-muted/40"
-          onClick={() => setShowCreateModal(false)}
-        >
-          Cancel
-        </button>
-        <button
-          className="px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 rounded-xl shadow-[0_3px_0_#000] active:translate-y-[1px]"
-          onClick={() => {
-            const name = newBotName.trim() || "New Template";
-            const key = toKey(name);
-            if (defs.some((d) => d.key === key)) {
-              alert("A template with this name/key already exists. Please choose a different name.");
-              return;
-            }
-            createTemplate({
-              name,
-              key,
-              emoji: newBotEmoji,
-            });
-            setDefs(listTemplateDefs());
-            setNewBotName("");
-            setNewBotEmoji("🤖");
-            setShowCreateModal(false);
-          }}
-        >
-          Create Bot
-        </button>
-      </div>
-    </div>
-  </div>
-)}   
+            {/* Emoji selector */}
+            <label className="font-semibold block mb-2">Choose an Emoji</label>
+            <div className="flex flex-wrap gap-3 mb-4">
+              {[
+                "🎯", // Lead Qualifier
+                "📅", // Appointment Booking
+                "💬", // Customer Support
+                "⏳", // Waitlist
+                "📢", // Social Media
+                "☎️", // Receptionist
+                "🤖", // General AI
+                "💼", // Business Bot
+                "🌟", // Premium Bot
+                "🧭", // Guidance Bot
+              ].map((emj) => (
+                <button
+                  key={emj}
+                  type="button"
+                  onClick={() => setNewBotEmoji(emj)}
+                  className={`text-3xl rounded-xl border-2 p-2 transition-all ${
+                    newBotEmoji === emj
+                      ? "border-black bg-yellow-100 shadow-md scale-110"
+                      : "border-gray-200 hover:border-gray-400"
+                  }`}
+                >
+                  {emj}
+                </button>
+              ))}
+            </div>
+
+            {/* Buttons */}
+            <div className="flex justify-end gap-3">
+              <button
+                className="px-4 py-2 font-bold ring-1 ring-border bg-white rounded-xl hover:bg-muted/40"
+                onClick={() => setShowCreateModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 rounded-xl shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                onClick={() => {
+                  const name = newBotName.trim() || "New Template";
+                  const key = toKey(name);
+                  if (defs.some((d) => d.key === key)) {
+                    alert("A template with this name/key already exists. Please choose a different name.");
+                    return;
+                  }
+                  createTemplate({
+                    name,
+                    key,
+                    emoji: newBotEmoji,
+                  });
+                  setDefs(listTemplateDefs());
+                  setNewBotName("");
+                  setNewBotEmoji("🤖");
+                  setShowCreateModal(false);
+                }}
+              >
+                Create Bot
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
