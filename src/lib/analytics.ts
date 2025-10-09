@@ -1,154 +1,249 @@
-// src/lib/analytics.ts
-// Tiny local analytics: event log + helpers for per-instance/per-template stats.
+/* ------------------------------------------------------------------------
+ * Lightweight Analytics Tracker
+ * ------------------------------------------------------------------------
+ * - Public API: trackEvent(name, scope, props?)
+ * - Persists a rolling event log (analytics.events.v1)
+ * - Updates dashboard metrics (analytics.metrics.v2) used by pages/admin/Analytics.tsx
+ * - Keeps small internal state (analytics.state.v1) for session timing & counters
+ * ---------------------------------------------------------------------- */
 
-export type AnalyticsScope =
-  | { kind: "inst"; id: string }     // specific client instance
-  | { kind: "bot"; key: string };    // base template key (fallback when no instance)
+type EventScope =
+  | { kind: "inst"; id: string }  // specific client bot instance
+  | { kind: "bot"; key: string }; // base template key
 
-export type EventType =
-  | "bubble_open"       // user opens popup
-  | "view_widget"       // widget visible (inline/sidebar)
-  | "step_next"         // next step in flow
+type EventName =
+  | "bubble_open"
+  | "step_next"
   | "step_back"
-  | "lead_submit"       // final completion / lead captured
-  | "close_widget"      // user closes
-  | "error";            // generic error
+  | "close_widget"
+  | "lead_submit";
 
-export type AnalyticsEvent = {
-  id: string;
-  ts: number;                 // epoch ms
-  type: EventType;
-  scope: AnalyticsScope;
-  meta?: Record<string, any>; // optional e.g. step index, page path, ua hash
+type EventRecord = {
+  ts: number;             // epoch ms
+  name: EventName;
+  scope: EventScope;
+  props?: Record<string, any>;
 };
 
-const KEY_EVENTS = "analytics:events.v1";
-const MAX_EVENTS = 10_000; // ring-buffer cap to keep localStorage sane
+const EVENTS_KEY = "analytics.events.v1";
+const METRICS_KEY = "analytics.metrics.v2"; // matches Analytics.tsx AKEY
+const STATE_KEY = "analytics.state.v1";     // internal helper state (sessions, counters)
 
-function readEvents(): AnalyticsEvent[] {
-  try {
-    const raw = localStorage.getItem(KEY_EVENTS);
-    return raw ? (JSON.parse(raw) as AnalyticsEvent[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeEvents(all: AnalyticsEvent[]) {
-  localStorage.setItem(KEY_EVENTS, JSON.stringify(all));
-}
-
-function newId() {
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-}
-
-export function trackEvent(type: EventType, scope: AnalyticsScope, meta?: Record<string, any>) {
-  const ev: AnalyticsEvent = { id: newId(), ts: Date.now(), type, scope, meta };
-  const all = readEvents();
-  all.push(ev);
-  // Cap size (drop oldest)
-  if (all.length > MAX_EVENTS) {
-    all.splice(0, all.length - MAX_EVENTS);
-  }
-  writeEvents(all);
-  // Fire a storage event for cross-tabs dashboards
-  try {
-    localStorage.setItem("analytics:last", String(ev.ts));
-  } catch {}
-}
-
-/* ---------------- Aggregations ---------------- */
-
-export type Totals = {
-  events: number;
-  bubbleOpens: number;
-  views: number;
-  nexts: number;
-  backs: number;
+/* ---------------- shared types with Analytics.tsx metrics ---------------- */
+type Metrics = {
+  conversations: number;
   leads: number;
-  closes: number;
+  appointments: number;
+  csatPct: number;         // 0–100
+  avgResponseSecs: number; // (not computed here)
+  conversionPct: number;   // 0–100
+
+  dropoffPct: number;          // 0–100
+  qualifiedLeads: number;      // count
+  avgConversationSecs: number; // seconds
+  handoffRatePct: number;      // 0–100
+  peakChatTime: string;        // e.g., "2–3 PM"
 };
 
-export function getTotals(scope?: AnalyticsScope): Totals {
-  const all = readEvents();
-  const rows = scope ? all.filter((e) => sameScope(e.scope, scope)) : all;
-  const t: Totals = {
-    events: rows.length,
-    bubbleOpens: 0,
-    views: 0,
-    nexts: 0,
-    backs: 0,
-    leads: 0,
-    closes: 0,
-  };
-  for (const e of rows) {
-    if (e.type === "bubble_open") t.bubbleOpens++;
-    else if (e.type === "view_widget") t.views++;
-    else if (e.type === "step_next") t.nexts++;
-    else if (e.type === "step_back") t.backs++;
-    else if (e.type === "lead_submit") t.leads++;
-    else if (e.type === "close_widget") t.closes++;
-  }
-  return t;
-}
+const defaultMetrics: Metrics = {
+  conversations: 0,
+  leads: 0,
+  appointments: 0,
+  csatPct: 0,
+  avgResponseSecs: 0,
+  conversionPct: 0,
 
-export type DailyPoint = { dateISO: string; count: number };
+  dropoffPct: 0,
+  qualifiedLeads: 0,
+  avgConversationSecs: 0,
+  handoffRatePct: 0,
+  peakChatTime: "—",
+};
 
-export function getDailyCounts(scope?: AnalyticsScope, type?: EventType, days = 14): DailyPoint[] {
-  const start = startOfDay(Date.now() - (days - 1) * DAY);
-  const buckets = new Map<string, number>();
-  for (let i = 0; i < days; i++) {
-    const d = new Date(start + i * DAY);
-    buckets.set(d.toISOString().slice(0, 10), 0);
-  }
+/* ---------------- internal state for sessions & counters ---------------- */
+type InternalState = {
+  /** active session start times, keyed by scopeId */
+  activeSessions: Record<string, number>;
+  /** total completed session count (used for avgConversationSecs denominator) */
+  completedSessions: number;
+  /** drop-offs (close without lead) */
+  dropoffs: number;
+  /** hour bucket counts for peak time, key "HH" (00–23) */
+  hourCounts: Record<string, number>;
+};
 
-  const all = readEvents();
-  const rows = all.filter((e) => {
-    if (scope && !sameScope(e.scope, scope)) return false;
-    if (type && e.type !== type) return false;
-    return e.ts >= start;
-  });
+const defaultState: InternalState = {
+  activeSessions: {},
+  completedSessions: 0,
+  dropoffs: 0,
+  hourCounts: {},
+};
 
-  for (const e of rows) {
-    const key = new Date(e.ts).toISOString().slice(0, 10);
-    if (buckets.has(key)) buckets.set(key, (buckets.get(key) || 0) + 1);
-  }
-
-  return Array.from(buckets.entries()).map(([dateISO, count]) => ({ dateISO, count }));
-}
-
-export function getConversion(scope?: AnalyticsScope) {
-  const t = getTotals(scope);
-  const opens = Math.max(1, t.bubbleOpens + t.views); // denominator (view or open)
-  const cr = (t.leads / opens) * 100;
-  return { rate: cr, numerator: t.leads, denominator: opens };
-}
-
-/* ---------------- Utils ---------------- */
-
-const DAY = 24 * 60 * 60 * 1000;
-
-function startOfDay(ts: number) {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-function sameScope(a: AnalyticsScope, b: AnalyticsScope) {
-  return a.kind === b.kind && ((a.kind === "inst" && a.id === (b as any).id) || (a.kind === "bot" && a.key === (b as any).key));
-}
-
-/* ---------------- Browser Helper (optional) ---------------- */
-
-// Minimal global shim so external pages (or the /widget) can record:
-declare global {
-  interface Window {
-    BotAnalytics?: { track: (type: EventType, scope: AnalyticsScope, meta?: Record<string, any>) => void };
+/* ---------------- storage helpers ---------------- */
+function readJSON<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
   }
 }
-
-if (typeof window !== "undefined") {
-  window.BotAnalytics = {
-    track: (type, scope, meta) => trackEvent(type, scope, meta),
-  };
+function writeJSON<T>(key: string, value: T) {
+  localStorage.setItem(key, JSON.stringify(value));
 }
+
+/* ---------------- small utils ---------------- */
+function scopeId(scope: EventScope): string {
+  return scope.kind === "inst" ? `inst:${scope.id}` : `bot:${scope.key}`;
+}
+function hourLabelFromDate(d: Date): { hourKey: string; pretty: string } {
+  const h = d.getHours(); // 0-23
+  const next = (h + 1) % 24;
+  const fmt = (n: number) =>
+    new Date(2000, 0, 1, n).toLocaleTimeString([], { hour: "numeric" }); // "2 AM", "3 PM"
+  return { hourKey: String(h).padStart(2, "0"), pretty: `${fmt(h)}–${fmt(next)}` };
+}
+function recomputePeakChatTime(hourCounts: Record<string, number>): string {
+  let bestKey = "";
+  let bestVal = -1;
+  for (const [k, v] of Object.entries(hourCounts)) {
+    if (v > bestVal) {
+      bestKey = k;
+      bestVal = v;
+    }
+  }
+  if (!bestKey) return "—";
+  const h = parseInt(bestKey, 10);
+  const d = new Date(2000, 0, 1, h);
+  const next = new Date(2000, 0, 1, (h + 1) % 24);
+  const fmt = (date: Date) => date.toLocaleTimeString([], { hour: "numeric" });
+  return `${fmt(d)}–${fmt(next)}`;
+}
+function round1(n: number) {
+  return Math.round(n * 10) / 10;
+}
+
+/* ------------------------------------------------------------------------
+ * Metrics update rules (heuristic but consistent with the dashboard)
+ * ---------------------------------------------------------------------- */
+function updateMetricsForEvent(name: EventName, evt: EventRecord) {
+  const m = readJSON<Metrics>(METRICS_KEY, defaultMetrics);
+  const st = readJSON<InternalState>(STATE_KEY, defaultState);
+
+  const now = Date.now();
+  const sid = scopeId(evt.scope);
+
+  switch (name) {
+    case "bubble_open": {
+      // New conversation if not already active for this scope
+      if (!st.activeSessions[sid]) {
+        st.activeSessions[sid] = now;
+        m.conversations += 1;
+      }
+      break;
+    }
+
+    case "lead_submit": {
+      // Mark a successful conversion; close the session if any
+      const startedAt = st.activeSessions[sid];
+      if (startedAt) {
+        const secs = Math.max(0, Math.round((now - startedAt) / 1000));
+        // Update avgConversationSecs using completedSessions as denominator
+        const n = st.completedSessions;
+        m.avgConversationSecs = round1((m.avgConversationSecs * n + secs) / (n + 1));
+        st.completedSessions = n + 1;
+
+        // bucket hour of close
+        const { hourKey } = hourLabelFromDate(new Date());
+        st.hourCounts[hourKey] = (st.hourCounts[hourKey] || 0) + 1;
+        m.peakChatTime = recomputePeakChatTime(st.hourCounts);
+
+        // Close session
+        delete st.activeSessions[sid];
+      }
+
+      m.leads += 1;
+      // Guard against divide-by-zero
+      if (m.conversations > 0) {
+        m.conversionPct = round1((m.leads / m.conversations) * 100);
+      }
+      // Drop-off % derived from dropoffs/conversations
+      if (m.conversations > 0) {
+        m.dropoffPct = round1((st.dropoffs / m.conversations) * 100);
+      }
+      break;
+    }
+
+    case "close_widget": {
+      // Only count a drop-off if a session was open but no lead was submitted
+      const startedAt = st.activeSessions[sid];
+      if (startedAt) {
+        const secs = Math.max(0, Math.round((now - startedAt) / 1000));
+        const n = st.completedSessions;
+        m.avgConversationSecs = round1((m.avgConversationSecs * n + secs) / (n + 1));
+        st.completedSessions = n + 1;
+
+        // bucket hour of close
+        const { hourKey } = hourLabelFromDate(new Date());
+        st.hourCounts[hourKey] = (st.hourCounts[hourKey] || 0) + 1;
+        m.peakChatTime = recomputePeakChatTime(st.hourCounts);
+
+        // Treat as dropoff
+        st.dropoffs += 1;
+        delete st.activeSessions[sid];
+      }
+      if (m.conversations > 0) {
+        m.dropoffPct = round1((st.dropoffs / m.conversations) * 100);
+      }
+      break;
+    }
+
+    // Navigation events are logged but don't mutate the summary directly
+    case "step_next":
+    case "step_back": {
+      // no-op for aggregates; retained in event log
+      break;
+    }
+  }
+
+  writeJSON(METRICS_KEY, m);
+  writeJSON(STATE_KEY, st);
+}
+
+/* ------------------------------------------------------------------------
+ * Public API: trackEvent
+ * ---------------------------------------------------------------------- */
+export function trackEvent(
+  name: EventName,
+  scope: EventScope,
+  props?: Record<string, any>
+) {
+  const evt: EventRecord = { ts: Date.now(), name, scope, props };
+
+  // Append to rolling log (cap length to keep storage in check)
+  const log = readJSON<EventRecord[]>(EVENTS_KEY, []);
+  log.push(evt);
+  // keep only last 500 events
+  const trimmed = log.slice(-500);
+  writeJSON(EVENTS_KEY, trimmed);
+
+  // Update dashboard metrics
+  updateMetricsForEvent(name, evt);
+}
+
+/* ------------------------------------------------------------------------
+ * Optional helpers (could be used elsewhere)
+ * ---------------------------------------------------------------------- */
+export function getEvents(): EventRecord[] {
+  return readJSON<EventRecord[]>(EVENTS_KEY, []);
+}
+export function getMetrics(): Metrics {
+  return readJSON<Metrics>(METRICS_KEY, defaultMetrics);
+}
+export function resetAnalytics() {
+  writeJSON(METRICS_KEY, defaultMetrics);
+  writeJSON(STATE_KEY, defaultState);
+  writeJSON(EVENTS_KEY, []);
+}
+
