@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAdminStore } from "@/lib/AdminStore";
 import { BotKey } from "@/lib/botSettings";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
+import BotSelector from "@/components/BotSelector";
 
 /** -----------------------------------------------------------------------
  *  Types & Config
@@ -15,14 +16,6 @@ type DocFile = {
   dataUrl: string; // for preview/download (simple local prototype)
   uploadedAt: number;
 };
-
-const BOT_OPTIONS: Array<{ key: BotKey; label: string }> = [
-  { key: "LeadQualifier",      label: "Lead Qualifier" },
-  { key: "AppointmentBooking", label: "Appointment Booking" },
-  { key: "CustomerSupport",    label: "Customer Support" },
-  { key: "Waitlist",           label: "Waitlist" },
-  { key: "SocialMedia",        label: "Social Media" },
-];
 
 const ACCEPT =
   ".pdf,.doc,.docx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain";
@@ -79,10 +72,9 @@ export default function Knowledge() {
     setCurrentBot?: (key: BotKey) => void;
   };
 
-  // Instances for the "Client Bot (instance)" picker
+  // Instances for label helper (purely for UX text); live-sync via storage
   const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
   useEffect(() => {
-    // Keep in sync if other tabs modify instances
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
       if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
@@ -94,16 +86,13 @@ export default function Knowledge() {
   }, []);
 
   // ---------- Scope state ----------
-  // Default to bot template using the store value (or first option if absent)
-  const initialBot = useMemo<BotKey>(() => currentBot || BOT_OPTIONS[0].key, [currentBot]);
+  const initialBot = useMemo<BotKey>(() => currentBot || ("Waitlist" as BotKey), [currentBot]);
 
-  // Remember the last chosen instance (if any)
   const [lastInstId, setLastInstId] = useState<string>(() => {
     const first = listInstances()[0];
     return first ? first.id : "";
   });
 
-  // Scope: "Bot Template" or "Client Bot (instance)"
   const [scope, setScope] = useState<Scope>({ kind: "bot", bot: initialBot });
 
   // Docs list for the current scope
@@ -163,7 +152,7 @@ export default function Knowledge() {
         setDocs(next);
         saveDocs(scope, next);
       }
-    } catch (err) {
+    } catch {
       setError("Upload failed. Please try again.");
     } finally {
       setBusy(false);
@@ -178,14 +167,12 @@ export default function Knowledge() {
   }
 
   // ---------- UI helpers ----------
-  const selectedInst = useMemo(
-    () => (scope.kind === "inst" ? instances.find((m) => m.id === scope.id) : undefined),
-    [scope, instances]
-  );
+  const selectedInst =
+    scope.kind === "inst" ? instances.find((m) => m.id === scope.id) : undefined;
 
   const scopeLabel =
     scope.kind === "bot"
-      ? BOT_OPTIONS.find((b) => b.key === scope.bot)?.label || scope.bot
+      ? scope.bot
       : selectedInst?.name || "(deleted instance)";
 
   const instanceOptions = instances
@@ -221,7 +208,12 @@ export default function Knowledge() {
                     type="radio"
                     name="scope"
                     checked={scope.kind === "bot"}
-                    onChange={() => setScope({ kind: "bot", bot: scope.kind === "bot" ? scope.bot : initialBot })}
+                    onChange={() =>
+                      setScope({
+                        kind: "bot",
+                        bot: scope.kind === "bot" ? scope.bot : (currentBot || "Waitlist"),
+                      })
+                    }
                   />
                   Bot Template
                 </label>
@@ -241,32 +233,27 @@ export default function Knowledge() {
               </div>
             </div>
 
-            {/* Bot template picker */}
+            {/* Bot template picker (BotSelector) */}
             {scope.kind === "bot" && (
               <div className="flex items-center gap-3">
                 <label className="text-xs font-bold uppercase text-foreground/70">Bot</label>
-                <select
-                  className="rounded-lg border px-3 py-2 font-semibold bg-white"
+                <BotSelector
+                  scope="template"
                   value={scope.bot}
-                  onChange={(e) => setScope({ kind: "bot", bot: e.target.value as BotKey })}
-                >
-                  {BOT_OPTIONS.map((b) => (
-                    <option key={b.key} value={b.key}>
-                      {b.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => {
+                    if (!v || v.kind !== "template") return;
+                    setScope({ kind: "bot", bot: v.key as BotKey });
+                  }}
+                  ariaLabel="Choose bot template"
+                />
               </div>
             )}
 
-            {/* Instance picker (wrapped label) */}
+            {/* Instance picker (with wrapped label UI preserved) */}
             {scope.kind === "inst" && (
               <div className="flex items-center gap-3">
                 <label className="text-xs font-bold uppercase text-foreground/70">My Bot</label>
-
-                {/* Wrapped display with real select on top */}
                 <div className="relative w-full md:w-[380px]">
-                  {/* Visible, wrapping label box */}
                   <div
                     className="
                       rounded-lg border bg-white pr-10 px-3 py-2
@@ -279,34 +266,24 @@ export default function Knowledge() {
                       ? "No instances yet — duplicate or create one first"
                       : selectedInstLabel}
                   </div>
-
-                  {/* Dropdown arrow */}
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 select-none text-foreground/70">
                     ▾
                   </span>
 
-                  {/* Real select (invisible but interactive) */}
-                  <select
-                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
-                    value={scope.id}
-                    onChange={(e) => {
-                      setLastInstId(e.target.value);
-                      setScope({ kind: "inst", id: e.target.value });
+                  {/* Real select via BotSelector (instance scope) */}
+                  <BotSelector
+                    scope="instance"
+                    value={scope.kind === "inst" ? scope.id : ""}
+                    onChange={(v) => {
+                      if (!v) return;
+                      if (v.kind === "instance") {
+                        setLastInstId(v.id);
+                        setScope({ kind: "inst", id: v.id });
+                      }
                     }}
-                    aria-label="Choose client bot instance"
-                  >
-                    {instances.length === 0 ? (
-                      <option value="" disabled>
-                        No instances yet — duplicate or create one first
-                      </option>
-                    ) : (
-                      instanceOptions.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {instanceLabel(m)}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                    ariaLabel="Choose client bot instance"
+                  />
                 </div>
               </div>
             )}
@@ -340,7 +317,7 @@ export default function Knowledge() {
                 + Upload
               </button>
               <button
-                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border hover:bg-muted/40"
+                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
                 onClick={() => alert("Source management UI coming soon.")}
               >
                 Manage Sources
