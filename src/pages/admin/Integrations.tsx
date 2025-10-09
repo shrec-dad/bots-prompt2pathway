@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useAdminStore } from "@/lib/AdminStore";
 import { getJSON, setJSON } from "@/lib/storage";
 import { listInstances, getInstance, type InstanceMeta } from "@/lib/instances";
+import BotSelector from "@/components/BotSelector";
 
 type UniversalCfg = {
   // Email (optional)
@@ -18,10 +19,11 @@ type UniversalCfg = {
   crmAuthToken?: string;
 };
 
+// Persist under a chosen key (admin id, instance id, or template key)
 const KEY = (botId: string) => `integrations:${botId}`;
 
-// Map a built-in BotKey to the AdminStore bot id (only needed for inheritance)
-function botKeyToAdminId(botKey: string): string | null {
+/** Map Template Keys to AdminStore ids for backward-compatibility */
+function adminIdForTemplateKey(botKey: string): string | null {
   switch (botKey) {
     case "LeadQualifier":
       return "lead-qualifier";
@@ -33,18 +35,26 @@ function botKeyToAdminId(botKey: string): string | null {
       return "waitlist-bot";
     case "SocialMedia":
       return "social-media";
+    case "Receptionist":
+      // Add mapping for Receptionist so legacy storage remains consistent
+      return "receptionist-bot";
     default:
-      return null; // custom templates won't have an AdminStore bot id
+      return null; // custom templates won't have an AdminStore id
   }
 }
 
+/** Resolve a storage key for a selection value (instance id OR template key) */
+function resolveStorageKey(selection: string): string {
+  if (selection.startsWith("inst_")) return selection; // instance
+  // template path: prefer legacy admin id if available
+  return adminIdForTemplateKey(selection) || selection; // fallback to template key
+}
+
 export default function Integrations() {
-  const { bots, currentBot } = useAdminStore();
+  const { bots } = useAdminStore();
 
   // ===== Client bots (instances) =====
-  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
-    listInstances()
-  );
+  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
@@ -56,56 +66,38 @@ export default function Integrations() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // value can be an AdminStore id (e.g. "waitlist-bot") OR an instance id (e.g. "inst_...")
-  const [appliesTo, setAppliesTo] = useState<string>(currentBot);
+  // selection value can be template key OR instance id
+  const [appliesTo, setAppliesTo] = useState<string>(() => {
+    // Prefer first admin bot id (backward compat) if present; else first template key; else instance if any; else ""
+    const firstAdminId = bots?.[0]?.id || "";
+    return firstAdminId || "";
+  });
 
   // Load config for selected key.
-  // If an instance is selected, prefill with its base template config and overlay instance config.
   const cfg = useMemo<UniversalCfg>(() => {
-    if (appliesTo.startsWith("inst_")) {
-      const inst = getInstance(appliesTo);
-      const instanceCfg = getJSON<UniversalCfg>(KEY(appliesTo), {});
-      if (inst?.meta?.bot) {
-        const baseAdminId = botKeyToAdminId(inst.meta.bot);
-        const baseCfg = baseAdminId ? getJSON<UniversalCfg>(KEY(baseAdminId), {}) : {};
-        return { ...baseCfg, ...instanceCfg };
-      }
-      return instanceCfg;
-    }
-    // base template selection
-    return getJSON<UniversalCfg>(KEY(appliesTo), {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const key = resolveStorageKey(appliesTo);
+    return getJSON<UniversalCfg>(KEY(key), {});
   }, [appliesTo]);
 
   const [form, setForm] = useState<UniversalCfg>(cfg);
 
   useEffect(() => {
-    // refresh form when target changes
-    if (appliesTo.startsWith("inst_")) {
-      const inst = getInstance(appliesTo);
-      const instanceCfg = getJSON<UniversalCfg>(KEY(appliesTo), {});
-      if (inst?.meta?.bot) {
-        const baseAdminId = botKeyToAdminId(inst.meta.bot);
-        const baseCfg = baseAdminId ? getJSON<UniversalCfg>(KEY(baseAdminId), {}) : {};
-        setForm({ ...baseCfg, ...instanceCfg });
-        return;
-      }
-      setForm(instanceCfg);
-      return;
-    }
-    setForm(getJSON<UniversalCfg>(KEY(appliesTo), {}));
+    const key = resolveStorageKey(appliesTo);
+    setForm(getJSON<UniversalCfg>(KEY(key), {}));
   }, [appliesTo]);
 
   const save = () => {
-    // Always save under the currently selected key (instance or base)
-    setJSON(KEY(appliesTo), form);
+    const key = resolveStorageKey(appliesTo);
+    setJSON(KEY(key), form);
     alert("Integrations saved for this target.");
   };
 
   const reset = () => {
+    if (!appliesTo) return;
     if (!confirm("Clear all integration fields for this target?")) return;
+    const key = resolveStorageKey(appliesTo);
     setForm({});
-    setJSON(KEY(appliesTo), {});
+    setJSON(KEY(key), {});
   };
 
   const header =
@@ -119,18 +111,12 @@ export default function Integrations() {
   const input =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
-  // sorted instances (newest first)
-  const sortedInstances = useMemo(
-    () => [...instances].sort((a, b) => b.updatedAt - a.updatedAt),
-    [instances]
-  );
-
   // Little hint message when editing an instance
   const instanceHint =
     appliesTo.startsWith("inst_") ? (
       <div className="text-[12px] font-semibold text-black/70">
         Editing <span className="font-extrabold">client bot instance</span>. Blank
-        fields effectively inherit from its base template when this form first loads.
+        fields effectively started as inherited from its base template when this form loaded.
         Any values you save here are stored only for this instance.
       </div>
     ) : null;
@@ -154,35 +140,16 @@ export default function Integrations() {
       {/* Applies-to selector */}
       <div className={group}>
         <div className="text-lg font-extrabold mb-3">Applies to</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <label className="block">
-            <div className={label}>Bot</div>
-            <select
-              className={input}
+            <div className={label}>Target</div>
+            <BotSelector
+              scope="both"
               value={appliesTo}
-              onChange={(e) => setAppliesTo(e.target.value)}
-            >
-              <optgroup label="Base Bot Templates">
-                {bots.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({b.id})
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Client Bots (instances)">
-                {sortedInstances.length === 0 ? (
-                  <option value="" disabled>
-                    No client bots yet
-                  </option>
-                ) : (
-                  sortedInstances.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {(m.name || `${m.bot} Instance`).toString()} • {m.mode}
-                    </option>
-                  ))
-                )}
-              </optgroup>
-            </select>
+              onChange={setAppliesTo}
+              placeholderOption="— Select a Template or an Instance —"
+              showGroups
+            />
           </label>
 
           <div className="flex items-end gap-3">
@@ -294,3 +261,4 @@ export default function Integrations() {
     </div>
   );
 }
+
