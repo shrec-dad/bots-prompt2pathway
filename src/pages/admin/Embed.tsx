@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useAdminStore } from "@/lib/AdminStore";
-import { listInstances } from "@/lib/instances";
+import { listInstances, type InstanceMeta } from "@/lib/instances";
+import BotSelector from "@/components/BotSelector";
 
 function CopyButton({ getText }: { getText: () => string }) {
   const [label, setLabel] = useState("Copy");
@@ -87,28 +87,27 @@ function readBranding(): Branding {
 
 export default function Embed() {
   /* Data sources */
-  const { bots } = useAdminStore();
   const [instances, setInstances] = useState<SavedInstance[]>([]);
 
   useEffect(() => {
     try {
       const list = listInstances?.() ?? [];
       setInstances(
-        list.map((i: any) => ({
+        list.map((i: InstanceMeta) => ({
           id: String(i.id),
           name: i.name ?? i.title ?? i.id,
           bot: i.bot,
           mode: i.mode,
           createdAt: i.createdAt,
-          position: i.position,
-          size: i.size,
-          color: i.color,
-          image: i.image,
-          shape: i.shape,
-          imageFit: i.imageFit,
-          label: i.label,
-          labelColor: i.labelColor,
-          avatar: i.avatar,
+          position: (i as any).position,
+          size: (i as any).size,
+          color: (i as any).color,
+          image: (i as any).image,
+          shape: (i as any).shape,
+          imageFit: (i as any).imageFit,
+          label: (i as any).label,
+          labelColor: (i as any).labelColor,
+          avatar: (i as any).avatar,
         }))
       );
     } catch {
@@ -117,9 +116,8 @@ export default function Embed() {
   }, []);
 
   /* Selection */
-  const defaultBot = bots?.[0]?.id ?? "waitlist-bot";
   const [instId, setInstId] = useState<string>("");
-  const [botId, setBotId] = useState<string>(defaultBot);
+  const [botKey, setBotKey] = useState<string>("Waitlist");
 
   /* Sync with Preview (brandingSettings) */
   const [syncWithPreview, setSyncWithPreview] = useState(true);
@@ -225,7 +223,7 @@ export default function Embed() {
   const widgetPath = useMemo(() => {
     const qp = new URLSearchParams();
     if (instId.trim()) qp.set("inst", instId.trim());
-    else qp.set("bot", botId);
+    else qp.set("bot", botKey);
 
     qp.set("position", active.position);
     qp.set("size", String(active.size));
@@ -241,7 +239,7 @@ export default function Embed() {
 
     qp.set("mode", mode);
     return `/widget?${qp.toString()}`;
-  }, [instId, botId, active, mode]);
+  }, [instId, botKey, active, mode]);
 
   const embedUrl = `${origin}${widgetPath}`;
 
@@ -297,10 +295,6 @@ export default function Embed() {
   const codeBox =
     "mt-3 rounded-lg border bg-neutral-900 text-neutral-50 text-sm p-3 overflow-auto";
 
-  const activeBotName =
-    bots?.find((b) => b.id === botId)?.name ??
-    botId.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase());
-
   const controlsDisabled = syncWithPreview;
 
   return (
@@ -332,40 +326,26 @@ export default function Embed() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Instance */}
+          {/* Instance via BotSelector */}
           <div>
             <div className={labelCls}>Instance (overrides Bot)</div>
-            <select
-              className={inputCls}
+            <BotSelector
+              scope="instance"
               value={instId}
-              onChange={(e) => setInstId(e.target.value)}
-              title="Pick a saved Instance to embed"
-            >
-              <option value="">— None (use Bot) —</option>
-              {instances.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name || i.id} {i.bot ? `• ${i.bot}` : ""} {i.mode ? `• ${i.mode}` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={setInstId}
+              placeholderOption="— None (use Bot) —"
+            />
           </div>
 
-          {/* Bot */}
+          {/* Bot via BotSelector */}
           <div>
             <div className={labelCls}>Bot</div>
-            <select
-              className={inputCls}
-              value={botId}
-              onChange={(e) => setBotId(e.target.value)}
+            <BotSelector
+              scope="template"
+              value={botKey}
+              onChange={setBotKey}
               disabled={!!instId.trim()}
-              title={instId.trim() ? "Instance is set; Bot is ignored" : "Choose a template bot"}
-            >
-              {bots?.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              )) || <option value={botId}>{activeBotName}</option>}
-            </select>
+            />
           </div>
 
           {/* Mode */}
