@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
-import { listTemplateDefs } from "@/lib/templates";
+import BotSelector from "@/components/BotSelector";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
@@ -16,6 +16,7 @@ const BOT_TITLES: Record<string, string> = {
   CustomerSupport: "Customer Support",
   Waitlist: "Waitlist",
   SocialMedia: "Social Media",
+  Receptionist: "Receptionist",
 };
 
 function titleCaseSlug(s: string) {
@@ -70,9 +71,8 @@ function setBranding(next: Partial<Branding>) {
 }
 
 export default function Preview() {
-  /* ---------- sources (instances + templates) ---------- */
+  /* ---------- sources (instances) ---------- */
   const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
-  const [defs] = useState(() => listTemplateDefs());
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -87,7 +87,7 @@ export default function Preview() {
 
   /* ---------- selection state ---------- */
   const [instId, setInstId] = useState<string>("");
-  const [botKey, setBotKey] = useState<string>(defs[0]?.key ?? "Waitlist"); // fallback
+  const [botKey, setBotKey] = useState<string>("Waitlist"); // fallback
 
   const activeInst = useMemo(
     () => instances.find((m) => m.id === instId),
@@ -252,45 +252,29 @@ export default function Preview() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-          {/* Instance select (optional) */}
+          {/* Instance via BotSelector (optional) */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Instance (optional)</label>
-            <select
-              className="w-full rounded-lg border px-3 py-2"
+            <BotSelector
+              scope="instance"
               value={instId}
-              onChange={(e) => setInstId(e.target.value)}
-            >
-              <option value="">— none —</option>
-              {instances
-                .slice()
-                .sort((a, b) => b.updatedAt - a.updatedAt)
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} • {m.mode}
-                  </option>
-                ))}
-            </select>
+              onChange={setInstId}
+              placeholderOption="— none —"
+            />
             <div className="text-xs text-muted-foreground">
               If an instance is chosen, it overrides the Bot.
             </div>
           </div>
 
-          {/* Bot dropdown (disabled when instance selected) */}
+          {/* Bot via BotSelector (disabled when instance selected) */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Bot</label>
-            <select
-              className="w-full rounded-lg border px-3 py-2"
+            <BotSelector
+              scope="template"
               value={botKey}
-              onChange={(e) => setBotKey(e.target.value)}
+              onChange={setBotKey}
               disabled={!!activeInst}
-              title={activeInst ? "Instance selected — Bot is ignored" : "Pick a base bot"}
-            >
-              {defs.map((d) => (
-                <option key={d.key} value={d.key}>
-                  {d.name} ({d.key})
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* Mode & Position */}
@@ -476,14 +460,14 @@ export default function Preview() {
             label={label}
             labelColor={labelColor}
             hideLabelWhenImage={hideLabelWhenImage}
-            onBubbleClick={() => { setStep(0); setOpenModal(true); }} // open the same modal instead of internal panel
+            onBubbleClick={() => { setStep(0); setOpenModal(true); }}
           />
         )}
 
         {openModal && (
           <div className="absolute inset-0 grid place-items-center">
             <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl">
-              <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
+              <div className={`rounded-t-2xl p-4 bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white`}>
                 <div className="text-lg font-extrabold">
                   {modalHeader}
                 </div>
@@ -560,4 +544,3 @@ export default function Preview() {
     </div>
   );
 }
-
