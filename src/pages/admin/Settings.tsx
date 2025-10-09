@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { getJSON, setJSON } from "@/lib/storage";
 import { BotKey } from "@/lib/botSettings";
+import BotSelector from "@/components/BotSelector";
 
 /* -------------------------------------------------------------------------- */
 /* Types & constants                                                          */
@@ -254,22 +255,14 @@ export default function Settings() {
               </select>
             </div>
 
-            {/* Default bot */}
+            {/* Default bot via BotSelector */}
             <div>
               <div className={labelSm}>Default Bot</div>
-              <select
-                className={inputCls}
-                value={s.defaultBot}
-                onChange={(e) =>
-                  setS((p) => ({ ...p, defaultBot: e.target.value as BotKey }))
-                }
-              >
-                <option value="LeadQualifier">Lead Qualifier</option>
-                <option value="AppointmentBooking">Appointment Booking</option>
-                <option value="CustomerSupport">Customer Support</option>
-                <option value="Waitlist">Waitlist</option>
-                <option value="SocialMedia">Social Media</option>
-              </select>
+              <BotSelector
+                scope="template"
+                value={s.defaultBot || ""}
+                onChange={(key) => setS((p) => ({ ...p, defaultBot: key as BotKey }))}
+              />
             </div>
           </div>
 
@@ -467,7 +460,7 @@ export default function Settings() {
         <div className={sectionCard}>
           <div className="flex items-center gap-3">
             <button
-              className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+              className="rounded-XL px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
               onClick={save}
             >
               Save Changes
