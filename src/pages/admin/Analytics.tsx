@@ -1,3 +1,4 @@
+// src/pages/admin/Analytics.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import BotSelector from "@/components/BotSelector";
 
@@ -38,8 +39,11 @@ async function ensureXLSX(): Promise<any> {
 /** ------------------------------------------------------------
  * Storage keys and metric types
  * ------------------------------------------------------------ */
-const AKEY = "analytics.metrics.v2";
-const EKEY = "analytics.events.v1";
+const GLOBAL_KEY = "analytics.metrics.v2";
+const INST_KEY = (instId: string) => `analytics.metrics:inst:${instId}`;
+
+/** Optional event log (if Preview.tsx is emitting events) */
+const EVENTS_KEY = "analytics.events.v1";
 
 type Metrics = {
   // core six
@@ -74,171 +78,108 @@ const defaultMetrics: Metrics = {
 };
 
 /** ------------------------------------------------------------
- * Events (as written by Preview/Widget tracking)
+ * Event types (when available) for recomputation fallback
  * ------------------------------------------------------------ */
-type Scope =
-  | { kind: "inst"; id: string }
-  | { kind: "bot"; key: string };
-
-type EventRecord = {
-  ts: number;                 // epoch ms
-  name: string;               // e.g., "bubble_open", "lead_submit", ...
-  scope: Scope;               // { kind: "inst", id } preferred for per-instance
-  props?: Record<string, any>;// arbitrary
+type AnyEvent = {
+  type: string;
+  ts: number; // epoch ms
+  scope?: { kind: "global" | "inst"; id?: string };
+  meta?: Record<string, any>;
 };
 
-function round1(n: number) {
-  return Math.round(n * 10) / 10;
-}
+/** Recompute per-instance metrics from event log if no rollup is present */
+function recomputeInstanceMetrics(instId: string): Metrics {
+  const events = readJSON<AnyEvent[]>(EVENTS_KEY, []);
+  if (!events.length) return { ...defaultMetrics };
 
-/** ------------------------------------------------------------
- * Per-instance recompute from event log
- * ------------------------------------------------------------ */
-function recomputeInstanceMetrics(events: EventRecord[], instId: string): Metrics {
-  const m: Metrics = { ...defaultMetrics };
+  // Filter by scope id (defensive: scope may be undefined)
+  const scoped = events.filter(
+    (e) => e?.scope?.kind === "inst" && e?.scope?.id === instId
+  );
 
-  // Session tracking (simple): one active start per instance in this admin preview flow.
-  let activeStart: number | null = null;
-  let sessions = 0;
-  let completedSessions = 0;
-  let dropoffs = 0;
-
-  // Derived tallies
-  let csatSumPct = 0; // sum of csat as percentage (score/5*100)
-  let csatCount = 0;
-
-  let latencySumSecs = 0; // from props.latencyMs or reply_latency_ms
-  let latencyCount = 0;
-
+  // Very simple heuristic counters; extend as your event schema grows
+  let conversations = 0;
+  let leads = 0;
+  let appointments = 0;
+  let qualifiedLeads = 0;
+  let drops = 0;
   let handoffs = 0;
 
-  const hourCounts: Record<string, number> = {}; // for peakChatTime (by session end hour)
+  // Response/conversation timing placeholders
+  let responseTimes: number[] = [];
+  let convoDurations: number[] = [];
 
-  const forInst = events.filter(
-    (e) => e.scope?.kind === "inst" && e.scope.id === instId
-  );
-  const sorted = forInst.sort((a, b) => a.ts - b.ts);
+  // Peak hour histogram
+  const hours: Record<number, number> = {};
 
-  const touchHour = (t: number) => {
-    const hr = new Date(t).getHours().toString().padStart(2, "0");
-    hourCounts[hr] = (hourCounts[hr] || 0) + 1;
-  };
+  for (const e of scoped) {
+    const hour = new Date(e.ts).getHours();
+    hours[hour] = (hours[hour] || 0) + 1;
 
-  const endSession = (endTs: number, dropped: boolean) => {
-    if (activeStart == null) return;
-    const secs = Math.max(0, Math.round((endTs - activeStart) / 1000));
-    m.avgConversationSecs = round1(
-      (m.avgConversationSecs * completedSessions + secs) / (completedSessions + 1)
-    );
-    completedSessions += 1;
-    if (dropped) dropoffs += 1;
-    touchHour(endTs);
-    activeStart = null;
-  };
-
-  for (const e of sorted) {
-    switch (e.name) {
-      case "bubble_open": {
-        // new conversation starts when bubble opens (if not already active)
-        if (activeStart == null) {
-          activeStart = e.ts;
-          sessions += 1;
-          m.conversations += 1;
-        }
+    switch (e.type) {
+      case "preview_modal_opened":
+      case "widget.conversation_started":
+        conversations += 1;
         break;
-      }
-
-      case "lead_submit": {
-        // counts as a conversion and ends a session
-        m.leads += 1;
-        endSession(e.ts, false);
+      case "widget.lead_captured":
+      case "preview.lead_captured":
+        leads += 1;
+        if (e.meta?.qualified) qualifiedLeads += 1;
         break;
-      }
-
-      case "appointment_booked":
-      case "calendar_created": {
-        // support either event name
-        m.appointments += 1;
-        // booking also ends a session as a success
-        endSession(e.ts, false);
+      case "widget.appointment_booked":
+        appointments += 1;
         break;
-      }
-
-      case "csat_submit": {
-        // expect props.score in 1..5 (fallback guards)
-        const raw = Number(e.props?.score ?? 0);
-        if (raw > 0) {
-          const pct = Math.max(0, Math.min(100, (raw / 5) * 100));
-          csatSumPct += pct;
-          csatCount += 1;
-        }
-        break;
-      }
-
-      case "bot_response":
-      case "assistant_response":
-      case "reply_latency": {
-        // collect response latency — prefer latencyMs, fallback reply_latency_ms
-        const ms =
-          Number(e.props?.latencyMs ?? e.props?.reply_latency_ms ?? NaN);
-        if (!Number.isNaN(ms) && ms >= 0) {
-          latencySumSecs += ms / 1000;
-          latencyCount += 1;
-        }
-        break;
-      }
-
-      case "handoff_to_human":
-      case "agent_handoff": {
+      case "widget.handoff_to_human":
         handoffs += 1;
         break;
-      }
-
-      case "lead_qualified": {
-        m.qualifiedLeads += 1;
+      case "widget.dropoff":
+        drops += 1;
         break;
-      }
-
-      case "close_widget": {
-        // treat as a session end only if active (counts as drop-off)
-        endSession(e.ts, true);
+      case "widget.response_time":
+        if (typeof e.meta?.secs === "number") responseTimes.push(e.meta.secs);
         break;
-      }
-
+      case "widget.conversation_length":
+        if (typeof e.meta?.secs === "number") convoDurations.push(e.meta.secs);
+        break;
       default:
-        // ignore other design-tuning events (color/size/position etc.)
         break;
     }
   }
 
-  // Derived/ratios
-  if (csatCount > 0) m.csatPct = round1(csatSumPct / csatCount);
-  if (latencyCount > 0) m.avgResponseSecs = round1(latencySumSecs / latencyCount);
-  if (m.conversations > 0) {
-    m.conversionPct = round1((m.leads / m.conversations) * 100);
-    m.dropoffPct = round1((dropoffs / m.conversations) * 100);
-    m.handoffRatePct = round1((handoffs / m.conversations) * 100);
+  const avg = (nums: number[]) =>
+    nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10 : 0;
+
+  const totalTouches = conversations || 1; // avoid div by 0
+  const conversionPct = Math.round(((leads || appointments) / totalTouches) * 1000) / 10;
+  const dropoffPct = Math.round((drops / totalTouches) * 1000) / 10;
+  const handoffRatePct = Math.round((handoffs / totalTouches) * 1000) / 10;
+
+  // CSAT placeholder: if you emit csat events, compute true avg; else keep as 0
+  const csatPct = 0;
+
+  // Peak hour -> friendly range like "14–15"
+  let peakChatTime = "—";
+  const topHour = Object.entries(hours).sort((a, b) => b[1] - a[1])[0];
+  if (topHour) {
+    const h = Number(topHour[0]);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    peakChatTime = `${pad(h)}–${pad((h + 1) % 24)}`;
   }
 
-  // Peak hour label
-  let bestKey = "";
-  let bestVal = -1;
-  for (const [k, v] of Object.entries(hourCounts)) {
-    if (v > bestVal) {
-      bestKey = k;
-      bestVal = v;
-    }
-  }
-  if (bestKey) {
-    const h = parseInt(bestKey, 10);
-    const fmt = (H: number) =>
-      new Date(2000, 0, 1, H).toLocaleTimeString([], { hour: "numeric" });
-    m.peakChatTime = `${fmt(h)}–${fmt((h + 1) % 24)}`;
-  } else {
-    m.peakChatTime = "—";
-  }
+  return {
+    conversations,
+    leads,
+    appointments,
+    csatPct,
+    avgResponseSecs: avg(responseTimes),
+    conversionPct,
 
-  return m;
+    dropoffPct,
+    qualifiedLeads,
+    avgConversationSecs: avg(convoDurations),
+    handoffRatePct,
+    peakChatTime,
+  };
 }
 
 /** ------------------------------------------------------------
@@ -270,52 +211,84 @@ function timeStamp() {
   );
 }
 
+/** Normalize a possibly-object value from BotSelector into a string id */
+function normalizeInstId(val: unknown): string {
+  if (typeof val === "string") return val;
+  if (val && typeof val === "object" && "id" in (val as any)) {
+    const id = (val as any).id;
+    return typeof id === "string" ? id : String(id ?? "");
+  }
+  return "";
+}
+
+/** Safe text for UI: never render an object by accident */
+function asSafeText(val: unknown): string {
+  if (val == null) return "";
+  return typeof val === "string" ? val : JSON.stringify(val);
+}
+
 /** ------------------------------------------------------------
  * Component
  * ------------------------------------------------------------ */
 export default function Analytics() {
-  // Instance filter: "" = All (global)
-  const [instId, setInstId] = useState<string>("");
+  // Selection (instance filter)
+  const [instId, setInstId] = useState<string>(""); // empty => global
 
-  // Keep page reactive if other tabs write events/metrics
-  const [, forceTick] = useState(0);
+  // Metrics (global or per-instance)
+  const initial = useMemo(() => readJSON<Metrics>(GLOBAL_KEY, defaultMetrics), []);
+  const [m, setM] = useState<Metrics>(initial);
+  const [exporting, setExporting] = useState(false);
+
+  /** Load metrics based on current selection */
+  const loadMetrics = (id: string) => {
+    if (!id) {
+      // Global rollup
+      const g = readJSON<Metrics>(GLOBAL_KEY, defaultMetrics);
+      setM(g);
+      return;
+    }
+    // Per-instance: try stored rollup, else recompute from events
+    const stored = readJSON<Metrics>(INST_KEY(id), null as any);
+    if (stored && typeof stored === "object") {
+      setM(stored);
+    } else {
+      const recomputed = recomputeInstanceMetrics(id);
+      setM(recomputed);
+    }
+  };
+
   useEffect(() => {
+    loadMetrics(instId);
+    // also react to changes saved in other tabs
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
-      if (e.key === EKEY || e.key === AKEY) {
-        forceTick((x) => x + 1);
+      if (e.key === GLOBAL_KEY || e.key === EVENTS_KEY || (instId && e.key === INST_KEY(instId))) {
+        loadMetrics(instId);
       }
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [instId]);
 
-  // Source of truth based on scope
-  const metrics = useMemo<Metrics>(() => {
-    if (!instId) {
-      // Global saved rollup
-      return readJSON<Metrics>(AKEY, defaultMetrics);
-    }
-    // Per-instance: recompute from event log
-    const evts = readJSON<EventRecord[]>(EKEY, []);
-    return recomputeInstanceMetrics(evts, instId);
-  }, [instId, forceTick]);
-
-  const [exporting, setExporting] = useState(false);
-
-  /** Save current metrics (only allowed for global view) */
+  /** Save current metrics to whichever scope is active */
   const save = () => {
-    if (instId) return; // no-op when scoped
-    writeJSON(AKEY, metrics);
+    if (!instId) {
+      writeJSON(GLOBAL_KEY, m);
+    } else {
+      writeJSON(INST_KEY(instId), m);
+    }
     alert("Analytics saved.");
   };
 
-  /** Reset to zeros/placeholders (only allowed for global view) */
+  /** Reset current scope to zeros/placeholders */
   const reset = () => {
-    if (instId) return; // no-op when scoped
-    if (!confirm("Reset all analytics to defaults?")) return;
-    writeJSON(AKEY, { ...defaultMetrics });
-    alert("Analytics reset.");
+    if (!confirm("Reset analytics for the current scope?")) return;
+    if (!instId) {
+      writeJSON(GLOBAL_KEY, { ...defaultMetrics });
+    } else {
+      writeJSON(INST_KEY(instId), { ...defaultMetrics });
+    }
+    setM({ ...defaultMetrics });
   };
 
   /** Export a true .xlsx workbook using SheetJS (loaded on demand) */
@@ -324,20 +297,22 @@ export default function Analytics() {
       setExporting(true);
       const XLSX = await ensureXLSX();
 
+      const scopeLabel = instId ? `Instance ${instId}` : "Global";
+
       const rows: Array<[string, string | number]> = [
+        ["Scope", scopeLabel],
         ["Metric", "Value"],
-        ["Scope", instId ? `Instance ${instId}` : "All (Global)"],
-        ["Conversations", metrics.conversations],
-        ["Leads Captured", metrics.leads],
-        ["Appointments Booked", metrics.appointments],
-        ["CSAT (Customer Satisfaction Score) %", `${metrics.csatPct}`],
-        ["Avg Response Time (secs)", `${metrics.avgResponseSecs}`],
-        ["Conversion Rate %", `${metrics.conversionPct}`],
-        ["Drop-off Rate %", `${metrics.dropoffPct}`],
-        ["Qualified Leads", metrics.qualifiedLeads],
-        ["Avg Conversation Length (secs)", `${metrics.avgConversationSecs}`],
-        ["Sales Handoff Rate %", `${metrics.handoffRatePct}`],
-        ["Peak Chat Time", metrics.peakChatTime || "—"],
+        ["Conversations", m.conversations],
+        ["Leads Captured", m.leads],
+        ["Appointments Booked", m.appointments],
+        ["CSAT (Customer Satisfaction Score) %", `${m.csatPct}`],
+        ["Avg Response Time (secs)", `${m.avgResponseSecs}`],
+        ["Conversion Rate %", `${m.conversionPct}`],
+        ["Drop-off Rate %", `${m.dropoffPct}`],
+        ["Qualified Leads", m.qualifiedLeads],
+        ["Avg Conversation Length (secs)", `${m.avgConversationSecs}`],
+        ["Sales Handoff Rate %", `${m.handoffRatePct}`],
+        ["Peak Chat Time", m.peakChatTime || "—"],
         ["Exported At", new Date().toISOString()],
       ];
 
@@ -374,9 +349,9 @@ export default function Analytics() {
           "linear-gradient(135deg,#ffeef8 0%,#f3e7fc 25%,#e7f0ff 50%,#e7fcf7 75%,#fff9e7 100%)",
       }}
     >
-      {/* Header + Instance filter */}
+      {/* Header */}
       <div className="rounded-2xl border-2 border-black bg-white p-4 md:p-5 shadow mb-5">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-2xl md:text-3xl font-extrabold">Analytics</div>
             <div className="text-foreground/80 mt-1">
@@ -384,32 +359,28 @@ export default function Analytics() {
             </div>
           </div>
 
+        {/* Scope Picker */}
           <div className="flex items-center gap-3">
-            <div className="text-xs font-bold uppercase text-purple-700">Instance Filter</div>
-            <div className="min-w-[260px]">
+            <div className="text-sm font-semibold">Scope:</div>
+            <div className="min-w-[240px]">
               <BotSelector
                 scope="instance"
                 value={instId}
-                onChange={setInstId}
+                onChange={(val) => {
+                  // Defensive: BotSelector might pass a string or an object
+                  const normalized = normalizeInstId(val);
+                  setInstId(normalized);
+                }}
                 placeholderOption="All (Global)"
               />
             </div>
           </div>
         </div>
+      </div>
 
-        {instId ? (
-          <div className="mt-3 text-[12px] font-semibold text-black/70">
-            Showing metrics for instance <span className="font-extrabold">{instId}</span>.{" "}
-            <span className="opacity-80">(Save/Reset disabled in scoped view)</span>
-          </div>
-        ) : (
-          <div className="mt-3 text-[12px] font-semibold text-black/70">
-            Showing <span className="font-extrabold">All (Global)</span> metrics.
-          </div>
-        )}
-
-        {/* Export / Save / Reset controls */}
-        <div className="mt-4 flex items-center gap-2">
+      {/* Controls */}
+      <div className="mb-5 rounded-2xl border-2 border-black bg-white p-4 shadow">
+        <div className="flex items-center gap-2">
           <button
             onClick={exportXLSX}
             className="rounded-xl px-3.5 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40 disabled:opacity-60"
@@ -420,49 +391,52 @@ export default function Analytics() {
           </button>
           <button
             onClick={save}
-            className="rounded-xl px-3.5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px] disabled:opacity-60"
-            title={instId ? "Disabled in scoped view" : "Save metrics to your browser"}
-            disabled={!!instId}
+            className="rounded-xl px-3.5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+            title="Save metrics to this scope"
           >
             Save
           </button>
           <button
             onClick={reset}
-            className="rounded-xl px-3.5 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40 disabled:opacity-60"
-            title={instId ? "Disabled in scoped view" : "Reset all metrics"}
-            disabled={!!instId}
+            className="rounded-xl px-3.5 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+            title="Reset this scope"
           >
             Reset
           </button>
+
+          <div className="ml-auto text-xs font-semibold text-foreground/70">
+            Viewing: {instId ? `Instance ${asSafeText(instId)}` : "All (Global)"}
+          </div>
         </div>
       </div>
 
-      {/* Metric Cards (scoped or global based on filter) */}
+      {/* Metric Cards (display-only) */}
       <div className={sectionCls}>
         <div className="text-xl md:text-2xl font-extrabold mb-3">Metrics</div>
 
         {/* Core six */}
         <div className="grid gap-3 md:grid-cols-3">
-          <Card title="Conversations" value={metrics.conversations} />
-          <Card title="Leads Captured" value={metrics.leads} />
-          <Card title="Appointments Booked" value={metrics.appointments} />
+          <Card title="Conversations" value={m.conversations} />
+          <Card title="Leads Captured" value={m.leads} />
+          <Card title="Appointments Booked" value={m.appointments} />
 
-          <Card title="CSAT (Customer Satisfaction Score)" value={`${metrics.csatPct}%`} />
-          <Card title="Avg Response Time" value={`${metrics.avgResponseSecs}s`} />
-          <Card title="Conversion Rate" value={`${metrics.conversionPct}%`} />
+          <Card title="CSAT (Customer Satisfaction Score)" value={`${m.csatPct}%`} />
+          <Card title="Avg Response Time" value={`${m.avgResponseSecs}s`} />
+          <Card title="Conversion Rate" value={`${m.conversionPct}%`} />
         </div>
 
         {/* Pro five */}
         <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <Card title="Drop-off Rate" value={`${metrics.dropoffPct}%`} />
-          <Card title="Qualified Leads" value={metrics.qualifiedLeads} />
-          <Card title="Avg Conversation Length" value={`${metrics.avgConversationSecs}s`} />
+          <Card title="Drop-off Rate" value={`${m.dropoffPct}%`} />
+          <Card title="Qualified Leads" value={m.qualifiedLeads} />
+          <Card title="Avg Conversation Length" value={`${m.avgConversationSecs}s`} />
 
-          <Card title="Sales Handoff Rate" value={`${metrics.handoffRatePct}%`} />
-          <Card title="Peak Chat Time" value={metrics.peakChatTime || "—"} />
+          <Card title="Sales Handoff Rate" value={`${m.handoffRatePct}%`} />
+          <Card title="Peak Chat Time" value={m.peakChatTime || "—"} />
           <div className="hidden md:block" />
         </div>
       </div>
     </div>
   );
 }
+
