@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
 import BotSelector from "@/components/BotSelector";
+import { trackEvent } from "@/lib/analytics";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
@@ -113,8 +114,22 @@ export default function Preview() {
   /* ---------- modal demo state ---------- */
   const [openModal, setOpenModal] = useState(false);
   const [step, setStep] = useState(0);
-  const next = () => setStep((s) => Math.min(s + 1, 3));
-  const back = () => setStep((s) => Math.max(s - 1, 0));
+
+  const next = () => {
+    const scope = activeInst
+      ? ({ kind: "inst", id: activeInst.id } as const)
+      : ({ kind: "bot", key: botKey } as const);
+    trackEvent("step_next", scope, { step });
+    setStep((s) => Math.min(s + 1, 3));
+  };
+
+  const back = () => {
+    const scope = activeInst
+      ? ({ kind: "inst", id: activeInst.id } as const)
+      : ({ kind: "bot", key: botKey } as const);
+    trackEvent("step_back", scope, { step });
+    setStep((s) => Math.max(s - 1, 0));
+  };
 
   // Modal header (title bar): instance name if present, otherwise bot name
   const modalHeader = activeInst ? activeInst.name : (BOT_TITLES[botKey] ?? titleCaseSlug(botKey));
@@ -414,7 +429,15 @@ export default function Preview() {
           <div className="md:col-span-2 flex items-center gap-3">
             <button
               className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
-              onClick={() => { setStep(0); setOpenModal(true); }}
+              onClick={() => {
+                // Opening via explicit button (treat as bubble open in preview context)
+                const scope = activeInst
+                  ? ({ kind: "inst", id: activeInst.id } as const)
+                  : ({ kind: "bot", key: botKey } as const);
+                trackEvent("bubble_open", scope, { from: "preview_button" });
+                setStep(0);
+                setOpenModal(true);
+              }}
             >
               Open Preview Modal
             </button>
@@ -460,7 +483,14 @@ export default function Preview() {
             label={label}
             labelColor={labelColor}
             hideLabelWhenImage={hideLabelWhenImage}
-            onBubbleClick={() => { setStep(0); setOpenModal(true); }}
+            onBubbleClick={() => {
+              const scope = activeInst
+                ? ({ kind: "inst", id: activeInst.id } as const)
+                : ({ kind: "bot", key: botKey } as const);
+              trackEvent("bubble_open", scope, { from: "preview_bubble" });
+              setStep(0);
+              setOpenModal(true);
+            }}
           />
         )}
 
@@ -506,7 +536,13 @@ export default function Preview() {
                 <div className="flex items-center justify-between">
                   <button
                     className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-                    onClick={() => setOpenModal(false)}
+                    onClick={() => {
+                      const scope = activeInst
+                        ? ({ kind: "inst", id: activeInst.id } as const)
+                        : ({ kind: "bot", key: botKey } as const);
+                      trackEvent("close_widget", scope, { step });
+                      setOpenModal(false);
+                    }}
                   >
                     Close
                   </button>
@@ -529,7 +565,13 @@ export default function Preview() {
                     ) : (
                       <button
                         className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                        onClick={() => setOpenModal(false)}
+                        onClick={() => {
+                          const scope = activeInst
+                            ? ({ kind: "inst", id: activeInst.id } as const)
+                            : ({ kind: "bot", key: botKey } as const);
+                          trackEvent("lead_submit", scope, { method: "preview-demo" });
+                          setOpenModal(false);
+                        }}
                       >
                         Done
                       </button>
