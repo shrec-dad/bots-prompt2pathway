@@ -6,7 +6,15 @@ import { trackEvent } from "@/lib/analytics";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
-type Shape = "circle" | "rounded" | "square" | "oval" | "chat" | "badge" | "speech" | "speech-rounded";
+type Shape =
+  | "circle"
+  | "rounded"
+  | "square"
+  | "oval"
+  | "chat"
+  | "badge"
+  | "speech"
+  | "speech-rounded";
 type ImageFit = "cover" | "contain" | "center";
 
 /* ---------- Small helpers ---------- */
@@ -33,7 +41,7 @@ type Branding = {
   primaryColor: string;
   secondaryColor: string;
   fontFamily: string;
-  chatBubbleImage?: string;   // may be a URL or a data: URI
+  chatBubbleImage?: string; // may be a URL or a data: URI
   chatBubbleColor: string;
   chatBubbleSize: number;
   chatBubblePosition: Pos;
@@ -71,6 +79,22 @@ function setBranding(next: Partial<Branding>) {
   return merged as Branding;
 }
 
+/* ---------- Safe coercion for instance id (guards accidental objects) ---------- */
+
+function isNonEmptyString(x: unknown): x is string {
+  return typeof x === "string" && x.trim().length > 0;
+}
+
+function coerceInstId(val: unknown): string {
+  if (isNonEmptyString(val)) return val.trim();
+  if (val && typeof val === "object") {
+    const anyVal = val as any;
+    if (isNonEmptyString(anyVal.id)) return anyVal.id.trim();
+    if (isNonEmptyString(anyVal.value)) return anyVal.value.trim();
+  }
+  return "";
+}
+
 export default function Preview() {
   /* ---------- sources (instances) ---------- */
   const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
@@ -95,7 +119,7 @@ export default function Preview() {
     [instances, instId]
   );
 
-  // The bot that actually drives copy/labels
+  // The bot that actually drives copy/labels when no instance is selected
   const activeBotKey = activeInst?.bot || botKey;
 
   /* ---------- widget look state ---------- */
@@ -109,7 +133,9 @@ export default function Preview() {
   const [imageFit, setImageFit] = useState<ImageFit>(b.chatBubbleImageFit ?? "cover");
   const [label, setLabel] = useState<string>(b.chatBubbleLabel ?? "Chat");
   const [labelColor, setLabelColor] = useState<string>(b.chatBubbleLabelColor ?? "#ffffff");
-  const [hideLabelWhenImage, setHideLabelWhenImage] = useState<boolean>(!!b.chatHideLabelWhenImage);
+  const [hideLabelWhenImage, setHideLabelWhenImage] = useState<boolean>(
+    !!b.chatHideLabelWhenImage
+  );
 
   /* ---------- modal demo state ---------- */
   const [openModal, setOpenModal] = useState(false);
@@ -132,10 +158,14 @@ export default function Preview() {
   };
 
   // Modal header (title bar): instance name if present, otherwise bot name
-  const modalHeader = activeInst ? activeInst.name : (BOT_TITLES[botKey] ?? titleCaseSlug(botKey));
+  const modalHeader = activeInst
+    ? activeInst.name
+    : BOT_TITLES[botKey] ?? titleCaseSlug(botKey);
 
-  // Headline “Welcome to …” based on the *active* bot (instance > bot)
-  const headline = `Welcome to ${BOT_TITLES[activeBotKey] ?? "Chat"}`;
+  // Headline — when an instance is selected, prefer its display name
+  const headline = activeInst
+    ? `Welcome to ${activeInst.name}`
+    : `Welcome to ${BOT_TITLES[activeBotKey] ?? "Chat"}`;
 
   // Demo subtext varies slightly per step
   const subtext = (() => {
@@ -244,9 +274,7 @@ export default function Preview() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xl font-extrabold">Widget Preview</div>
-              <div className="text-sm opacity-90">
-                Tune the customer-facing widget style.
-              </div>
+              <div className="text-sm opacity-90">Tune the customer-facing widget style.</div>
             </div>
             <div className="flex gap-2">
               <button
@@ -273,7 +301,7 @@ export default function Preview() {
             <BotSelector
               scope="instance"
               value={instId}
-              onChange={setInstId}
+              onChange={(v) => setInstId(coerceInstId(v))}
               placeholderOption="— none —"
             />
             <div className="text-xs text-muted-foreground">
@@ -284,12 +312,7 @@ export default function Preview() {
           {/* Bot via BotSelector (disabled when instance selected) */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Bot</label>
-            <BotSelector
-              scope="template"
-              value={botKey}
-              onChange={setBotKey}
-              disabled={!!activeInst}
-            />
+            <BotSelector scope="template" value={botKey} onChange={setBotKey} disabled={!!activeInst} />
           </div>
 
           {/* Mode & Position */}
@@ -430,7 +453,6 @@ export default function Preview() {
             <button
               className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
               onClick={() => {
-                // Opening via explicit button (treat as bubble open in preview context)
                 const scope = activeInst
                   ? ({ kind: "inst", id: activeInst.id } as const)
                   : ({ kind: "bot", key: botKey } as const);
@@ -474,6 +496,9 @@ export default function Preview() {
           <ChatWidget
             mode="popup"
             botId={activeInst ? activeInst.bot : botKey}
+            /* pass instance id through so the widget can load the real client bot if it supports it */
+            // @ts-expect-error allow downstream optional prop
+            instId={activeInst?.id}
             position={pos}
             size={size}
             color={color || undefined}
@@ -498,9 +523,7 @@ export default function Preview() {
           <div className="absolute inset-0 grid place-items-center">
             <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl">
               <div className={`rounded-t-2xl p-4 bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white`}>
-                <div className="text-lg font-extrabold">
-                  {modalHeader}
-                </div>
+                <div className="text-lg font-extrabold">{modalHeader}</div>
               </div>
 
               <div className="p-6 space-y-6">
@@ -512,20 +535,14 @@ export default function Preview() {
 
                   {step === 1 && (
                     <div className="mt-4">
-                      <input
-                        className="w-full rounded-lg border px-3 py-2"
-                        placeholder="you@domain.com"
-                      />
+                      <input className="w-full rounded-lg border px-3 py-2" placeholder="you@domain.com" />
                     </div>
                   )}
 
                   {step === 2 && (
                     <div className="mt-4 grid gap-2">
                       {["Curious", "Very interested", "VIP"].map((o) => (
-                        <button
-                          key={o}
-                          className="rounded-lg border px-3 py-2 hover:bg-muted/50"
-                        >
+                        <button key={o} className="rounded-lg border px-3 py-2 hover:bg-muted/50">
                           {o}
                         </button>
                       ))}
@@ -548,10 +565,7 @@ export default function Preview() {
                   </button>
                   <div className="flex gap-2">
                     {step > 0 && step < 3 && (
-                      <button
-                        className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-                        onClick={back}
-                      >
+                      <button className="rounded-xl px-4 py-2 font-bold ring-1 ring-border" onClick={back}>
                         Back
                       </button>
                     )}
@@ -586,3 +600,4 @@ export default function Preview() {
     </div>
   );
 }
+
