@@ -28,8 +28,25 @@ const BOT_TITLES: Record<string, string> = {
   Receptionist: "Receptionist",
 };
 
-function titleCaseSlug(s: string) {
-  return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+/** Defensive title-case helper (won’t explode on non-strings) */
+function titleCaseSlug(s: unknown) {
+  if (typeof s === "string") {
+    return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return "";
+}
+
+/** Extract a string id/key from BotSelector values (string | object | null) */
+function toId(val: unknown): string {
+  if (typeof val === "string") return val;
+  if (val && typeof val === "object") {
+    const anyVal = val as any;
+    // common possibilities
+    if (typeof anyVal.id === "string") return anyVal.id;
+    if (typeof anyVal.key === "string") return anyVal.key;
+    if (typeof anyVal.value === "string") return anyVal.value;
+  }
+  return "";
 }
 
 /* ---------- Branding storage ---------- */
@@ -79,25 +96,11 @@ function setBranding(next: Partial<Branding>) {
   return merged as Branding;
 }
 
-/* ---------- Safe coercion for instance id (guards accidental objects) ---------- */
-
-function isNonEmptyString(x: unknown): x is string {
-  return typeof x === "string" && x.trim().length > 0;
-}
-
-function coerceInstId(val: unknown): string {
-  if (isNonEmptyString(val)) return val.trim();
-  if (val && typeof val === "object") {
-    const anyVal = val as any;
-    if (isNonEmptyString(anyVal.id)) return anyVal.id.trim();
-    if (isNonEmptyString(anyVal.value)) return anyVal.value.trim();
-  }
-  return "";
-}
-
 export default function Preview() {
   /* ---------- sources (instances) ---------- */
-  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
+  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
+    listInstances()
+  );
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -114,12 +117,26 @@ export default function Preview() {
   const [instId, setInstId] = useState<string>("");
   const [botKey, setBotKey] = useState<string>("Waitlist"); // fallback
 
+  /** Change handlers with guards so BotSelector can pass objects safely */
+  const onInstanceChange = (val: unknown) => {
+    const id = toId(val);
+    setInstId(id); // empty string clears selection
+    // small analytics ping
+    trackEvent("preview_select_instance", id ? { kind: "inst", id } : { kind: "bot", key: botKey });
+  };
+  const onBotChange = (val: unknown) => {
+    const key = toId(val) || "Waitlist";
+    setBotKey(key);
+    // small analytics ping
+    trackEvent("preview_select_bot", { kind: "bot", key });
+  };
+
   const activeInst = useMemo(
-    () => instances.find((m) => m.id === instId),
+    () => (typeof instId === "string" && instId ? instances.find((m) => m.id === instId) : undefined),
     [instances, instId]
   );
 
-  // The bot that actually drives copy/labels when no instance is selected
+  // The *template key* behind the selection (used for the bubble widget source)
   const activeBotKey = activeInst?.bot || botKey;
 
   /* ---------- widget look state ---------- */
@@ -144,7 +161,7 @@ export default function Preview() {
   const next = () => {
     const scope = activeInst
       ? ({ kind: "inst", id: activeInst.id } as const)
-      : ({ kind: "bot", key: botKey } as const);
+      : ({ kind: "bot", key: activeBotKey } as const);
     trackEvent("step_next", scope, { step });
     setStep((s) => Math.min(s + 1, 3));
   };
@@ -152,20 +169,15 @@ export default function Preview() {
   const back = () => {
     const scope = activeInst
       ? ({ kind: "inst", id: activeInst.id } as const)
-      : ({ kind: "bot", key: botKey } as const);
+      : ({ kind: "bot", key: activeBotKey } as const);
     trackEvent("step_back", scope, { step });
     setStep((s) => Math.max(s - 1, 0));
   };
 
-  // Modal header (title bar): instance name if present, otherwise bot name
-  const modalHeader = activeInst
-    ? activeInst.name
-    : BOT_TITLES[botKey] ?? titleCaseSlug(botKey);
-
-  // Headline — when an instance is selected, prefer its display name
+  // Headline: for instances show the instance name; otherwise the friendly template title
   const headline = activeInst
     ? `Welcome to ${activeInst.name}`
-    : `Welcome to ${BOT_TITLES[activeBotKey] ?? "Chat"}`;
+    : `Welcome to ${BOT_TITLES[activeBotKey] ?? titleCaseSlug(activeBotKey)}`;
 
   // Demo subtext varies slightly per step
   const subtext = (() => {
@@ -179,7 +191,7 @@ export default function Preview() {
   const widgetSrc = useMemo(() => {
     const qp = new URLSearchParams();
     if (activeInst) qp.set("inst", activeInst.id);
-    else qp.set("bot", botKey);
+    else qp.set("bot", activeBotKey);
 
     qp.set("position", pos);
     qp.set("size", String(size));
@@ -191,7 +203,7 @@ export default function Preview() {
     if (img.trim()) qp.set("image", img.trim());
 
     return `/widget?${qp.toString()}`;
-  }, [activeInst, botKey, pos, size, shape, imageFit, label, labelColor, color, img]);
+  }, [activeInst, activeBotKey, pos, size, shape, imageFit, label, labelColor, color, img]);
 
   const embedIframe = `<iframe
   src="${widgetSrc}"
@@ -274,7 +286,9 @@ export default function Preview() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xl font-extrabold">Widget Preview</div>
-              <div className="text-sm opacity-90">Tune the customer-facing widget style.</div>
+              <div className="text-sm opacity-90">
+                Tune the customer-facing widget style.
+              </div>
             </div>
             <div className="flex gap-2">
               <button
@@ -301,7 +315,7 @@ export default function Preview() {
             <BotSelector
               scope="instance"
               value={instId}
-              onChange={(v) => setInstId(coerceInstId(v))}
+              onChange={onInstanceChange}
               placeholderOption="— none —"
             />
             <div className="text-xs text-muted-foreground">
@@ -312,7 +326,12 @@ export default function Preview() {
           {/* Bot via BotSelector (disabled when instance selected) */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">Bot</label>
-            <BotSelector scope="template" value={botKey} onChange={setBotKey} disabled={!!activeInst} />
+            <BotSelector
+              scope="template"
+              value={botKey}
+              onChange={onBotChange}
+              disabled={!!activeInst}
+            />
           </div>
 
           {/* Mode & Position */}
@@ -382,7 +401,12 @@ export default function Preview() {
               />
               <label className="rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white">
                 Upload
-                <input type="file" accept="image/*" className="hidden" onChange={onPickBubbleImage} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={onPickBubbleImage}
+                />
               </label>
               <button
                 className="rounded-lg border px-3 py-2 font-semibold bg-white"
@@ -455,7 +479,7 @@ export default function Preview() {
               onClick={() => {
                 const scope = activeInst
                   ? ({ kind: "inst", id: activeInst.id } as const)
-                  : ({ kind: "bot", key: botKey } as const);
+                  : ({ kind: "bot", key: activeBotKey } as const);
                 trackEvent("bubble_open", scope, { from: "preview_button" });
                 setStep(0);
                 setOpenModal(true);
@@ -495,10 +519,7 @@ export default function Preview() {
         {mode === "popup" && (
           <ChatWidget
             mode="popup"
-            botId={activeInst ? activeInst.bot : botKey}
-            /* pass instance id through so the widget can load the real client bot if it supports it */
-            // @ts-expect-error allow downstream optional prop
-            instId={activeInst?.id}
+            botId={activeBotKey}
             position={pos}
             size={size}
             color={color || undefined}
@@ -511,7 +532,7 @@ export default function Preview() {
             onBubbleClick={() => {
               const scope = activeInst
                 ? ({ kind: "inst", id: activeInst.id } as const)
-                : ({ kind: "bot", key: botKey } as const);
+                : ({ kind: "bot", key: activeBotKey } as const);
               trackEvent("bubble_open", scope, { from: "preview_bubble" });
               setStep(0);
               setOpenModal(true);
@@ -522,10 +543,11 @@ export default function Preview() {
         {openModal && (
           <div className="absolute inset-0 grid place-items-center">
             <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl">
-              <div className={`rounded-t-2xl p-4 bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white`}>
-                <div className="text-lg font-extrabold">{modalHeader}</div>
-              </div>
-
+              {/* Keep the colorful banner, but no duplicate name text */}
+              <div
+                className={`rounded-t-2xl p-4 ${gradientHeader}`}
+                aria-hidden="true"
+              />
               <div className="p-6 space-y-6">
                 <div className="grid place-items-center text-5xl">👋</div>
 
@@ -535,14 +557,20 @@ export default function Preview() {
 
                   {step === 1 && (
                     <div className="mt-4">
-                      <input className="w-full rounded-lg border px-3 py-2" placeholder="you@domain.com" />
+                      <input
+                        className="w-full rounded-lg border px-3 py-2"
+                        placeholder="you@domain.com"
+                      />
                     </div>
                   )}
 
                   {step === 2 && (
                     <div className="mt-4 grid gap-2">
                       {["Curious", "Very interested", "VIP"].map((o) => (
-                        <button key={o} className="rounded-lg border px-3 py-2 hover:bg-muted/50">
+                        <button
+                          key={o}
+                          className="rounded-lg border px-3 py-2 hover:bg-muted/50"
+                        >
                           {o}
                         </button>
                       ))}
@@ -556,7 +584,7 @@ export default function Preview() {
                     onClick={() => {
                       const scope = activeInst
                         ? ({ kind: "inst", id: activeInst.id } as const)
-                        : ({ kind: "bot", key: botKey } as const);
+                        : ({ kind: "bot", key: activeBotKey } as const);
                       trackEvent("close_widget", scope, { step });
                       setOpenModal(false);
                     }}
@@ -565,7 +593,10 @@ export default function Preview() {
                   </button>
                   <div className="flex gap-2">
                     {step > 0 && step < 3 && (
-                      <button className="rounded-xl px-4 py-2 font-bold ring-1 ring-border" onClick={back}>
+                      <button
+                        className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                        onClick={back}
+                      >
                         Back
                       </button>
                     )}
@@ -582,7 +613,7 @@ export default function Preview() {
                         onClick={() => {
                           const scope = activeInst
                             ? ({ kind: "inst", id: activeInst.id } as const)
-                            : ({ kind: "bot", key: botKey } as const);
+                            : ({ kind: "bot", key: activeBotKey } as const);
                           trackEvent("lead_submit", scope, { method: "preview-demo" });
                           setOpenModal(false);
                         }}
@@ -600,4 +631,3 @@ export default function Preview() {
     </div>
   );
 }
-
