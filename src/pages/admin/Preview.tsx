@@ -119,7 +119,7 @@ export default function Preview() {
     [instances, instId]
   );
 
-  // The bot that drives copy/labels when no instance is selected
+  // The bot that actually drives copy/labels when no instance is selected
   const activeBotKey = activeInst?.bot || botKey;
 
   /* ---------- widget look state ---------- */
@@ -157,10 +157,15 @@ export default function Preview() {
     setStep((s) => Math.max(s - 1, 0));
   };
 
+  // Modal header (title bar): instance name if present, otherwise bot name
+  const modalHeader = activeInst
+    ? activeInst.name
+    : BOT_TITLES[botKey] ?? titleCaseSlug(botKey);
+
   // Headline — when an instance is selected, prefer its display name
   const headline = activeInst
     ? `Welcome to ${activeInst.name}`
-    : `Welcome to ${BOT_TITLES[activeBotKey] ?? titleCaseSlug(activeBotKey)}`;
+    : `Welcome to ${BOT_TITLES[activeBotKey] ?? "Chat"}`;
 
   // Demo subtext varies slightly per step
   const subtext = (() => {
@@ -292,18 +297,7 @@ export default function Preview() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
           {/* Instance via BotSelector (optional) */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold">Instance (optional)</label>
-              {/* Always-available escape hatch to deselect instance */}
-              <button
-                type="button"
-                className="text-xs font-semibold rounded-md border px-2 py-1 bg-white hover:bg-muted/40"
-                onClick={() => setInstId("")}
-                title="Clear selected instance"
-              >
-                Clear Instance
-              </button>
-            </div>
+            <label className="text-sm font-semibold">Instance (optional)</label>
             <BotSelector
               scope="instance"
               value={instId}
@@ -459,7 +453,6 @@ export default function Preview() {
             <button
               className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
               onClick={() => {
-                // Opening via explicit button (treat like bubble open in preview context)
                 const scope = activeInst
                   ? ({ kind: "inst", id: activeInst.id } as const)
                   : ({ kind: "bot", key: botKey } as const);
@@ -529,7 +522,10 @@ export default function Preview() {
         {openModal && (
           <div className="absolute inset-0 grid place-items-center">
             <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl">
-              {/* Removed the top colorful banner to avoid duplicate naming */}
+              <div className={`rounded-t-2xl p-4 bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white`}>
+                <div className="text-lg font-extrabold">{modalHeader}</div>
+              </div>
+
               <div className="p-6 space-y-6">
                 <div className="grid place-items-center text-5xl">👋</div>
 
