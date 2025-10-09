@@ -41,7 +41,6 @@ function toId(val: unknown): string {
   if (typeof val === "string") return val;
   if (val && typeof val === "object") {
     const anyVal = val as any;
-    // common possibilities
     if (typeof anyVal.id === "string") return anyVal.id;
     if (typeof anyVal.key === "string") return anyVal.key;
     if (typeof anyVal.value === "string") return anyVal.value;
@@ -121,18 +120,27 @@ export default function Preview() {
   const onInstanceChange = (val: unknown) => {
     const id = toId(val);
     setInstId(id); // empty string clears selection
-    // small analytics ping
-    trackEvent("preview_select_instance", id ? { kind: "inst", id } : { kind: "bot", key: botKey });
+    trackEvent(
+      "preview_select_instance",
+      id ? { kind: "inst", id } : { kind: "bot", key: botKey }
+    );
   };
   const onBotChange = (val: unknown) => {
     const key = toId(val) || "Waitlist";
     setBotKey(key);
-    // small analytics ping
     trackEvent("preview_select_bot", { kind: "bot", key });
+  };
+  const clearInstance = () => {
+    if (!instId) return;
+    trackEvent("preview_clear_instance", { kind: "inst", id: instId });
+    setInstId("");
   };
 
   const activeInst = useMemo(
-    () => (typeof instId === "string" && instId ? instances.find((m) => m.id === instId) : undefined),
+    () =>
+      typeof instId === "string" && instId
+        ? instances.find((m) => m.id === instId)
+        : undefined,
     [instances, instId]
   );
 
@@ -147,9 +155,13 @@ export default function Preview() {
   const [color, setColor] = useState<string>(b.chatBubbleColor ?? "#7aa8ff");
   const [img, setImg] = useState<string>(b.chatBubbleImage ?? "");
   const [shape, setShape] = useState<Shape>(b.chatBubbleShape ?? "circle");
-  const [imageFit, setImageFit] = useState<ImageFit>(b.chatBubbleImageFit ?? "cover");
+  const [imageFit, setImageFit] = useState<ImageFit>(
+    b.chatBubbleImageFit ?? "cover"
+  );
   const [label, setLabel] = useState<string>(b.chatBubbleLabel ?? "Chat");
-  const [labelColor, setLabelColor] = useState<string>(b.chatBubbleLabelColor ?? "#ffffff");
+  const [labelColor, setLabelColor] = useState<string>(
+    b.chatBubbleLabelColor ?? "#ffffff"
+  );
   const [hideLabelWhenImage, setHideLabelWhenImage] = useState<boolean>(
     !!b.chatHideLabelWhenImage
   );
@@ -181,7 +193,8 @@ export default function Preview() {
 
   // Demo subtext varies slightly per step
   const subtext = (() => {
-    if (step === 0) return "I’ll ask a few quick questions to help our team help you.";
+    if (step === 0)
+      return "I’ll ask a few quick questions to help our team help you.";
     if (step === 1) return "What’s the best email to reach you?";
     if (step === 2) return "Choose your interest level.";
     return "Thanks! You’re on the list — we’ll be in touch.";
@@ -203,7 +216,18 @@ export default function Preview() {
     if (img.trim()) qp.set("image", img.trim());
 
     return `/widget?${qp.toString()}`;
-  }, [activeInst, activeBotKey, pos, size, shape, imageFit, label, labelColor, color, img]);
+  }, [
+    activeInst,
+    activeBotKey,
+    pos,
+    size,
+    shape,
+    imageFit,
+    label,
+    labelColor,
+    color,
+    img,
+  ]);
 
   const embedIframe = `<iframe
   src="${widgetSrc}"
@@ -311,7 +335,19 @@ export default function Preview() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
           {/* Instance via BotSelector (optional) */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">Instance (optional)</label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold">Instance (optional)</label>
+              <button
+                type="button"
+                className="text-xs font-semibold rounded-md px-2 py-1 border bg-white hover:bg-muted/40"
+                onClick={clearInstance}
+                disabled={!instId}
+                title={instId ? "Clear selected instance" : "No instance selected"}
+                aria-disabled={!instId}
+              >
+                Clear
+              </button>
+            </div>
             <BotSelector
               scope="instance"
               value={instId}
@@ -555,27 +591,27 @@ export default function Preview() {
                   <h2 className="text-2xl font-extrabold">{headline}</h2>
                   <p className="mt-2 text-muted-foreground">{subtext}</p>
 
-                  {step === 1 && (
-                    <div className="mt-4">
-                      <input
-                        className="w-full rounded-lg border px-3 py-2"
-                        placeholder="you@domain.com"
-                      />
-                    </div>
-                  )}
+                {step === 1 && (
+                  <div className="mt-4">
+                    <input
+                      className="w-full rounded-lg border px-3 py-2"
+                      placeholder="you@domain.com"
+                    />
+                  </div>
+                )}
 
-                  {step === 2 && (
-                    <div className="mt-4 grid gap-2">
-                      {["Curious", "Very interested", "VIP"].map((o) => (
-                        <button
-                          key={o}
-                          className="rounded-lg border px-3 py-2 hover:bg-muted/50"
-                        >
-                          {o}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                {step === 2 && (
+                  <div className="mt-4 grid gap-2">
+                    {["Curious", "Very interested", "VIP"].map((o) => (
+                      <button
+                        key={o}
+                        className="rounded-lg border px-3 py-2 hover:bg-muted/50"
+                      >
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -614,7 +650,9 @@ export default function Preview() {
                           const scope = activeInst
                             ? ({ kind: "inst", id: activeInst.id } as const)
                             : ({ kind: "bot", key: activeBotKey } as const);
-                          trackEvent("lead_submit", scope, { method: "preview-demo" });
+                          trackEvent("lead_submit", scope, {
+                            method: "preview-demo",
+                          });
                           setOpenModal(false);
                         }}
                       >
@@ -631,3 +669,4 @@ export default function Preview() {
     </div>
   );
 }
+
