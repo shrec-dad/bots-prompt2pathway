@@ -553,7 +553,7 @@ export default function Preview() {
           </div>
         </div>
 
-               {/* Live area: bubble + modal */}
+        {/* Live area: bubble + modal */}
         <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
           {mode === "popup" && (
             <ChatWidget
@@ -597,7 +597,7 @@ export default function Preview() {
                 role="dialog"
                 aria-modal="true"
                 aria-label="Widget Preview"
-                className="w-[560px] max-w-[94vw] rounded-2xl border bg-white shadow-2xl outline-none"
+                className="w-[480px] max-w-[94vw] rounded-2xl border bg-white shadow-2xl outline-none"
                 tabIndex={-1}
               >
                 {/* top strip */}
@@ -606,8 +606,8 @@ export default function Preview() {
                   aria-hidden="true"
                 />
 
-                {/* body – vertical layout */}
-                <div className="p-6 flex flex-col gap-6">
+                {/* body – vertical layout; scroll-safe on short screens */}
+                <div className="p-6 flex flex-col gap-6 max-h-[70vh] overflow-y-auto">
                   {/* Close button (top-right) */}
                   <div className="flex">
                     <button
