@@ -97,7 +97,7 @@ function recomputeInstanceMetrics(instId: string): Metrics {
     (e) => e?.scope?.kind === "inst" && e?.scope?.id === instId
   );
 
-  // Very simple heuristic counters; extend as your event schema grows
+  // Simple heuristic counters; extend as your event schema grows
   let conversations = 0;
   let leads = 0;
   let appointments = 0;
@@ -359,10 +359,10 @@ export default function Analytics() {
             </div>
           </div>
 
-        {/* Scope Picker */}
+          {/* Scope Picker */}
           <div className="flex items-center gap-3">
             <div className="text-sm font-semibold">Scope:</div>
-            <div className="min-w-[240px]">
+            <div className="min-w-[260px] flex items-center gap-2">
               <BotSelector
                 scope="instance"
                 value={instId}
@@ -373,6 +373,15 @@ export default function Analytics() {
                 }}
                 placeholderOption="All (Global)"
               />
+              {/* Clear Instance button */}
+              <button
+                type="button"
+                onClick={() => setInstId("")}
+                className="rounded-md border px-2.5 py-1.5 text-sm font-semibold bg-white hover:bg-muted/40"
+                title="Clear selected instance (view Global)"
+              >
+                Clear
+              </button>
             </div>
           </div>
         </div>
