@@ -531,7 +531,7 @@ export default function Bots() {
                     </div>
                   </div>
 
-                  <div className="p-4 flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
+                  <div className="p-3 sm:p-4 flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
                       onClick={() => (window.location.href = `/admin/builder?inst=${m.id}`)}
