@@ -1,8 +1,10 @@
+// src/pages/admin/Preview.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import ChatWidget from "@/widgets/ChatWidget";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
 import BotSelector from "@/components/BotSelector";
 import { trackEvent } from "@/lib/analytics";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
@@ -303,370 +305,371 @@ export default function Preview() {
     "bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white";
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Controls */}
-      <div className="rounded-2xl border bg-white shadow-sm">
-        <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xl font-extrabold">Widget Preview</div>
-              <div className="text-sm opacity-90">
-                Tune the customer-facing widget style.
+    <ErrorBoundary>
+      <div className="p-6 space-y-6">
+        {/* Controls */}
+        <div className="rounded-2xl border bg-white shadow-sm">
+          <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xl font-extrabold">Widget Preview</div>
+                <div className="text-sm opacity-90">
+                  Tune the customer-facing widget style.
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
+                  onClick={onSave}
+                >
+                  Save
+                </button>
+                <button
+                  className="rounded-2xl px-3 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
+                  onClick={onReset}
+                >
+                  Reset
+                </button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
-                onClick={onSave}
-              >
-                Save
-              </button>
-              <button
-                className="rounded-2xl px-3 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
-                onClick={onReset}
-              >
-                Reset
-              </button>
+            {savedNote && <div className="mt-2 text-xs font-bold">{savedNote}</div>}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+            {/* Instance via BotSelector (optional) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold">Instance (optional)</label>
+                <button
+                  type="button"
+                  className="text-xs font-semibold rounded-md px-2 py-1 border bg-white hover:bg-muted/40"
+                  onClick={clearInstance}
+                  disabled={!instId}
+                  title={instId ? "Clear selected instance" : "No instance selected"}
+                  aria-disabled={!instId}
+                >
+                  Clear
+                </button>
+              </div>
+              <BotSelector
+                scope="instance"
+                value={instId}
+                onChange={onInstanceChange}
+                placeholderOption="— none —"
+              />
+              <div className="text-xs text-muted-foreground">
+                If an instance is chosen, it overrides the Bot.
+              </div>
             </div>
-          </div>
-          {savedNote && <div className="mt-2 text-xs font-bold">{savedNote}</div>}
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-          {/* Instance via BotSelector (optional) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold">Instance (optional)</label>
-              <button
-                type="button"
-                className="text-xs font-semibold rounded-md px-2 py-1 border bg-white hover:bg-muted/40"
-                onClick={clearInstance}
-                disabled={!instId}
-                title={instId ? "Clear selected instance" : "No instance selected"}
-                aria-disabled={!instId}
+            {/* Bot via BotSelector (disabled when instance selected) */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Bot</label>
+              <BotSelector
+                scope="template"
+                value={botKey}
+                onChange={onBotChange}
+                disabled={!!activeInst}
+              />
+            </div>
+
+            {/* Mode & Position */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Mode</label>
+              <select
+                className="w-full rounded-lg border px-3 py-2"
+                value={mode}
+                onChange={(e) => setMode(e.target.value as Mode)}
               >
-                Clear
-              </button>
+                <option value="popup">popup (floating bubble)</option>
+                <option value="inline">inline</option>
+                <option value="sidebar">sidebar</option>
+              </select>
             </div>
-            <BotSelector
-              scope="instance"
-              value={instId}
-              onChange={onInstanceChange}
-              placeholderOption="— none —"
-            />
-            <div className="text-xs text-muted-foreground">
-              If an instance is chosen, it overrides the Bot.
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Position</label>
+              <select
+                className="w-full rounded-lg border px-3 py-2"
+                value={pos}
+                onChange={(e) => setPos(e.target.value as Pos)}
+              >
+                <option value="bottom-right">bottom-right</option>
+                <option value="bottom-left">bottom-left</option>
+              </select>
             </div>
-          </div>
 
-          {/* Bot via BotSelector (disabled when instance selected) */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Bot</label>
-            <BotSelector
-              scope="template"
-              value={botKey}
-              onChange={onBotChange}
-              disabled={!!activeInst}
-            />
-          </div>
+            {/* Size & Shape */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Size (px)</label>
+              <input
+                type="number"
+                min={40}
+                max={120}
+                className="w-full rounded-lg border px-3 py-2"
+                value={size}
+                onChange={(e) => setSize(Number(e.target.value))}
+              />
+            </div>
 
-          {/* Mode & Position */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Mode</label>
-            <select
-              className="w-full rounded-lg border px-3 py-2"
-              value={mode}
-              onChange={(e) => setMode(e.target.value as Mode)}
-            >
-              <option value="popup">popup (floating bubble)</option>
-              <option value="inline">inline</option>
-              <option value="sidebar">sidebar</option>
-            </select>
-          </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Bubble Shape</label>
+              <select
+                className="w-full rounded-lg border px-3 py-2"
+                value={shape}
+                onChange={(e) => setShape(e.target.value as Shape)}
+              >
+                <option value="circle">circle</option>
+                <option value="rounded">rounded</option>
+                <option value="square">square</option>
+                <option value="oval">oval</option>
+                <option value="speech">speech (round)</option>
+                <option value="speech-rounded">speech (rounded)</option>
+              </select>
+            </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Position</label>
-            <select
-              className="w-full rounded-lg border px-3 py-2"
-              value={pos}
-              onChange={(e) => setPos(e.target.value as Pos)}
-            >
-              <option value="bottom-right">bottom-right</option>
-              <option value="bottom-left">bottom-left</option>
-            </select>
-          </div>
+            {/* Image & Fit (with upload + clear) */}
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-semibold">Bubble Image (optional)</label>
+              <div className="flex items-center gap-3">
+                <input
+                  className="w-full rounded-lg border px-3 py-2"
+                  placeholder="https://example.com/icon.png  — or use Upload"
+                  value={img}
+                  onChange={(e) => setImg(e.target.value)}
+                />
+                <label className="rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white">
+                  Upload
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={onPickBubbleImage}
+                  />
+                </label>
+                <button
+                  className="rounded-lg border px-3 py-2 font-semibold bg-white"
+                  onClick={() => setImg("")}
+                  title="Clear bubble image"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  id="hideLabel"
+                  type="checkbox"
+                  className="h-3 w-3"
+                  checked={hideLabelWhenImage}
+                  onChange={(e) => setHideLabelWhenImage(e.target.checked)}
+                />
+                <label htmlFor="hideLabel">Hide label when an image is used</label>
+              </div>
+            </div>
 
-          {/* Size & Shape */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Size (px)</label>
-            <input
-              type="number"
-              min={40}
-              max={120}
-              className="w-full rounded-lg border px-3 py-2"
-              value={size}
-              onChange={(e) => setSize(Number(e.target.value))}
-            />
-          </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Image Fit</label>
+              <select
+                className="w-full rounded-lg border px-3 py-2"
+                value={imageFit}
+                onChange={(e) => setImageFit(e.target.value as ImageFit)}
+              >
+                <option value="cover">cover (fill bubble)</option>
+                <option value="contain">contain (fit inside)</option>
+                <option value="center">center (no scale)</option>
+              </select>
+            </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Bubble Shape</label>
-            <select
-              className="w-full rounded-lg border px-3 py-2"
-              value={shape}
-              onChange={(e) => setShape(e.target.value as Shape)}
-            >
-              <option value="circle">circle</option>
-              <option value="rounded">rounded</option>
-              <option value="square">square</option>
-              <option value="oval">oval</option>
-              <option value="speech">speech (round)</option>
-              <option value="speech-rounded">speech (rounded)</option>
-            </select>
-          </div>
-
-          {/* Image & Fit (with upload + clear) */}
-          <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-semibold">Bubble Image (optional)</label>
-            <div className="flex items-center gap-3">
+            {/* Label & Colors */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Bubble Label</label>
               <input
                 className="w-full rounded-lg border px-3 py-2"
-                placeholder="https://example.com/icon.png  — or use Upload"
-                value={img}
-                onChange={(e) => setImg(e.target.value)}
+                placeholder="Chat"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
               />
-              <label className="rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white">
-                Upload
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={onPickBubbleImage}
-                />
-              </label>
-              <button
-                className="rounded-lg border px-3 py-2 font-semibold bg-white"
-                onClick={() => setImg("")}
-                title="Clear bubble image"
-              >
-                Clear
-              </button>
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Accent Color</label>
               <input
-                id="hideLabel"
-                type="checkbox"
-                className="h-3 w-3"
-                checked={hideLabelWhenImage}
-                onChange={(e) => setHideLabelWhenImage(e.target.checked)}
+                type="color"
+                className="h-10 w-full rounded-lg border"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
               />
-              <label htmlFor="hideLabel">Hide label when an image is used</label>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Label Color</label>
+              <input
+                type="color"
+                className="h-10 w-full rounded-lg border"
+                value={labelColor}
+                onChange={(e) => setLabelColor(e.target.value)}
+              />
+            </div>
+
+            {/* Open modal + embed url (copy) */}
+            <div className="md:col-span-2 flex items-center gap-3">
+              <button
+                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
+                onClick={() => {
+                  const scope = activeInst
+                    ? ({ kind: "inst", id: activeInst.id } as const)
+                    : ({ kind: "bot", key: activeBotKey } as const);
+                  trackEvent("bubble_open", scope, { from: "preview_button" });
+                  setStep(0);
+                  setOpenModal(true);
+                }}
+              >
+                Open Preview Modal
+              </button>
+
+              <div className="ml-auto text-sm font-semibold">Embed URL:</div>
+              <input
+                readOnly
+                value={widgetSrc}
+                className="w-[420px] max-w-full rounded-lg border px-3 py-2 text-xs font-mono"
+                onFocus={(e) => e.currentTarget.select()}
+                aria-label="Embed URL"
+              />
+            </div>
+
+            {/* Full iframe code (copyable) */}
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold">Embed (iframe)</label>
+              </div>
+              <textarea
+                readOnly
+                className="w-full rounded-lg border px-3 py-2 text-xs font-mono"
+                rows={4}
+                value={embedIframe}
+                onFocus={(e) => e.currentTarget.select()}
+              />
             </div>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Image Fit</label>
-            <select
-              className="w-full rounded-lg border px-3 py-2"
-              value={imageFit}
-              onChange={(e) => setImageFit(e.target.value as ImageFit)}
-            >
-              <option value="cover">cover (fill bubble)</option>
-              <option value="contain">contain (fit inside)</option>
-              <option value="center">center (no scale)</option>
-            </select>
-          </div>
-
-          {/* Label & Colors */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Bubble Label</label>
-            <input
-              className="w-full rounded-lg border px-3 py-2"
-              placeholder="Chat"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Accent Color</label>
-            <input
-              type="color"
-              className="h-10 w-full rounded-lg border"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Label Color</label>
-            <input
-              type="color"
-              className="h-10 w-full rounded-lg border"
-              value={labelColor}
-              onChange={(e) => setLabelColor(e.target.value)}
-            />
-          </div>
-
-          {/* Open modal + embed url (copy) */}
-          <div className="md:col-span-2 flex items-center gap-3">
-            <button
-              className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
-              onClick={() => {
+        {/* Live area: bubble + modal */}
+        <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
+          {mode === "popup" && (
+            <ChatWidget
+              mode="popup"
+              botId={activeBotKey}
+              position={pos}
+              size={size}
+              color={color || undefined}
+              image={img || undefined}
+              shape={shape as any}
+              imageFit={imageFit}
+              label={label}
+              labelColor={labelColor}
+              hideLabelWhenImage={hideLabelWhenImage}
+              onBubbleClick={() => {
                 const scope = activeInst
                   ? ({ kind: "inst", id: activeInst.id } as const)
                   : ({ kind: "bot", key: activeBotKey } as const);
-                trackEvent("bubble_open", scope, { from: "preview_button" });
+                trackEvent("bubble_open", scope, { from: "preview_bubble" });
                 setStep(0);
                 setOpenModal(true);
               }}
-            >
-              Open Preview Modal
-            </button>
-
-            <div className="ml-auto text-sm font-semibold">Embed URL:</div>
-            <input
-              readOnly
-              value={widgetSrc}
-              className="w-[420px] max-w-full rounded-lg border px-3 py-2 text-xs font-mono"
-              onFocus={(e) => e.currentTarget.select()}
-              aria-label="Embed URL"
             />
-          </div>
+          )}
 
-          {/* Full iframe code (copyable) */}
-          <div className="md:col-span-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold">Embed (iframe)</label>
-            </div>
-            <textarea
-              readOnly
-              className="w-full rounded-lg border px-3 py-2 text-xs font-mono"
-              rows={4}
-              value={embedIframe}
-              onFocus={(e) => e.currentTarget.select()}
-            />
-          </div>
-        </div>
-      </div>
+          {openModal && (
+            <div className="absolute inset-0 grid place-items-center">
+              <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl">
+                {/* Keep the colorful banner, but no duplicate name text */}
+                <div
+                  className={`rounded-t-2xl p-4 ${gradientHeader}`}
+                  aria-hidden="true"
+                />
+                <div className="p-6 space-y-6">
+                  <div className="grid place-items-center text-5xl">👋</div>
 
-      {/* Live area: bubble + modal */}
-      <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
-        {mode === "popup" && (
-          <ChatWidget
-            mode="popup"
-            botId={activeBotKey}
-            position={pos}
-            size={size}
-            color={color || undefined}
-            image={img || undefined}
-            shape={shape as any}
-            imageFit={imageFit}
-            label={label}
-            labelColor={labelColor}
-            hideLabelWhenImage={hideLabelWhenImage}
-            onBubbleClick={() => {
-              const scope = activeInst
-                ? ({ kind: "inst", id: activeInst.id } as const)
-                : ({ kind: "bot", key: activeBotKey } as const);
-              trackEvent("bubble_open", scope, { from: "preview_bubble" });
-              setStep(0);
-              setOpenModal(true);
-            }}
-          />
-        )}
+                  <div className="text-center">
+                    <h2 className="text-2xl font-extrabold">{headline}</h2>
+                    <p className="mt-2 text-muted-foreground">{subtext}</p>
 
-        {openModal && (
-          <div className="absolute inset-0 grid place-items-center">
-            <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl">
-              {/* Keep the colorful banner, but no duplicate name text */}
-              <div
-                className={`rounded-t-2xl p-4 ${gradientHeader}`}
-                aria-hidden="true"
-              />
-              <div className="p-6 space-y-6">
-                <div className="grid place-items-center text-5xl">👋</div>
-
-                <div className="text-center">
-                  <h2 className="text-2xl font-extrabold">{headline}</h2>
-                  <p className="mt-2 text-muted-foreground">{subtext}</p>
-
-                {step === 1 && (
-                  <div className="mt-4">
-                    <input
-                      className="w-full rounded-lg border px-3 py-2"
-                      placeholder="you@domain.com"
-                    />
-                  </div>
-                )}
-
-                {step === 2 && (
-                  <div className="mt-4 grid gap-2">
-                    {["Curious", "Very interested", "VIP"].map((o) => (
-                      <button
-                        key={o}
-                        className="rounded-lg border px-3 py-2 hover:bg-muted/50"
-                      >
-                        {o}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <button
-                    className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-                    onClick={() => {
-                      const scope = activeInst
-                        ? ({ kind: "inst", id: activeInst.id } as const)
-                        : ({ kind: "bot", key: activeBotKey } as const);
-                      trackEvent("close_widget", scope, { step });
-                      setOpenModal(false);
-                    }}
-                  >
-                    Close
-                  </button>
-                  <div className="flex gap-2">
-                    {step > 0 && step < 3 && (
-                      <button
-                        className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-                        onClick={back}
-                      >
-                        Back
-                      </button>
+                    {step === 1 && (
+                      <div className="mt-4">
+                        <input
+                          className="w-full rounded-lg border px-3 py-2"
+                          placeholder="you@domain.com"
+                        />
+                      </div>
                     )}
-                    {step < 3 ? (
-                      <button
-                        className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                        onClick={next}
-                      >
-                        Continue
-                      </button>
-                    ) : (
-                      <button
-                        className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                        onClick={() => {
-                          const scope = activeInst
-                            ? ({ kind: "inst", id: activeInst.id } as const)
-                            : ({ kind: "bot", key: activeBotKey } as const);
-                          trackEvent("lead_submit", scope, {
-                            method: "preview-demo",
-                          });
-                          setOpenModal(false);
-                        }}
-                      >
-                        Done
-                      </button>
+
+                    {step === 2 && (
+                      <div className="mt-4 grid gap-2">
+                        {["Curious", "Very interested", "VIP"].map((o) => (
+                          <button
+                            key={o}
+                            className="rounded-lg border px-3 py-2 hover:bg-muted/50"
+                          >
+                            {o}
+                          </button>
+                        ))}
+                      </div>
                     )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <button
+                      className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                      onClick={() => {
+                        const scope = activeInst
+                          ? ({ kind: "inst", id: activeInst.id } as const)
+                          : ({ kind: "bot", key: activeBotKey } as const);
+                        trackEvent("close_widget", scope, { step });
+                        setOpenModal(false);
+                      }}
+                    >
+                      Close
+                    </button>
+                    <div className="flex gap-2">
+                      {step > 0 && step < 3 && (
+                        <button
+                          className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                          onClick={back}
+                        >
+                          Back
+                        </button>
+                      )}
+                      {step < 3 ? (
+                        <button
+                          className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                          onClick={next}
+                        >
+                          Continue
+                        </button>
+                      ) : (
+                        <button
+                          className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                          onClick={() => {
+                            const scope = activeInst
+                              ? ({ kind: "inst", id: activeInst.id } as const)
+                              : ({ kind: "bot", key: activeBotKey } as const);
+                            trackEvent("lead_submit", scope, {
+                              method: "preview-demo",
+                            });
+                            setOpenModal(false);
+                          }}
+                        >
+                          Done
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }
-
