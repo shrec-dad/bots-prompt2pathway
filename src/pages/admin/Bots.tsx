@@ -163,6 +163,39 @@ function EmojiPickerModal({
   );
 }
 
+/* ---------------- persistence helpers (instances) ---------------- */
+
+/** Minimal direct access keys used elsewhere in the app */
+const INST_INDEX_KEY = "botInstances:index";
+const INST_DATA_KEY = (id: string) => `botInstances:${id}`;
+
+/** Safely touch/persist an instance: keeps index in sync & updates updatedAt */
+function saveInstanceRecord(inst: InstanceMeta) {
+  try {
+    // 1) Persist the instance payload itself (merge if exists)
+    const existing = getJSON<any>(INST_DATA_KEY(inst.id), null);
+    const merged = { ...(existing || {}), ...inst, updatedAt: Date.now() };
+    setJSON(INST_DATA_KEY(inst.id), merged);
+
+    // 2) Ensure the index contains this id exactly once
+    const index = getJSON<string[]>(INST_INDEX_KEY, []);
+    const nextIndex = Array.from(new Set([...(index || []), inst.id]));
+    setJSON(INST_INDEX_KEY, nextIndex);
+  } catch {
+    // no-op
+  }
+}
+
+/** After creating/renaming/removing, re-read instances with a short double-pass to avoid races */
+function refreshInstancesStable(setter: (arr: InstanceMeta[]) => void) {
+  // immediate
+  setter(listInstances());
+  // next frame
+  requestAnimationFrame(() => setter(listInstances()));
+  // tiny delay
+  setTimeout(() => setter(listInstances()), 60);
+}
+
 /* ---------------- main page ---------------- */
 
 export default function Bots() {
@@ -179,6 +212,9 @@ export default function Bots() {
 
   // Instances list (My Bots)
   const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
+
+  // Per-instance ephemeral "Saved!" indicator
+  const [savedId, setSavedId] = useState<string | null>(null);
 
   // Analytics metrics used for header stats
   const [metrics, setMetrics] = useState<Metrics>(() =>
@@ -257,7 +293,7 @@ export default function Bots() {
 
   // Tidy, sorted list for display
   const sortedInstances = useMemo(
-    () => [...instances].sort((a, b) => b.updatedAt - a.updatedAt),
+    () => [...instances].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
     [instances]
   );
 
@@ -432,7 +468,7 @@ export default function Bots() {
                     prompt("Name this new client bot:", defaultName)?.trim() || defaultName;
 
                   duplicateInstanceFromTemplate(b.key as any, mode, desired);
-                  setInstances(listInstances());
+                  refreshInstancesStable(setInstances);
                 }}
                 aria-label={`Duplicate ${b.name}`}
               >
@@ -511,6 +547,23 @@ export default function Bots() {
                       Nurture
                     </button>
 
+                    {/* Manual Save (persist this instance & bump updatedAt) */}
+                    <button
+                      className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-emerald-50"
+                      onClick={() => {
+                        saveInstanceRecord(m);
+                        setSavedId(m.id);
+                        refreshInstancesStable(setInstances);
+                        setTimeout(() => setSavedId((id) => (id === m.id ? null : id)), 1200);
+                      }}
+                      title="Save this instance"
+                    >
+                      Save
+                    </button>
+                    {savedId === m.id && (
+                      <span className="text-xs font-bold text-emerald-700">Saved!</span>
+                    )}
+
                     {/* Rename via helper */}
                     <button
                       className="rounded-lg border bg-white px-3 py-1.5 text-sm font-bold hover:bg-muted/40"
@@ -518,7 +571,7 @@ export default function Bots() {
                         const next = prompt("Rename this bot instance:", title)?.trim();
                         if (!next) return;
                         renameInstance(m.id, next);
-                        setInstances(listInstances());
+                        refreshInstancesStable(setInstances);
                       }}
                     >
                       Rename
@@ -529,7 +582,7 @@ export default function Bots() {
                       onClick={() => {
                         if (!confirm(`Remove "${title}" instance? This cannot be undone.`)) return;
                         removeInstance(m.id);
-                        setInstances(listInstances());
+                        refreshInstancesStable(setInstances);
                       }}
                     >
                       Remove
