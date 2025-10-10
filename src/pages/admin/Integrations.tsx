@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAdminStore } from "@/lib/AdminStore";
 import { getJSON, setJSON } from "@/lib/storage";
-import { listInstances, getInstance, type InstanceMeta } from "@/lib/instances";
+import { listInstances, type InstanceMeta } from "@/lib/instances";
 import BotSelector from "@/components/BotSelector";
 
 type UniversalCfg = {
@@ -36,18 +36,42 @@ function adminIdForTemplateKey(botKey: string): string | null {
     case "SocialMedia":
       return "social-media";
     case "Receptionist":
-      // Add mapping for Receptionist so legacy storage remains consistent
       return "receptionist-bot";
     default:
       return null; // custom templates won't have an AdminStore id
   }
 }
 
-/** Resolve a storage key for a selection value (instance id OR template key) */
-function resolveStorageKey(selection: string): string {
-  if (selection.startsWith("inst_")) return selection; // instance
-  // template path: prefer legacy admin id if available
-  return adminIdForTemplateKey(selection) || selection; // fallback to template key
+/** Safely resolve a storage key for a selection value (instance id OR template key OR object) */
+function resolveStorageKey(selection: unknown): string {
+  // If we already have a string, normalize it
+  if (typeof selection === "string") {
+    if (selection.startsWith("inst_")) return selection; // instance id
+    // template: prefer legacy admin id if available
+    return adminIdForTemplateKey(selection) || selection;
+  }
+
+  // Some UIs may pass an object; try to glean id/key safely
+  if (selection && typeof selection === "object") {
+    const anySel = selection as any;
+    // Instance objects often have an id like "inst_..."
+    if (typeof anySel.id === "string") {
+      if (anySel.id.startsWith("inst_")) return anySel.id;
+      // If it's an admin id (e.g., "waitlist-bot"), use it as-is
+      return anySel.id;
+    }
+    // Template objects may expose a `key`
+    if (typeof anySel.key === "string") {
+      return adminIdForTemplateKey(anySel.key) || anySel.key;
+    }
+    // Or a generic value field
+    if (typeof anySel.value === "string") {
+      return resolveStorageKey(anySel.value);
+    }
+  }
+
+  // Fallback: empty string means "no selection"
+  return "";
 }
 
 export default function Integrations() {
@@ -66,10 +90,9 @@ export default function Integrations() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // selection value can be template key OR instance id
+  // selection value can be template key OR instance id OR an object from BotSelector
   const [appliesTo, setAppliesTo] = useState<string>(() => {
-    // Prefer first admin bot id (backward compat) if present; else first template key; else instance if any; else ""
-    const firstAdminId = bots?.[0]?.id || "";
+    const firstAdminId = typeof bots?.[0]?.id === "string" ? bots[0].id : "";
     return firstAdminId || "";
   });
 
@@ -88,14 +111,18 @@ export default function Integrations() {
 
   const save = () => {
     const key = resolveStorageKey(appliesTo);
+    if (!key) {
+      alert("Pick a target (template or instance) first.");
+      return;
+    }
     setJSON(KEY(key), form);
     alert("Integrations saved for this target.");
   };
 
   const reset = () => {
-    if (!appliesTo) return;
-    if (!confirm("Clear all integration fields for this target?")) return;
     const key = resolveStorageKey(appliesTo);
+    if (!key) return;
+    if (!confirm("Clear all integration fields for this target?")) return;
     setForm({});
     setJSON(KEY(key), {});
   };
@@ -113,7 +140,7 @@ export default function Integrations() {
 
   // Little hint message when editing an instance
   const instanceHint =
-    appliesTo.startsWith("inst_") ? (
+    typeof appliesTo === "string" && appliesTo.startsWith("inst_") ? (
       <div className="text-[12px] font-semibold text-black/70">
         Editing <span className="font-extrabold">client bot instance</span>. Blank
         fields effectively started as inherited from its base template when this form loaded.
@@ -146,7 +173,11 @@ export default function Integrations() {
             <BotSelector
               scope="both"
               value={appliesTo}
-              onChange={setAppliesTo}
+              onChange={(v) => {
+                // Accept strings or objects; store as string state
+                const next = resolveStorageKey(v);
+                setAppliesTo(next);
+              }}
               placeholderOption="— Select a Template or an Instance —"
               showGroups
             />
@@ -261,4 +292,3 @@ export default function Integrations() {
     </div>
   );
 }
-
