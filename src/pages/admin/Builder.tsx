@@ -27,6 +27,7 @@ import { useAdminStore } from "@/lib/AdminStore";
 import { getTemplate, listTemplateDefs, type BotKey } from "@/lib/templates";
 import { getBotSettings, setBotSettings } from "@/lib/botSettings";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 /* =========================================================================
    0)  Instance support (duplicated bots)
@@ -879,8 +880,10 @@ function BuilderInner() {
 
 export default function Builder() {
   return (
-    <ReactFlowProvider>
-      <BuilderInner />
-    </ReactFlowProvider>
+    <ErrorBoundary>
+      <ReactFlowProvider>
+        <BuilderInner />
+      </ReactFlowProvider>
+    </ErrorBoundary>
   );
 }
