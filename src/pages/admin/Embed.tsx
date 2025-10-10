@@ -1,3 +1,4 @@
+// src/pages/admin/Embed.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
 import BotSelector from "@/components/BotSelector";
@@ -27,13 +28,7 @@ function CopyButton({ getText }: { getText: () => string }) {
 }
 
 type Pos = "bottom-right" | "bottom-left";
-type Shape =
-  | "circle"
-  | "rounded"
-  | "square"
-  | "oval"
-  | "speech"
-  | "speech-rounded";
+type Shape = "circle" | "rounded" | "square" | "oval" | "speech" | "speech-rounded";
 type Fit = "cover" | "contain" | "fill" | "center" | "none";
 type Mode = "popup" | "inline" | "sidebar";
 
@@ -68,6 +63,18 @@ type Branding = {
   hideLabelWhenImage?: boolean;
 };
 
+/** Normalize BotSelector values (string | object) -> string id/key */
+function normalizeSelectionToString(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") {
+    const anyV = v as any;
+    if (typeof anyV.id === "string") return anyV.id;
+    if (typeof anyV.value === "string") return anyV.value;
+    if (typeof anyV.key === "string") return anyV.key;
+  }
+  return "";
+}
+
 function readBranding(): Branding {
   try {
     const raw = localStorage.getItem(BRAND_KEY);
@@ -95,7 +102,7 @@ export default function Embed() {
       setInstances(
         list.map((i: InstanceMeta) => ({
           id: String(i.id),
-          name: i.name ?? i.title ?? i.id,
+          name: i.name ?? (i as any).title ?? i.id,
           bot: i.bot,
           mode: i.mode,
           createdAt: i.createdAt,
@@ -116,7 +123,7 @@ export default function Embed() {
   }, []);
 
   /* Selection */
-  const [instId, setInstId] = useState<string>("");
+  const [instId, setInstId] = useState<string>(""); // always store a string
   const [botKey, setBotKey] = useState<string>("Waitlist");
 
   /* Sync with Preview (brandingSettings) */
@@ -222,7 +229,8 @@ export default function Embed() {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const widgetPath = useMemo(() => {
     const qp = new URLSearchParams();
-    if (instId.trim()) qp.set("inst", instId.trim());
+    const inst = typeof instId === "string" ? instId.trim() : "";
+    if (inst) qp.set("inst", inst);
     else qp.set("bot", botKey);
 
     qp.set("position", active.position);
@@ -329,12 +337,24 @@ export default function Embed() {
           {/* Instance via BotSelector */}
           <div>
             <div className={labelCls}>Instance (overrides Bot)</div>
-            <BotSelector
-              scope="instance"
-              value={instId}
-              onChange={setInstId}
-              placeholderOption="— None (use Bot) —"
-            />
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <BotSelector
+                  scope="instance"
+                  value={instId}
+                  onChange={(v) => setInstId(normalizeSelectionToString(v))}
+                  placeholderOption="— None (use Bot) —"
+                />
+              </div>
+              {/* Quick clear */}
+              <button
+                className="px-3 py-2 rounded-lg border bg-white text-sm font-semibold"
+                onClick={() => setInstId("")}
+                title="Clear instance selection"
+              >
+                Clear
+              </button>
+            </div>
           </div>
 
           {/* Bot via BotSelector */}
@@ -343,8 +363,8 @@ export default function Embed() {
             <BotSelector
               scope="template"
               value={botKey}
-              onChange={setBotKey}
-              disabled={!!instId.trim()}
+              onChange={(v) => setBotKey(normalizeSelectionToString(v))}
+              disabled={!!instId}
             />
           </div>
 
@@ -417,7 +437,12 @@ export default function Embed() {
                 onChange={(e) => setImage(e.target.value)}
                 disabled={controlsDisabled}
               />
-              <label className={"rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white " + (controlsDisabled ? "opacity-50 cursor-not-allowed" : "")}>
+              <label
+                className={
+                  "rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white " +
+                  (controlsDisabled ? "opacity-50 cursor-not-allowed" : "")
+                }
+              >
                 Upload
                 <input type="file" accept="image/*" className="hidden" onChange={onUpload} disabled={controlsDisabled} />
               </label>
