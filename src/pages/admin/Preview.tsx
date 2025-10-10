@@ -580,87 +580,128 @@ export default function Preview() {
           )}
 
           {openModal && (
-            <div className="absolute inset-0 grid place-items-center">
-              <div className="w-[520px] max-w-[92vw] rounded-2xl border bg-white shadow-2xl">
-                {/* Keep the colorful banner, but no duplicate name text */}
-                <div
-                  className={`rounded-t-2xl p-4 ${gradientHeader}`}
-                  aria-hidden="true"
-                />
-                <div className="p-6 space-y-6">
-                  <div className="grid place-items-center text-5xl">👋</div>
+  <div
+    className="absolute inset-0 grid place-items-center"
+    // close on ESC
+    onKeyDown={(e) => {
+      if (e.key === "Escape") {
+        const scope = activeInst
+          ? ({ kind: "inst", id: activeInst.id } as const)
+          : ({ kind: "bot", key: activeBotKey } as const);
+        trackEvent("close_widget", scope, { step });
+        setOpenModal(false);
+      }
+    }}
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Widget Preview"
+      className="w-[560px] max-w-[94vw] rounded-2xl border bg-white shadow-2xl outline-none"
+      tabIndex={-1}
+    >
+      {/* top strip */}
+      <div className={`rounded-t-2xl p-4 ${gradientHeader}`} aria-hidden="true" />
 
-                  <div className="text-center">
-                    <h2 className="text-2xl font-extrabold">{headline}</h2>
-                    <p className="mt-2 text-muted-foreground">{subtext}</p>
+      {/* body – vertical layout */}
+      <div className="p-6 flex flex-col gap-6">
+        {/* Close button (top-right) */}
+        <div className="flex">
+          <button
+            className="ml-auto rounded-xl px-3 py-1.5 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+            onClick={() => {
+              const scope = activeInst
+                ? ({ kind: "inst", id: activeInst.id } as const)
+                : ({ kind: "bot", key: activeBotKey } as const);
+              trackEvent("close_widget", scope, { step });
+              setOpenModal(false);
+            }}
+            autoFocus
+            aria-label="Close preview"
+          >
+            Close
+          </button>
+        </div>
 
-                    {step === 1 && (
-                      <div className="mt-4">
-                        <input
-                          className="w-full rounded-lg border px-3 py-2"
-                          placeholder="you@domain.com"
-                        />
-                      </div>
-                    )}
+        {/* emoji + text */}
+        <div className="grid place-items-center text-6xl">👋</div>
 
-                    {step === 2 && (
-                      <div className="mt-4 grid gap-2">
-                        {["Curious", "Very interested", "VIP"].map((o) => (
-                          <button
-                            key={o}
-                            className="rounded-lg border px-3 py-2 hover:bg-muted/50"
-                          >
-                            {o}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+        <div className="text-center space-y-3">
+          <h2 className="text-2xl md:text-3xl font-extrabold">{headline}</h2>
+          <p className="text-muted-foreground">{subtext}</p>
 
-                  <div className="flex items-center justify-between">
-                    <button
-                      className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-                      onClick={() => {
-                        const scope = activeInst
-                          ? ({ kind: "inst", id: activeInst.id } as const)
-                          : ({ kind: "bot", key: activeBotKey } as const);
-                        trackEvent("close_widget", scope, { step });
-                        setOpenModal(false);
-                      }}
-                    >
-                      Close
-                    </button>
-                    <div className="flex gap-2">
-                      {step > 0 && step < 3 && (
-                        <button
-                          className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-                          onClick={back}
-                        >
-                          Back
-                        </button>
-                      )}
-                      {step < 3 ? (
-                        <button
-                          className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                          onClick={next}
-                        >
-                          Continue
-                        </button>
-                      ) : (
-                        <button
-                          className="rounded-xl px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                          onClick={() => {
-                            const scope = activeInst
-                              ? ({ kind: "inst", id: activeInst.id } as const)
-                              : ({ kind: "bot", key: activeBotKey } as const);
-                            trackEvent("lead_submit", scope, {
-                              method: "preview-demo",
-                            });
-                            setOpenModal(false);
-                          }}
-                        >
-                          Done
-                        </button>
+          {step === 1 && (
+            <div className="mt-4">
+              <input
+                className="w-full rounded-lg border px-3 py-2"
+                placeholder="you@domain.com"
+              />
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="mt-4 grid gap-2">
+              {["Curious", "Very interested", "VIP"].map((o) => (
+                <button
+                  key={o}
+                  className="rounded-lg border px-3 py-2 hover:bg-muted/50"
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* CTA zone – vertical buttons */}
+        <div className="flex flex-col gap-3">
+          {step > 0 && step < 3 && (
+            <button
+              className="rounded-xl w-full px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+              onClick={() => {
+                const scope = activeInst
+                  ? ({ kind: "inst", id: activeInst.id } as const)
+                  : ({ kind: "bot", key: activeBotKey } as const);
+                trackEvent("step_back", scope, { step });
+                setStep((s) => Math.max(s - 1, 0));
+              }}
+            >
+              Back
+            </button>
+          )}
+
+          {step < 3 ? (
+            <button
+              className="rounded-xl w-full px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+              onClick={() => {
+                const scope = activeInst
+                  ? ({ kind: "inst", id: activeInst.id } as const)
+                  : ({ kind: "bot", key: activeBotKey } as const);
+                trackEvent("step_next", scope, { step });
+                setStep((s) => Math.min(s + 1, 3));
+              }}
+            >
+              Continue
+            </button>
+          ) : (
+            <button
+              className="rounded-xl w-full px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+              onClick={() => {
+                const scope = activeInst
+                  ? ({ kind: "inst", id: activeInst.id } as const)
+                  : ({ kind: "bot", key: activeBotKey } as const);
+                trackEvent("lead_submit", scope, { method: "preview-demo" });
+                setOpenModal(false);
+              }}
+            >
+              Done
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
                       )}
                     </div>
                   </div>
