@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getJSON, setJSON } from "@/lib/storage";
 import { BotKey } from "@/lib/botSettings";
 import BotSelector from "@/components/BotSelector";
@@ -39,7 +39,9 @@ type AppSettings = {
   lastCloudBackupAt?: string;
 };
 
-const KEY = "app:settings";
+/** Global key + per-instance variant */
+const GLOBAL_KEY = "app:settings";
+const INST_KEY = (instId: string) => `app:settings:inst:${instId}`;
 
 /* -------------------------------------------------------------------------- */
 /* UI helpers                                                                 */
@@ -59,18 +61,18 @@ const inputCls =
 /* Cloud stub helpers (replace with real API later)                           */
 /* -------------------------------------------------------------------------- */
 
-const CLOUD_KEY = "cloud:app-settings.v1"; // demo only
+const CLOUD_KEY = (scopeKey: string) => `cloud:${scopeKey}.v1`; // demo only
 
-async function backupToCloudStub(payload: AppSettings) {
+async function backupToCloudStub(scopeKey: string, payload: AppSettings) {
   // TODO: swap with your DigitalOcean call
   await new Promise((r) => setTimeout(r, 350));
-  localStorage.setItem(CLOUD_KEY, JSON.stringify(payload));
+  localStorage.setItem(CLOUD_KEY(scopeKey), JSON.stringify(payload));
 }
 
-async function restoreFromCloudStub(): Promise<AppSettings | null> {
+async function restoreFromCloudStub(scopeKey: string): Promise<AppSettings | null> {
   await new Promise((r) => setTimeout(r, 350));
   try {
-    const raw = localStorage.getItem(CLOUD_KEY);
+    const raw = localStorage.getItem(CLOUD_KEY(scopeKey));
     return raw ? (JSON.parse(raw) as AppSettings) : null;
   } catch {
     return null;
@@ -78,13 +80,34 @@ async function restoreFromCloudStub(): Promise<AppSettings | null> {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Small guards/utilities                                                     */
+/* -------------------------------------------------------------------------- */
+
+function normalizeInstId(val: unknown): string {
+  if (typeof val === "string") return val;
+  if (val && typeof val === "object" && "id" in (val as any)) {
+    const id = (val as any).id;
+    return typeof id === "string" ? id : String(id ?? "");
+  }
+  return "";
+}
+
+function activeStorageKey(instId: string): string {
+  return instId ? INST_KEY(instId) : GLOBAL_KEY;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Component                                                                  */
 /* -------------------------------------------------------------------------- */
 
 export default function Settings() {
+  /** Scope picker (empty string = Global) */
+  const [instId, setInstId] = useState<string>("");
+
+  /** Load initial from global; subsequent loads will re-read by scope */
   const initial = useMemo<AppSettings>(
     () =>
-      getJSON<AppSettings>(KEY, {
+      getJSON<AppSettings>(GLOBAL_KEY, {
         mode: "basic",
         domain: "",
         language: "English",
@@ -103,11 +126,19 @@ export default function Settings() {
   const [s, setS] = useState<AppSettings>(initial);
   const [busyCloud, setBusyCloud] = useState(false);
 
+  /** Reload settings whenever scope changes */
+  useEffect(() => {
+    const key = activeStorageKey(instId);
+    const next = getJSON<AppSettings>(key, s); // fall back to current to avoid flicker
+    setS(next);
+  }, [instId]);
+
   /* -------------------------------- Actions -------------------------------- */
 
   function save() {
-    setJSON(KEY, s);
-    alert("Settings saved.");
+    const key = activeStorageKey(instId);
+    setJSON(key, s);
+    alert(`Settings saved to ${instId ? `Instance ${instId}` : "Global"}.`);
   }
 
   function resetAll() {
@@ -117,13 +148,14 @@ export default function Settings() {
   }
 
   function exportJson() {
+    const scopeLabel = instId ? `instance-${instId}` : "global";
     const blob = new Blob([JSON.stringify(s, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "app-settings.json";
+    a.download = `app-settings-${scopeLabel}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -135,8 +167,9 @@ export default function Settings() {
     try {
       const parsed = JSON.parse(text) as AppSettings;
       setS(parsed);
-      setJSON(KEY, parsed);
-      alert("Settings imported.");
+      const key = activeStorageKey(instId);
+      setJSON(key, parsed);
+      alert(`Settings imported to ${instId ? `Instance ${instId}` : "Global"}.`);
     } catch {
       alert("Invalid JSON.");
     } finally {
@@ -156,11 +189,14 @@ export default function Settings() {
   async function backupToCloud() {
     try {
       setBusyCloud(true);
+      const key = activeStorageKey(instId);
       const next = { ...s, lastCloudBackupAt: new Date().toISOString() };
-      await backupToCloudStub(next);
+      await backupToCloudStub(key, next);
       setS(next);
-      setJSON(KEY, next);
-      alert("Backed up to cloud (demo stub). Replace with your DO call.");
+      setJSON(key, next);
+      alert(
+        `Backed up ${instId ? `Instance ${instId}` : "Global"} to cloud (demo stub). Replace with your DO call.`
+      );
     } catch {
       alert("Cloud backup failed.");
     } finally {
@@ -171,13 +207,14 @@ export default function Settings() {
   async function restoreFromCloud() {
     try {
       setBusyCloud(true);
-      const remote = await restoreFromCloudStub();
+      const key = activeStorageKey(instId);
+      const remote = await restoreFromCloudStub(key);
       if (!remote) {
-        alert("No cloud backup found.");
+        alert("No cloud backup found for this scope.");
         return;
       }
       setS(remote);
-      setJSON(KEY, remote);
+      setJSON(key, remote);
       alert("Restored from cloud (demo stub).");
     } catch {
       alert("Cloud restore failed.");
@@ -190,11 +227,44 @@ export default function Settings() {
 
   return (
     <div className={wrapper}>
-      {/* Header (premium) */}
+      {/* Header with Scope Picker */}
       <div className={sectionHeader}>
-        <div className="text-3xl font-extrabold">Settings</div>
-        <div className="text-foreground/80 mt-1">
-          Adjust system preferences and account details.
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-3xl font-extrabold">Settings</div>
+            <div className="text-foreground/80 mt-1">
+              Adjust system preferences and account details.
+            </div>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <div className="text-xs font-bold uppercase tracking-wide text-purple-700">
+              Scope
+            </div>
+            <div className="min-w-[260px]">
+              <BotSelector
+                scope="instance"
+                value={instId}
+                onChange={(val) => setInstId(normalizeInstId(val))}
+                placeholderOption="All (Global)"
+              />
+            </div>
+            {!!instId && (
+              <button
+                className="rounded-lg border px-3 py-2 font-semibold bg-white hover:bg-muted/40"
+                onClick={() => setInstId("")}
+                title="Clear instance — back to Global"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <span className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold bg-white">
+            Viewing: {instId ? `Instance ${instId}` : "Global"}
+          </span>
         </div>
       </div>
 
@@ -460,7 +530,7 @@ export default function Settings() {
         <div className={sectionCard}>
           <div className="flex items-center gap-3">
             <button
-              className="rounded-XL px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+              className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
               onClick={save}
             >
               Save Changes
