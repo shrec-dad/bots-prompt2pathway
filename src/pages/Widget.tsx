@@ -1,5 +1,6 @@
 // src/pages/Widget.tsx
 import React, { useEffect, useMemo, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 /** ---------------------------------------------------------------
  * Branding pulled from localStorage (kept from your original file)
@@ -34,15 +35,6 @@ function getBranding(): Branding {
 
 /** ---------------------------------------------------------------
  * URL params used by Preview/Embed
- *  - bot / inst  (not used for logic yet, but preserved)
- *  - position: "bottom-right" | "bottom-left"
- *  - size: number
- *  - color: hex/rgb for bubble bg when no image
- *  - image: url to fill/contain inside bubble
- *  - imageFit: "cover" | "contain"
- *  - shape: "circle" | "rounded" | "square" | "oval"
- *  - label: text inside the bubble (optional)
- *  - labelColor: bubble label color
  * --------------------------------------------------------------- */
 type BubbleShape = "circle" | "rounded" | "square" | "oval";
 type ImageFit = "cover" | "contain";
@@ -75,19 +67,17 @@ function bubbleBorderRadius(shape: BubbleShape, size: number) {
     case "circle":
       return "50%";
     case "rounded":
-      // A nice rounded-rect for square-ish sizes, scales with size
       return Math.round(size * 0.25);
     case "square":
-      return 10; // still a hint of radius so outline looks crisp
+      return 10;
     case "oval":
-      // Horizontal oval look (prevents “square” issue you saw)
       return `${Math.round(size * 0.6)}px / ${Math.round(size * 0.42)}px`;
     default:
       return "50%";
   }
 }
 
-export default function Widget() {
+function WidgetInner() {
   /** ------------------ Setup + Options ------------------ */
   const b = useMemo(getBranding, []);
   const qp = useQueryParams();
@@ -148,7 +138,6 @@ export default function Widget() {
         minHeight: "100vh",
         background:
           "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
-        // do NOT hide overflow here; the widget lives on top with fixed
         overflow: "visible",
       }}
     >
@@ -270,17 +259,15 @@ export default function Widget() {
             </button>
           </div>
 
-          {/* Messages (scrollable).  IMPORTANT: extra top padding fixes clipping */}
+          {/* Messages (scrollable) */}
           <div
             style={{
-              // leave room for header and add generous top padding
               padding: `${CONTENT_PADDING + TOP_SCROLL_PAD}px ${CONTENT_PADDING}px ${CONTENT_PADDING}px`,
               display: "flex",
               flexDirection: "column",
               gap: 10,
               flex: 1,
               overflowY: "auto",
-              // scroll padding ensures when you jump to top the first chip still shows fully
               scrollPaddingTop: TOP_SCROLL_PAD + 4,
               overscrollBehavior: "contain",
               background: "#fff",
@@ -297,7 +284,6 @@ export default function Widget() {
                   borderRadius: 14,
                   padding: "8px 12px",
                   maxWidth: "78%",
-                  // ensure first bubble can’t clip if it lands at the very top edge
                   marginTop: i === 0 ? 2 : 0,
                 }}
               >
@@ -344,5 +330,13 @@ export default function Widget() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function Widget() {
+  return (
+    <ErrorBoundary>
+      <WidgetInner />
+    </ErrorBoundary>
   );
 }
