@@ -1,3 +1,4 @@
+// src/pages/admin/Bots.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { getBotSettings, setBotSettings } from "@/lib/botSettings";
 import {
@@ -108,7 +109,7 @@ function EmojiPickerModal({
   ];
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-      <div className="bg-white rounded-2xl border-2 border-black p-5 w/full max-w-sm shadow-xl">
+      <div className="bg-white rounded-2xl border-2 border-black p-5 w-full max-w-sm shadow-xl">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xl font-extrabold">Choose Emoji</h3>
           <button
@@ -187,7 +188,8 @@ export default function Bots() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newBotName, setNewBotName] = useState("");
   const [newBotEmoji, setNewBotEmoji] = useState("🤖");
-  const [showEmojiPickerFor, setShowEmojiPickerFor] = useState<null | { key: string; emoji: string }>(null);
+  const [showEmojiPickerFor, setShowEmojiPickerFor] =
+    useState<null | { key: string; emoji: string }>(null);
   const [emojiOverrides, setEmojiOverrides] = useState<Record<string, string>>(
     () => getJSON<Record<string, string>>(EMOJI_OVERRIDES_KEY, {})
   );
