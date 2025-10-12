@@ -4,7 +4,12 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-// ✅ Add this at the top, before rendering the app
+/*  ✅ NEW: load theme css + apply saved (or default) palette  */
+import "@/styles/theme.css";
+import { applyTheme } from "@/lib/theme";
+applyTheme();
+
+// ✅ Keep your migrations at the top, too
 import { ensureMigrations } from "@/lib/storageVersion";
 ensureMigrations();
 
