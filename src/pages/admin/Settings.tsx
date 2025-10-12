@@ -4,14 +4,13 @@ import { getJSON, setJSON } from "@/lib/storage";
 import { BotKey } from "@/lib/botSettings";
 import BotSelector from "@/components/BotSelector";
 
-// THEME imports
+/* THEME imports (single source of truth) */
 import {
-  loadPalette,
-  savePalette,
-  resetPalette,
-  applyTheme,
   DEFAULT_PALETTE,
-  type Palette,
+  applyTheme,
+  savePalette,
+  loadPalette,
+  resetPalette,
 } from "@/lib/theme";
 
 /* -------------------------------------------------------------------------- */
@@ -36,7 +35,7 @@ type AppSettings = {
   emailNotifications?: boolean;
   notifyEmail?: string;
 
-  // palette snapshot (we keep this for export/import convenience)
+  // palette used as defaults/new-bot seed (mirrors platform theme)
   palette?: {
     from: string;
     via: string;
@@ -50,7 +49,6 @@ type AppSettings = {
   lastCloudBackupAt?: string;
 };
 
-/** Global key + per-instance variant */
 const GLOBAL_KEY = "app:settings";
 const INST_KEY = (instId: string) => `app:settings:inst:${instId}`;
 
@@ -114,7 +112,7 @@ export default function Settings() {
   /** Scope picker (empty string = Global) */
   const [instId, setInstId] = useState<string>("");
 
-  /** Load initial settings from global; palette comes from theme store */
+  /** Load initial from global; subsequent loads will re-read by scope */
   const initial = useMemo<AppSettings>(
     () =>
       getJSON<AppSettings>(GLOBAL_KEY, {
@@ -125,8 +123,7 @@ export default function Settings() {
         defaultBot: "Waitlist",
         consentText:
           "By continuing, you agree to our Terms and Privacy Policy.",
-        // Snapshot of theme palette for export/import convenience
-        palette: { ...loadPalette() },
+        palette: { ...DEFAULT_PALETTE },
         emailNotifications: false,
         notifyEmail: "",
         syncMode: "local",
@@ -135,37 +132,30 @@ export default function Settings() {
   );
 
   const [s, setS] = useState<AppSettings>(initial);
-
-  // Local palette state drives the UI color inputs (and live preview via applyTheme)
-  const [palette, setPalette] = useState<Palette>(() => loadPalette());
-
   const [busyCloud, setBusyCloud] = useState(false);
 
-  /** Apply the palette to CSS variables live whenever it changes */
+  /** Apply platform theme on first mount and whenever palette changes */
   useEffect(() => {
-    applyTheme(palette);
-  }, [palette]);
+    const p = s.palette ?? DEFAULT_PALETTE;
+    applyTheme(p);
+  }, [s.palette]);
 
   /** Reload settings whenever scope changes */
   useEffect(() => {
     const key = activeStorageKey(instId);
     const next = getJSON<AppSettings>(key, s);
     setS(next);
-    // When scope changes, we keep the platform palette from the theme store,
-    // not the per-scope snapshot, so the UI stays consistent.
   }, [instId]);
 
   /* -------------------------------- Actions -------------------------------- */
 
   function save() {
-    // Persist app settings (including a snapshot of current palette)
+    // persist app settings
     const key = activeStorageKey(instId);
-    const next: AppSettings = { ...s, palette: { ...palette } };
-    setJSON(key, next);
+    setJSON(key, s);
 
-    // Persist + apply theme palette globally
-    savePalette(palette);
-
+    // persist + apply platform theme
+    if (s.palette) savePalette(s.palette);
     alert(`Settings saved to ${instId ? `Instance ${instId}` : "Global"}.`);
   }
 
@@ -177,8 +167,7 @@ export default function Settings() {
 
   function exportJson() {
     const scopeLabel = instId ? `instance-${instId}` : "global";
-    const payload: AppSettings = { ...s, palette: { ...palette } };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    const blob = new Blob([JSON.stringify(s, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -196,13 +185,9 @@ export default function Settings() {
     try {
       const parsed = JSON.parse(text) as AppSettings;
       setS(parsed);
-      if (parsed.palette) {
-        setPalette(parsed.palette as Palette);
-        applyTheme(parsed.palette as Palette);
-        savePalette(parsed.palette as Palette); // keep theme store in sync
-      }
       const key = activeStorageKey(instId);
       setJSON(key, parsed);
+      if (parsed.palette) savePalette(parsed.palette);
       alert(`Settings imported to ${instId ? `Instance ${instId}` : "Global"}.`);
     } catch {
       alert("Invalid JSON.");
@@ -224,12 +209,12 @@ export default function Settings() {
     try {
       setBusyCloud(true);
       const key = activeStorageKey(instId);
-      const next = { ...s, palette: { ...palette }, lastCloudBackupAt: new Date().toISOString() };
+      const next = { ...s, lastCloudBackupAt: new Date().toISOString() };
       await backupToCloudStub(key, next);
       setS(next);
       setJSON(key, next);
       alert(
-        `Backed up ${instId ? `Instance ${instId}` : "Global"} to cloud (demo stub). Replace with your DO call.`
+        `Backed up ${instId ? `Instance ${instId}` : "Global"} to cloud (demo stub).`
       );
     } catch {
       alert("Cloud backup failed.");
@@ -248,12 +233,8 @@ export default function Settings() {
         return;
       }
       setS(remote);
-      if (remote.palette) {
-        setPalette(remote.palette as Palette);
-        applyTheme(remote.palette as Palette);
-        savePalette(remote.palette as Palette);
-      }
       setJSON(key, remote);
+      if (remote.palette) savePalette(remote.palette);
       alert("Restored from cloud (demo stub).");
     } catch {
       alert("Cloud restore failed.");
@@ -262,11 +243,10 @@ export default function Settings() {
     }
   }
 
-  /* Reset only the platform gradient to your default system colors */
-  function onResetPlatformGradient() {
-    resetPalette();                // updates localStorage + calls applyTheme()
-    const fresh = loadPalette();   // read back what theme now uses
-    setPalette(fresh);             // sync UI inputs
+  function resetPlatformGradient() {
+    const next = { ...DEFAULT_PALETTE };
+    setS((p) => ({ ...p, palette: next }));
+    savePalette(next);
   }
 
   /* --------------------------------- Render -------------------------------- */
@@ -449,10 +429,12 @@ export default function Settings() {
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border"
-                  value={palette.from || DEFAULT_PALETTE.from}
-                  onChange={(e) =>
-                    setPalette((p) => ({ ...p, from: e.target.value }))
-                  }
+                  value={s.palette?.from || DEFAULT_PALETTE.from}
+                  onChange={(e) => {
+                    const next = { ...(s.palette || DEFAULT_PALETTE), from: e.target.value };
+                    setS((p) => ({ ...p, palette: next }));
+                    savePalette(next);
+                  }}
                 />
               </div>
               <div>
@@ -460,10 +442,12 @@ export default function Settings() {
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border"
-                  value={palette.via || DEFAULT_PALETTE.via}
-                  onChange={(e) =>
-                    setPalette((p) => ({ ...p, via: e.target.value }))
-                  }
+                  value={s.palette?.via || DEFAULT_PALETTE.via}
+                  onChange={(e) => {
+                    const next = { ...(s.palette || DEFAULT_PALETTE), via: e.target.value };
+                    setS((p) => ({ ...p, palette: next }));
+                    savePalette(next);
+                  }}
                 />
               </div>
               <div>
@@ -471,19 +455,21 @@ export default function Settings() {
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border"
-                  value={palette.to || DEFAULT_PALETTE.to}
-                  onChange={(e) =>
-                    setPalette((p) => ({ ...p, to: e.target.value }))
-                  }
+                  value={s.palette?.to || DEFAULT_PALETTE.to}
+                  onChange={(e) => {
+                    const next = { ...(s.palette || DEFAULT_PALETTE), to: e.target.value };
+                    setS((p) => ({ ...p, palette: next }));
+                    savePalette(next);
+                  }}
                 />
               </div>
             </div>
           </div>
 
-          {/* Live preview bar that uses the CSS vars + auto text color */}
+          {/* Live preview */}
           <div className="mt-4">
             <div className="text-xs text-foreground/70 mb-2">
-              These colors become the <strong>default gradient</strong> for the platform UI and new bot defaults.
+              These colors become the <strong>default gradient</strong> for new bots and headers.
               Text color adjusts automatically for readability.
             </div>
 
@@ -500,7 +486,18 @@ export default function Settings() {
 
             <div className="mt-3 flex flex-wrap gap-2">
               <button
-                onClick={onResetPlatformGradient}
+                onClick={() => {
+                  const current = loadPalette();
+                  setS((p) => ({ ...p, palette: current }));
+                  applyTheme(current);
+                }}
+                className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+              >
+                Use Saved Theme
+              </button>
+
+              <button
+                onClick={resetPlatformGradient}
                 className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
                 title="Revert to the platform’s default colors"
               >
@@ -593,7 +590,11 @@ export default function Settings() {
         <div className={sectionCard}>
           <div className="flex items-center gap-3">
             <button
-              className="gradient-button"
+              className="rounded-xl px-4 py-2 font-bold text-[var(--grad-text)] shadow-[0_3px_0_#000]"
+              style={{
+                background:
+                  "linear-gradient(90deg, var(--grad-from), var(--grad-via), var(--grad-to))",
+              }}
               onClick={save}
             >
               Save Changes
