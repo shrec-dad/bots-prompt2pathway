@@ -4,6 +4,16 @@ import { getJSON, setJSON } from "@/lib/storage";
 import { BotKey } from "@/lib/botSettings";
 import BotSelector from "@/components/BotSelector";
 
+// THEME imports
+import {
+  loadPalette,
+  savePalette,
+  resetPalette,
+  applyTheme,
+  DEFAULT_PALETTE,
+  type Palette,
+} from "@/lib/theme";
+
 /* -------------------------------------------------------------------------- */
 /* Types & constants                                                          */
 /* -------------------------------------------------------------------------- */
@@ -26,7 +36,7 @@ type AppSettings = {
   emailNotifications?: boolean;
   notifyEmail?: string;
 
-  // palette (used as defaults when creating bots/instances) + platform theme
+  // palette snapshot (we keep this for export/import convenience)
   palette?: {
     from: string;
     via: string;
@@ -43,50 +53,6 @@ type AppSettings = {
 /** Global key + per-instance variant */
 const GLOBAL_KEY = "app:settings";
 const INST_KEY = (instId: string) => `app:settings:inst:${instId}`;
-
-/* -------------------------------------------------------------------------- */
-/* Platform theme helpers (live preview + auto-contrast text)                 */
-/* -------------------------------------------------------------------------- */
-
-// Current platform "default" gradient (matches what you’re using today)
-const DEFAULT_PLATFORM_GRADIENT = {
-  from: "#a855f7", // purple-500-ish
-  via: "#6366f1",  // indigo-500-ish
-  to: "#14b8a6",   // teal-500-ish
-};
-
-// Simple relative luminance
-function luminance(hex: string): number {
-  const h = hex.replace("#", "");
-  const r = parseInt(h.slice(0, 2), 16) / 255;
-  const g = parseInt(h.slice(2, 4), 16) / 255;
-  const b = parseInt(h.slice(4, 6), 16) / 255;
-
-  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-  return L;
-}
-
-// Choose white or black for maximum contrast against a gradient.
-// We average the luminance of the three stops; if it's dark → use white text.
-function pickReadableText(from: string, via: string, to: string): "#000000" | "#ffffff" {
-  const avgL = (luminance(from) + luminance(via) + luminance(to)) / 3;
-  return avgL < 0.5 ? "#ffffff" : "#000000";
-}
-
-// Apply variables to :root so the whole app can style with them.
-function applyPlatformGradient(palette: { from: string; via: string; to: string }) {
-  const root = document.documentElement;
-  root.style.setProperty("--brand-from", palette.from);
-  root.style.setProperty("--brand-via", palette.via);
-  root.style.setProperty("--brand-to", palette.to);
-
-  const fg = pickReadableText(palette.from, palette.via, palette.to);
-  root.style.setProperty("--brand-fg-strong", fg);
-
-  // Optional: bold on brand text everywhere we use the var.
-  // (Components can simply use font-semibold/extrabold; this keeps it simple.)
-}
 
 /* -------------------------------------------------------------------------- */
 /* UI helpers                                                                 */
@@ -148,7 +114,7 @@ export default function Settings() {
   /** Scope picker (empty string = Global) */
   const [instId, setInstId] = useState<string>("");
 
-  /** Load initial from global; subsequent loads will re-read by scope */
+  /** Load initial settings from global; palette comes from theme store */
   const initial = useMemo<AppSettings>(
     () =>
       getJSON<AppSettings>(GLOBAL_KEY, {
@@ -159,8 +125,8 @@ export default function Settings() {
         defaultBot: "Waitlist",
         consentText:
           "By continuing, you agree to our Terms and Privacy Policy.",
-        // Default palette matches current platform colors.
-        palette: { ...DEFAULT_PLATFORM_GRADIENT },
+        // Snapshot of theme palette for export/import convenience
+        palette: { ...loadPalette() },
         emailNotifications: false,
         notifyEmail: "",
         syncMode: "local",
@@ -169,26 +135,37 @@ export default function Settings() {
   );
 
   const [s, setS] = useState<AppSettings>(initial);
+
+  // Local palette state drives the UI color inputs (and live preview via applyTheme)
+  const [palette, setPalette] = useState<Palette>(() => loadPalette());
+
   const [busyCloud, setBusyCloud] = useState(false);
 
-  /** Apply palette live to the platform (auto text color) */
+  /** Apply the palette to CSS variables live whenever it changes */
   useEffect(() => {
-    const p = s.palette ?? DEFAULT_PLATFORM_GRADIENT;
-    applyPlatformGradient(p);
-  }, [s.palette]);
+    applyTheme(palette);
+  }, [palette]);
 
   /** Reload settings whenever scope changes */
   useEffect(() => {
     const key = activeStorageKey(instId);
-    const next = getJSON<AppSettings>(key, s); // fall back to current to avoid flicker
+    const next = getJSON<AppSettings>(key, s);
     setS(next);
+    // When scope changes, we keep the platform palette from the theme store,
+    // not the per-scope snapshot, so the UI stays consistent.
   }, [instId]);
 
   /* -------------------------------- Actions -------------------------------- */
 
   function save() {
+    // Persist app settings (including a snapshot of current palette)
     const key = activeStorageKey(instId);
-    setJSON(key, s);
+    const next: AppSettings = { ...s, palette: { ...palette } };
+    setJSON(key, next);
+
+    // Persist + apply theme palette globally
+    savePalette(palette);
+
     alert(`Settings saved to ${instId ? `Instance ${instId}` : "Global"}.`);
   }
 
@@ -200,7 +177,8 @@ export default function Settings() {
 
   function exportJson() {
     const scopeLabel = instId ? `instance-${instId}` : "global";
-    const blob = new Blob([JSON.stringify(s, null, 2)], {
+    const payload: AppSettings = { ...s, palette: { ...palette } };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -218,6 +196,11 @@ export default function Settings() {
     try {
       const parsed = JSON.parse(text) as AppSettings;
       setS(parsed);
+      if (parsed.palette) {
+        setPalette(parsed.palette as Palette);
+        applyTheme(parsed.palette as Palette);
+        savePalette(parsed.palette as Palette); // keep theme store in sync
+      }
       const key = activeStorageKey(instId);
       setJSON(key, parsed);
       alert(`Settings imported to ${instId ? `Instance ${instId}` : "Global"}.`);
@@ -241,7 +224,7 @@ export default function Settings() {
     try {
       setBusyCloud(true);
       const key = activeStorageKey(instId);
-      const next = { ...s, lastCloudBackupAt: new Date().toISOString() };
+      const next = { ...s, palette: { ...palette }, lastCloudBackupAt: new Date().toISOString() };
       await backupToCloudStub(key, next);
       setS(next);
       setJSON(key, next);
@@ -265,6 +248,11 @@ export default function Settings() {
         return;
       }
       setS(remote);
+      if (remote.palette) {
+        setPalette(remote.palette as Palette);
+        applyTheme(remote.palette as Palette);
+        savePalette(remote.palette as Palette);
+      }
       setJSON(key, remote);
       alert("Restored from cloud (demo stub).");
     } catch {
@@ -274,12 +262,11 @@ export default function Settings() {
     }
   }
 
-  /* Convenience: reset just the gradient to the current platform defaults */
-  function resetPlatformGradient() {
-    setS((p) => ({
-      ...p,
-      palette: { ...DEFAULT_PLATFORM_GRADIENT },
-    }));
+  /* Reset only the platform gradient to your default system colors */
+  function onResetPlatformGradient() {
+    resetPalette();                // updates localStorage + calls applyTheme()
+    const fresh = loadPalette();   // read back what theme now uses
+    setPalette(fresh);             // sync UI inputs
   }
 
   /* --------------------------------- Render -------------------------------- */
@@ -462,12 +449,9 @@ export default function Settings() {
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border"
-                  value={s.palette?.from || DEFAULT_PLATFORM_GRADIENT.from}
+                  value={palette.from || DEFAULT_PALETTE.from}
                   onChange={(e) =>
-                    setS((p) => ({
-                      ...p,
-                      palette: { ...(p.palette || {}), from: e.target.value },
-                    }))
+                    setPalette((p) => ({ ...p, from: e.target.value }))
                   }
                 />
               </div>
@@ -476,12 +460,9 @@ export default function Settings() {
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border"
-                  value={s.palette?.via || DEFAULT_PLATFORM_GRADIENT.via}
+                  value={palette.via || DEFAULT_PALETTE.via}
                   onChange={(e) =>
-                    setS((p) => ({
-                      ...p,
-                      palette: { ...(p.palette || {}), via: e.target.value },
-                    }))
+                    setPalette((p) => ({ ...p, via: e.target.value }))
                   }
                 />
               </div>
@@ -490,12 +471,9 @@ export default function Settings() {
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border"
-                  value={s.palette?.to || DEFAULT_PLATFORM_GRADIENT.to}
+                  value={palette.to || DEFAULT_PALETTE.to}
                   onChange={(e) =>
-                    setS((p) => ({
-                      ...p,
-                      palette: { ...(p.palette || {}), to: e.target.value },
-                    }))
+                    setPalette((p) => ({ ...p, to: e.target.value }))
                   }
                 />
               </div>
@@ -505,7 +483,7 @@ export default function Settings() {
           {/* Live preview bar that uses the CSS vars + auto text color */}
           <div className="mt-4">
             <div className="text-xs text-foreground/70 mb-2">
-              These colors become the <strong>default gradient</strong> for new bots and headers.
+              These colors become the <strong>default gradient</strong> for the platform UI and new bot defaults.
               Text color adjusts automatically for readability.
             </div>
 
@@ -513,8 +491,8 @@ export default function Settings() {
               className="rounded-xl px-4 py-3 font-extrabold text-center shadow"
               style={{
                 background:
-                  "linear-gradient(90deg, var(--brand-from), var(--brand-via), var(--brand-to))",
-                color: "var(--brand-fg-strong)",
+                  "linear-gradient(90deg, var(--grad-from), var(--grad-via), var(--grad-to))",
+                color: "var(--grad-text)",
               }}
             >
               Live Preview — Auto-contrast text
@@ -522,9 +500,9 @@ export default function Settings() {
 
             <div className="mt-3 flex flex-wrap gap-2">
               <button
-                onClick={resetPlatformGradient}
+                onClick={onResetPlatformGradient}
                 className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
-                title="Revert to the current platform’s default colors"
+                title="Revert to the platform’s default colors"
               >
                 Reset to Platform Defaults
               </button>
@@ -615,11 +593,7 @@ export default function Settings() {
         <div className={sectionCard}>
           <div className="flex items-center gap-3">
             <button
-              className="rounded-xl px-4 py-2 font-bold text-[var(--brand-fg-strong)] shadow-[0_3px_0_#000]"
-              style={{
-                background:
-                  "linear-gradient(90deg, var(--brand-from), var(--brand-via), var(--brand-to))",
-              }}
+              className="gradient-button"
               onClick={save}
             >
               Save Changes
