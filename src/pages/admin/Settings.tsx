@@ -1,3 +1,4 @@
+// src/pages/admin/Settings.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { getJSON, setJSON } from "@/lib/storage";
 import { BotKey } from "@/lib/botSettings";
@@ -18,22 +19,22 @@ type AppSettings = {
   defaultBot?: BotKey;
   consentText?: string;
 
-  // NEW: branding
+  // branding
   brandLogoDataUrl?: string;
 
-  // NEW: notifications
+  // notifications
   emailNotifications?: boolean;
   notifyEmail?: string;
 
-  // NEW: palette (used as defaults when creating bots/instances)
+  // palette (used as defaults when creating bots/instances) + platform theme
   palette?: {
     from: string;
     via: string;
     to: string;
   };
 
-  // NEW: data sync
-  syncMode?: SyncMode; // local (default) vs DigitalOcean (stub)
+  // data sync
+  syncMode?: SyncMode;
 
   // internal: last cloud backup ISO timestamp
   lastCloudBackupAt?: string;
@@ -42,6 +43,50 @@ type AppSettings = {
 /** Global key + per-instance variant */
 const GLOBAL_KEY = "app:settings";
 const INST_KEY = (instId: string) => `app:settings:inst:${instId}`;
+
+/* -------------------------------------------------------------------------- */
+/* Platform theme helpers (live preview + auto-contrast text)                 */
+/* -------------------------------------------------------------------------- */
+
+// Current platform "default" gradient (matches what you’re using today)
+const DEFAULT_PLATFORM_GRADIENT = {
+  from: "#a855f7", // purple-500-ish
+  via: "#6366f1",  // indigo-500-ish
+  to: "#14b8a6",   // teal-500-ish
+};
+
+// Simple relative luminance
+function luminance(hex: string): number {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return L;
+}
+
+// Choose white or black for maximum contrast against a gradient.
+// We average the luminance of the three stops; if it's dark → use white text.
+function pickReadableText(from: string, via: string, to: string): "#000000" | "#ffffff" {
+  const avgL = (luminance(from) + luminance(via) + luminance(to)) / 3;
+  return avgL < 0.5 ? "#ffffff" : "#000000";
+}
+
+// Apply variables to :root so the whole app can style with them.
+function applyPlatformGradient(palette: { from: string; via: string; to: string }) {
+  const root = document.documentElement;
+  root.style.setProperty("--brand-from", palette.from);
+  root.style.setProperty("--brand-via", palette.via);
+  root.style.setProperty("--brand-to", palette.to);
+
+  const fg = pickReadableText(palette.from, palette.via, palette.to);
+  root.style.setProperty("--brand-fg-strong", fg);
+
+  // Optional: bold on brand text everywhere we use the var.
+  // (Components can simply use font-semibold/extrabold; this keeps it simple.)
+}
 
 /* -------------------------------------------------------------------------- */
 /* UI helpers                                                                 */
@@ -64,7 +109,6 @@ const inputCls =
 const CLOUD_KEY = (scopeKey: string) => `cloud:${scopeKey}.v1`; // demo only
 
 async function backupToCloudStub(scopeKey: string, payload: AppSettings) {
-  // TODO: swap with your DigitalOcean call
   await new Promise((r) => setTimeout(r, 350));
   localStorage.setItem(CLOUD_KEY(scopeKey), JSON.stringify(payload));
 }
@@ -115,7 +159,8 @@ export default function Settings() {
         defaultBot: "Waitlist",
         consentText:
           "By continuing, you agree to our Terms and Privacy Policy.",
-        palette: { from: "#c4b5fd", via: "#a5b4fc", to: "#86efac" },
+        // Default palette matches current platform colors.
+        palette: { ...DEFAULT_PLATFORM_GRADIENT },
         emailNotifications: false,
         notifyEmail: "",
         syncMode: "local",
@@ -125,6 +170,12 @@ export default function Settings() {
 
   const [s, setS] = useState<AppSettings>(initial);
   const [busyCloud, setBusyCloud] = useState(false);
+
+  /** Apply palette live to the platform (auto text color) */
+  useEffect(() => {
+    const p = s.palette ?? DEFAULT_PLATFORM_GRADIENT;
+    applyPlatformGradient(p);
+  }, [s.palette]);
 
   /** Reload settings whenever scope changes */
   useEffect(() => {
@@ -221,6 +272,14 @@ export default function Settings() {
     } finally {
       setBusyCloud(false);
     }
+  }
+
+  /* Convenience: reset just the gradient to the current platform defaults */
+  function resetPlatformGradient() {
+    setS((p) => ({
+      ...p,
+      palette: { ...DEFAULT_PLATFORM_GRADIENT },
+    }));
   }
 
   /* --------------------------------- Render -------------------------------- */
@@ -403,7 +462,7 @@ export default function Settings() {
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border"
-                  value={s.palette?.from || "#c4b5fd"}
+                  value={s.palette?.from || DEFAULT_PLATFORM_GRADIENT.from}
                   onChange={(e) =>
                     setS((p) => ({
                       ...p,
@@ -417,7 +476,7 @@ export default function Settings() {
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border"
-                  value={s.palette?.via || "#a5b4fc"}
+                  value={s.palette?.via || DEFAULT_PLATFORM_GRADIENT.via}
                   onChange={(e) =>
                     setS((p) => ({
                       ...p,
@@ -431,7 +490,7 @@ export default function Settings() {
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border"
-                  value={s.palette?.to || "#86efac"}
+                  value={s.palette?.to || DEFAULT_PLATFORM_GRADIENT.to}
                   onChange={(e) =>
                     setS((p) => ({
                       ...p,
@@ -442,8 +501,34 @@ export default function Settings() {
               </div>
             </div>
           </div>
-          <div className="mt-4 text-xs text-foreground/70">
-            These colors become the <strong>default gradient</strong> for new bots and headers.
+
+          {/* Live preview bar that uses the CSS vars + auto text color */}
+          <div className="mt-4">
+            <div className="text-xs text-foreground/70 mb-2">
+              These colors become the <strong>default gradient</strong> for new bots and headers.
+              Text color adjusts automatically for readability.
+            </div>
+
+            <div
+              className="rounded-xl px-4 py-3 font-extrabold text-center shadow"
+              style={{
+                background:
+                  "linear-gradient(90deg, var(--brand-from), var(--brand-via), var(--brand-to))",
+                color: "var(--brand-fg-strong)",
+              }}
+            >
+              Live Preview — Auto-contrast text
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={resetPlatformGradient}
+                className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
+                title="Revert to the current platform’s default colors"
+              >
+                Reset to Platform Defaults
+              </button>
+            </div>
           </div>
         </div>
 
@@ -530,7 +615,11 @@ export default function Settings() {
         <div className={sectionCard}>
           <div className="flex items-center gap-3">
             <button
-              className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+              className="rounded-xl px-4 py-2 font-bold text-[var(--brand-fg-strong)] shadow-[0_3px_0_#000]"
+              style={{
+                background:
+                  "linear-gradient(90deg, var(--brand-from), var(--brand-via), var(--brand-to))",
+              }}
               onClick={save}
             >
               Save Changes
