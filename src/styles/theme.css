@@ -1,6 +1,34 @@
 /* src/styles/theme.css */
+/* These use CSS variables set by the theme helper. */
+
 .gradient-header {
   background: linear-gradient(90deg, var(--grad-from), var(--grad-via), var(--grad-to));
   color: var(--grad-text);
-  font-weight: var(--grad-font-weight);
+  font-weight: var(--grad-font-weight, 800);
+}
+
+/* Reusable gradient button with auto-contrast text */
+.gradient-button {
+  background: linear-gradient(90deg, var(--grad-from), var(--grad-via), var(--grad-to));
+  color: var(--grad-text);
+  font-weight: var(--grad-font-weight, 800);
+  border-radius: 0.75rem; /* rounded-xl */
+  padding: 0.5rem 1rem;   /* px-4 py-2 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 3px 0 #000;        /* matches your style */
+  border: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.gradient-button:active {
+  transform: translateY(1px);
+}
+
+.gradient-button:focus {
+  outline: 2px solid rgba(0, 0, 0, 0.15);
+  outline-offset: 2px;
 }
