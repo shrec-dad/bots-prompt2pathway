@@ -1,0 +1,6 @@
+/* src/styles/theme.css */
+.gradient-header {
+  background: linear-gradient(90deg, var(--grad-from), var(--grad-via), var(--grad-to));
+  color: var(--grad-text);
+  font-weight: var(--grad-font-weight);
+}
