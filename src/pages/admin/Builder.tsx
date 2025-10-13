@@ -822,7 +822,6 @@ function BuilderInner() {
                   custom
                 </button>
               </div>
-            </div>
 
             {/* Add Node */}
             <div className="relative">
