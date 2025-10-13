@@ -1,4 +1,4 @@
-// src/App.tsx
+// src/App.tsx - UPDATED WITH RECEPTIONIST SETTINGS ROUTE
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
@@ -16,11 +16,12 @@ const Branding = lazy(() => import("@/pages/admin/Branding"));
 const Analytics = lazy(() => import("@/pages/admin/Analytics"));
 const Integrations = lazy(() => import("@/pages/admin/Integrations"));
 const Clients = lazy(() => import("@/pages/admin/Clients"));
-const Knowledge = lazy(() => import("@/pages/admin/Knowledge")); // if it has an error, only this route breaks
+const Knowledge = lazy(() => import("@/pages/admin/Knowledge"));
 const Nurture = lazy(() => import("@/pages/admin/Nurture"));
 const Settings = lazy(() => import("@/pages/admin/Settings"));
 const Preview = lazy(() => import("@/pages/admin/Preview"));
 const Embed = lazy(() => import("@/pages/admin/Embed"));
+const ReceptionistSettings = lazy(() => import("@/pages/admin/ReceptionistSettings")); // ← ADDED
 
 export default function App() {
   return (
@@ -30,7 +31,7 @@ export default function App() {
           {/* Public */}
           <Route path="/" element={<Index />} />
           <Route path="/widget" element={<Widget />} />
-
+          
           {/* Admin */}
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Dashboard />} />
@@ -45,11 +46,12 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="preview" element={<Preview />} />
             <Route path="embed" element={<Embed />} />
+            <Route path="receptionist" element={<ReceptionistSettings />} /> {/* ← ADDED */}
           </Route>
-
+          
           {/* Optional redirect */}
           <Route path="/admin/preview/*" element={<Navigate to="/admin/preview" replace />} />
-
+          
           {/* 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
