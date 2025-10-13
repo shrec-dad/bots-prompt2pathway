@@ -1,4 +1,4 @@
-// src/pages/admin/Builder.tsx
+// src/pages/admin/Builder.tsx - COMPLETE UPDATED FILE WITH PHONE & CALENDAR NODES
 import React, {
   useMemo,
   useState,
@@ -67,7 +67,7 @@ function writeInstMeta(instId: string, meta: InstMeta) {
 }
 
 /* =========================================================================
-   1)  Custom Node components (same visual style you liked)
+   1)  Custom Node components (INCLUDING NEW PHONE & CALENDAR NODES)
    ========================================================================= */
 
 const MessageNode = ({ data }: { data: any }) => (
@@ -108,11 +108,44 @@ const InputNode = ({ data }: { data: any }) => (
   </div>
 );
 
+// ← NEW: Phone Node
+const PhoneNode = ({ data }: { data: any }) => (
+  <div className="px-4 py-2 shadow-md rounded-md bg-sky-50 border-2 border-sky-400">
+    <Handle type="target" position={Position.Top} />
+    <div className="flex items-center gap-2">
+      <span className="text-xl">☎️</span>
+      <div>
+        <div className="font-bold text-sm">{data?.label || "Phone"}</div>
+        <div className="text-xs text-gray-600">{data?.phoneAction || "Handle call"}</div>
+      </div>
+    </div>
+    <Handle type="source" position={Position.Bottom} />
+  </div>
+);
+
+// ← NEW: Calendar Node
+const CalendarNode = ({ data }: { data: any }) => (
+  <div className="px-4 py-2 shadow-md rounded-md bg-emerald-50 border-2 border-emerald-400">
+    <Handle type="target" position={Position.Top} />
+    <div className="flex items-center gap-2">
+      <span className="text-xl">📅</span>
+      <div>
+        <div className="font-bold text-sm">{data?.label || "Calendar"}</div>
+        <div className="text-xs text-gray-600">{data?.calendarAction || "Book appointment"}</div>
+      </div>
+    </div>
+    <Handle type="source" position={Position.Bottom} />
+  </div>
+);
+
+// ← UPDATED: Register new node types
 const nodeTypes = {
   message: MessageNode,
   choice: ChoiceNode,
   action: ActionNode,
   input: InputNode,
+  phone: PhoneNode,      // ← ADDED
+  calendar: CalendarNode, // ← ADDED
 };
 
 /* =========================================================================
@@ -127,7 +160,9 @@ type RFNode = Node & {
     | "group"
     | "message"
     | "choice"
-    | "action";
+    | "action"
+    | "phone"      // ← ADDED
+    | "calendar";  // ← ADDED
   data?: any;
 };
 
@@ -174,11 +209,9 @@ const sourceToValue = (s: Source) =>
 function BuilderInner() {
   const [search, setSearch] = useSearchParams();
 
-  // existing query-string support
   const queryInst = search.get("inst") || undefined;
   const queryBot = (search.get("bot") as string | null) || null;
 
-  // templates (dynamic: built-in + custom)
   const [defs, setDefs] = useState(() => listTemplateDefs());
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -197,16 +230,14 @@ function BuilderInner() {
     "CustomerSupport",
     "Waitlist",
     "SocialMedia",
+    "Receptionist", // ← ADDED
   ] as BotKey[]);
 
-  // NOTE: AdminStore in your project uses fixed built-ins.
-  // To avoid conflicts, only sync when the key is one of the built-ins.
   const { currentBot, setCurrentBot } = useAdminStore() as {
     currentBot: any;
     setCurrentBot?: (key: any) => void;
   };
 
-  // list client instances for dropdown
   const [instances, setInstances] = useState<InstanceMeta[]>(() =>
     listInstances()
   );
@@ -221,7 +252,6 @@ function BuilderInner() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Build initial source from URL or default to first template
   const initialSource: Source = useMemo(() => {
     if (queryInst) {
       return { kind: "inst", id: queryInst, meta: readInstMeta(queryInst) };
@@ -229,13 +259,12 @@ function BuilderInner() {
     const defaultKey =
       queryBot ||
       defs[0]?.key ||
-      "LeadQualifier"; // safe fallback if nothing exists yet
+      "LeadQualifier";
     return { kind: "tpl", bot: defaultKey };
   }, [queryInst, queryBot, defs]);
 
   const [source, setSource] = useState<Source>(initialSource);
 
-  // Derived: bot (base template) and mode based on source
   const initialBot: string =
     source.kind === "tpl"
       ? source.bot
@@ -251,15 +280,12 @@ function BuilderInner() {
 
   const [mode, setMode] = useState<"basic" | "custom">(initialMode);
 
-  // Keep admin store in sync when editing a template (only for built-ins)
   useEffect(() => {
     if (source.kind === "tpl" && BUILTIN_KEYS.has(bot as BotKey)) {
       if (setCurrentBot && bot !== currentBot) setCurrentBot(bot);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bot, source.kind]);
 
-  // If user changes AdminStore elsewhere, reflect it for built-ins only
   useEffect(() => {
     if (
       source.kind === "tpl" &&
@@ -273,10 +299,8 @@ function BuilderInner() {
           "custom"
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBot]);
 
-  // ReactFlow data (template + overrides)
   const activeInstId = source.kind === "inst" ? source.id : undefined;
 
   const [overrides, setOv] = useState<Record<string, any>>(() =>
@@ -302,7 +326,6 @@ function BuilderInner() {
     base ? (base as any).edges : []
   );
 
-  // Rebuild when bot/mode/source changes
   useEffect(() => {
     const found = getTemplate(bot, mode);
 
@@ -321,19 +344,17 @@ function BuilderInner() {
   function onModeChange(next: "basic" | "custom") {
     setMode(next);
     if (source.kind === "inst") {
-      // persist on instance meta
       writeInstMeta(source.id, { baseKey: bot, mode: next });
     } else {
       setBotSettings(bot as any, { mode: next });
     }
   }
 
-  // selection + editor
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValues, setEditorValues] = useState<any>({});
 
   useEffect(() => {
-    if (!selectedId) return setEditorValues({}); // clear if nothing selected
+    if (!selectedId) return setEditorValues({});
     const n = nodes.find((x) => x.id === selectedId);
     setEditorValues(n?.data || {});
   }, [selectedId, nodes]);
@@ -366,10 +387,9 @@ function BuilderInner() {
     saveOverrides(bot, mode, nextOv, activeInstId);
   }, [selectedId, editorValues, overrides, setNodes, bot, mode, activeInstId]);
 
-  // ====== Add/Place/Delete Node ======
   const rf = useReactFlow<RFNode, Edge>();
   const [pendingType, setPendingType] = useState<
-    null | "message" | "choice" | "input" | "action"
+    null | "message" | "choice" | "input" | "action" | "phone" | "calendar" // ← UPDATED
   >(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
 
@@ -378,14 +398,25 @@ function BuilderInner() {
       .toString(36)
       .slice(2, 6)}`;
 
-  const defaultDataFor = (t: Exclude<typeof pendingType, null>) =>
-    t === "message"
-      ? { title: "New Message", text: "Edit me…" }
-      : t === "choice"
-      ? { label: "Choose one", options: ["Option A", "Option B"] }
-      : t === "input"
-      ? { label: "Your input", placeholder: "Type here…" }
-      : { label: "Action", to: "mailto:example@domain.com" };
+  // ← UPDATED: Add default data for new node types
+  const defaultDataFor = (t: Exclude<typeof pendingType, null>) => {
+    switch (t) {
+      case "message":
+        return { title: "New Message", text: "Edit me…" };
+      case "choice":
+        return { label: "Choose one", options: ["Option A", "Option B"] };
+      case "input":
+        return { label: "Your input", placeholder: "Type here…" };
+      case "action":
+        return { label: "Action", to: "mailto:example@domain.com" };
+      case "phone":
+        return { label: "Phone Handler", phoneAction: "answer" };
+      case "calendar":
+        return { label: "Calendar Booking", calendarAction: "check-availability" };
+      default:
+        return {};
+    }
+  };
 
   const onPaneClick = useCallback(
     (e: React.MouseEvent) => {
@@ -456,7 +487,6 @@ function BuilderInner() {
     setSelectedId(null);
   };
 
-  // Avoid ReactFlow swallowing editor keystrokes
   const editorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = editorRef.current;
@@ -480,8 +510,6 @@ function BuilderInner() {
     [nodes, selectedId]
   );
 
-  // ====== Dropdown with Templates + Client Bots ======
-  // Value is "tpl:<key>" OR "inst:<id>"
   const selectValue = sourceToValue(source);
 
   function onSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -498,7 +526,6 @@ function BuilderInner() {
       setBot(baseKey);
       setMode(m);
 
-      // reflect in query string for deep-linking
       setSearch((s) => {
         s.set("inst", id);
         s.delete("bot");
@@ -527,7 +554,6 @@ function BuilderInner() {
     }
   }
 
-  // UI helpers
   const inputClass =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
   const FieldLabel = ({ children }: { children: React.ReactNode }) => (
@@ -536,6 +562,7 @@ function BuilderInner() {
     </div>
   );
 
+  // ← UPDATED: Editor with Phone and Calendar support
   const Editor = () => {
     if (!selected)
       return (
@@ -543,6 +570,68 @@ function BuilderInner() {
           Select a node above to edit its text and labels.
         </div>
       );
+
+    // Phone Node Editor
+    if (selected.type === "phone") {
+      return (
+        <div className="space-y-3">
+          <div>
+            <FieldLabel>Label</FieldLabel>
+            <input
+              className={inputClass}
+              value={editorValues.label || ""}
+              onChange={(e) => updateEditorValue("label", e.target.value)}
+              placeholder="Phone Handler"
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <FieldLabel>Phone Action</FieldLabel>
+            <select
+              className={inputClass}
+              value={editorValues.phoneAction || "answer"}
+              onChange={(e) => updateEditorValue("phoneAction", e.target.value)}
+            >
+              <option value="answer">Answer Call</option>
+              <option value="transfer">Transfer to Human</option>
+              <option value="voicemail">Take Voicemail</option>
+              <option value="collect-info">Collect Information</option>
+            </select>
+          </div>
+        </div>
+      );
+    }
+
+    // Calendar Node Editor
+    if (selected.type === "calendar") {
+      return (
+        <div className="space-y-3">
+          <div>
+            <FieldLabel>Label</FieldLabel>
+            <input
+              className={inputClass}
+              value={editorValues.label || ""}
+              onChange={(e) => updateEditorValue("label", e.target.value)}
+              placeholder="Calendar Action"
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <FieldLabel>Calendar Action</FieldLabel>
+            <select
+              className={inputClass}
+              value={editorValues.calendarAction || "check-availability"}
+              onChange={(e) => updateEditorValue("calendarAction", e.target.value)}
+            >
+              <option value="check-availability">Check Availability</option>
+              <option value="book">Book Appointment</option>
+              <option value="cancel">Cancel Appointment</option>
+              <option value="reschedule">Reschedule Appointment</option>
+            </select>
+          </div>
+        </div>
+      );
+    }
 
     if (selected.type === "input") {
       return (
@@ -637,7 +726,6 @@ function BuilderInner() {
       );
     }
 
-    // default => message
     return (
       <div className="space-y-3">
         <div>
@@ -683,7 +771,6 @@ function BuilderInner() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Combined dropdown */}
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold uppercase text-foreground/70">
                 Bot
@@ -728,14 +815,6 @@ function BuilderInner() {
               <div className="flex items-center gap-2">
                 <button
                   className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                    mode === "basic" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
-                  }`}
-                  onClick={() => onModeChange("basic")}
-                >
-                  basic
-                </button>
-                <button
-                  className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
                     mode === "custom" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
                   }`}
                   onClick={() => onModeChange("custom")}
@@ -760,7 +839,7 @@ function BuilderInner() {
                   role="menu"
                   className="absolute right-0 mt-2 w-40 rounded-lg border-2 border-black bg-white shadow-xl z-20"
                 >
-                  {(["message", "choice", "input", "action"] as const).map(
+                  {(["message", "choice", "input", "action", "phone", "calendar"] as const).map(
                     (t) => (
                       <button
                         key={t}
@@ -771,7 +850,7 @@ function BuilderInner() {
                         }}
                         className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
                       >
-                        {t[0].toUpperCase() + t.slice(1)} (click to place)
+                        {t === "phone" ? "☎️ Phone" : t === "calendar" ? "📅 Calendar" : t[0].toUpperCase() + t.slice(1)}
                       </button>
                     )
                   )}
@@ -835,7 +914,7 @@ function BuilderInner() {
         {pendingType && (
           <div className="mt-2 text-xs font-bold text-purple-700">
             Click on the canvas to place your new{" "}
-            {pendingType[0].toUpperCase() + pendingType.slice(1)} node.
+            {pendingType === "phone" ? "Phone" : pendingType === "calendar" ? "Calendar" : pendingType[0].toUpperCase() + pendingType.slice(1)} node.
           </div>
         )}
       </div>
@@ -886,4 +965,12 @@ export default function Builder() {
       </ReactFlowProvider>
     </ErrorBoundary>
   );
-}
+}d px-2 py-1 text-xs font-bold ring-1 ring-border ${
+                    mode === "basic" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
+                  }`}
+                  onClick={() => onModeChange("basic")}
+                >
+                  basic
+                </button>
+                <button
+                  className={`rounded-m
