@@ -19,8 +19,8 @@ import ReactFlow, {
   Position,
   useReactFlow,
   ReactFlowProvider,
-} from "reactflow";
-import "reactflow/dist/style.css";
+} from "@xyflow/react";  // ← CHANGED: Use @xyflow/react
+import "@xyflow/react/dist/style.css";  // ← CHANGED: Correct CSS path
 
 import { useSearchParams } from "react-router-dom";
 import { useAdminStore } from "@/lib/AdminStore";
