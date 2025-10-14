@@ -51,6 +51,10 @@ type SavedInstance = {
 
 const BRAND_KEY = "brandingSettings";
 
+/**
+ * Branding as written by Preview.tsx in localStorage.
+ * NOTE: Preview uses `chatHideLabelWhenImage` (not `hideLabelWhenImage`).
+ */
 type Branding = {
   chatBubbleImage?: string;
   chatBubbleColor: string;
@@ -60,7 +64,8 @@ type Branding = {
   chatBubbleLabel?: string;
   chatBubbleLabelColor?: string;
   chatBubbleImageFit?: Fit | "cover" | "contain" | "center";
-  hideLabelWhenImage?: boolean;
+  /** matches Preview storage key */
+  chatHideLabelWhenImage?: boolean;
 };
 
 /** Normalize BotSelector values (string | object) -> string id/key */
@@ -78,8 +83,9 @@ function normalizeSelectionToString(v: unknown): string {
 function readBranding(): Branding {
   try {
     const raw = localStorage.getItem(BRAND_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return JSON.parse(raw) as Branding;
   } catch {}
+  // defaults mirror Preview.tsx as closely as possible
   return {
     chatBubbleColor: "#7aa8ff",
     chatBubbleSize: 56,
@@ -88,7 +94,7 @@ function readBranding(): Branding {
     chatBubbleLabel: "Chat",
     chatBubbleLabelColor: "#ffffff",
     chatBubbleImageFit: "cover",
-    hideLabelWhenImage: false,
+    chatHideLabelWhenImage: false,
   };
 }
 
@@ -174,7 +180,7 @@ export default function Embed() {
     if (syncWithPreview) {
       const b = branding;
       return {
-        position: b.chatBubblePosition ?? "bottom-right",
+        position: (b.chatBubblePosition as Pos) ?? "bottom-right",
         size: b.chatBubbleSize ?? 56,
         color: b.chatBubbleColor ?? "#7aa8ff",
         image: b.chatBubbleImage ?? "",
@@ -183,7 +189,7 @@ export default function Embed() {
         label: b.chatBubbleLabel ?? "Chat",
         labelColor: b.chatBubbleLabelColor ?? "#ffffff",
         avatar: "", // optional; Preview doesn’t manage this today
-        hideLabelWhenImage: !!b.hideLabelWhenImage,
+        hideLabelWhenImage: !!b.chatHideLabelWhenImage, // <<< align with Preview storage key
       };
     }
     return {
@@ -326,11 +332,6 @@ export default function Embed() {
               onChange={(e) => setSyncWithPreview(e.target.checked)}
             />
           </div>
-          <div className="text-xs text-muted-foreground">
-            {syncWithPreview
-              ? "Reading from brandingSettings (Preview)."
-              : "Overrides are local to this page and not saved."}
-          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -409,7 +410,13 @@ export default function Embed() {
               value={active.size}
               onChange={(e) => setSize(Number(e.target.value || 64))}
               disabled={controlsDisabled || mode === "sidebar"}
-              title={controlsDisabled ? "Controlled by Preview" : mode === "sidebar" ? "Not used for sidebar" : ""}
+              title={
+                controlsDisabled
+                  ? "Controlled by Preview"
+                  : mode === "sidebar"
+                  ? "Not used for sidebar"
+                  : ""
+              }
             />
           </div>
 
@@ -444,7 +451,13 @@ export default function Embed() {
                 }
               >
                 Upload
-                <input type="file" accept="image/*" className="hidden" onChange={onUpload} disabled={controlsDisabled} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={onUpload}
+                  disabled={controlsDisabled}
+                />
               </label>
               <button
                 className="rounded-lg border px-3 py-2 font-semibold bg-white"
@@ -537,7 +550,12 @@ export default function Embed() {
           {/* Preview URL */}
           <div className="md:col-span-3">
             <div className={labelCls}>Preview URL</div>
-            <input className={inputCls} value={embedUrl} readOnly onFocus={(e) => e.currentTarget.select()} />
+            <input
+              className={inputCls}
+              value={embedUrl}
+              readOnly
+              onFocus={(e) => e.currentTarget.select()}
+            />
           </div>
         </div>
       </div>
@@ -573,3 +591,4 @@ export default function Embed() {
     </div>
   );
 }
+
