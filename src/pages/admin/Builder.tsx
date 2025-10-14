@@ -1,4 +1,4 @@
-// src/pages/admin/Builder.tsx - COMPLETE WORKING FILE
+// src/pages/admin/Builder.tsx
 import React, {
   useMemo,
   useState,
@@ -67,7 +67,7 @@ function writeInstMeta(instId: string, meta: InstMeta) {
 }
 
 /* =========================================================================
-   1)  Custom Node components (INCLUDING PHONE & CALENDAR NODES)
+   1)  Custom Node components (INCLUDING NEW PHONE & CALENDAR NODES)
    ========================================================================= */
 
 const MessageNode = ({ data }: { data: any }) => (
@@ -108,6 +108,7 @@ const InputNode = ({ data }: { data: any }) => (
   </div>
 );
 
+/* NEW: Phone Node */
 const PhoneNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-sky-50 border-2 border-sky-400">
     <Handle type="target" position={Position.Top} />
@@ -115,13 +116,16 @@ const PhoneNode = ({ data }: { data: any }) => (
       <span className="text-xl">☎️</span>
       <div>
         <div className="font-bold text-sm">{data?.label || "Phone"}</div>
-        <div className="text-xs text-gray-600">{data?.phoneAction || "Handle call"}</div>
+        <div className="text-xs text-gray-600">
+          {data?.phoneAction || "Handle call"}
+        </div>
       </div>
     </div>
     <Handle type="source" position={Position.Bottom} />
   </div>
 );
 
+/* NEW: Calendar Node */
 const CalendarNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-emerald-50 border-2 border-emerald-400">
     <Handle type="target" position={Position.Top} />
@@ -129,13 +133,16 @@ const CalendarNode = ({ data }: { data: any }) => (
       <span className="text-xl">📅</span>
       <div>
         <div className="font-bold text-sm">{data?.label || "Calendar"}</div>
-        <div className="text-xs text-gray-600">{data?.calendarAction || "Book appointment"}</div>
+        <div className="text-xs text-gray-600">
+          {data?.calendarAction || "Book appointment"}
+        </div>
       </div>
     </div>
     <Handle type="source" position={Position.Bottom} />
   </div>
 );
 
+/* Register node types */
 const nodeTypes = {
   message: MessageNode,
   choice: ChoiceNode,
@@ -253,10 +260,7 @@ function BuilderInner() {
     if (queryInst) {
       return { kind: "inst", id: queryInst, meta: readInstMeta(queryInst) };
     }
-    const defaultKey =
-      queryBot ||
-      defs[0]?.key ||
-      "LeadQualifier";
+    const defaultKey = queryBot || defs[0]?.key || "LeadQualifier";
     return { kind: "tpl", bot: defaultKey };
   }, [queryInst, queryBot, defs]);
 
@@ -281,7 +285,7 @@ function BuilderInner() {
     if (source.kind === "tpl" && BUILTIN_KEYS.has(bot as BotKey)) {
       if (setCurrentBot && bot !== currentBot) setCurrentBot(bot);
     }
-  }, [bot, source.kind, setCurrentBot, currentBot, BUILTIN_KEYS]);
+  }, [bot, source.kind]);
 
   useEffect(() => {
     if (
@@ -296,7 +300,7 @@ function BuilderInner() {
           "custom"
       );
     }
-  }, [currentBot, source.kind, bot, BUILTIN_KEYS]);
+  }, [currentBot]);
 
   const activeInstId = source.kind === "inst" ? source.id : undefined;
 
@@ -325,7 +329,6 @@ function BuilderInner() {
 
   useEffect(() => {
     const found = getTemplate(bot, mode);
-
     const nextOv = getOverrides(bot, mode, activeInstId);
     setOv(nextOv);
 
@@ -386,7 +389,13 @@ function BuilderInner() {
 
   const rf = useReactFlow<RFNode, Edge>();
   const [pendingType, setPendingType] = useState<
-    null | "message" | "choice" | "input" | "action" | "phone" | "calendar"
+    | null
+    | "message"
+    | "choice"
+    | "input"
+    | "action"
+    | "phone"
+    | "calendar"
   >(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
 
@@ -408,7 +417,10 @@ function BuilderInner() {
       case "phone":
         return { label: "Phone Handler", phoneAction: "answer" };
       case "calendar":
-        return { label: "Calendar Booking", calendarAction: "check-availability" };
+        return {
+          label: "Calendar Booking",
+          calendarAction: "check-availability",
+        };
       default:
         return {};
     }
@@ -532,10 +544,8 @@ function BuilderInner() {
 
     if (v.startsWith("tpl:")) {
       const key = v.slice(4);
-
       const m =
-        (getBotSettings(key as any).mode as "basic" | "custom") ||
-        ("custom" as const);
+        (getBotSettings(key as any).mode as "basic" | "custom") || "custom";
 
       setSource({ kind: "tpl", bot: key });
       setBot(key);
@@ -558,6 +568,7 @@ function BuilderInner() {
     </div>
   );
 
+  /* Editor with Phone and Calendar support */
   const Editor = () => {
     if (!selected)
       return (
@@ -614,7 +625,9 @@ function BuilderInner() {
             <select
               className={inputClass}
               value={editorValues.calendarAction || "check-availability"}
-              onChange={(e) => updateEditorValue("calendarAction", e.target.value)}
+              onChange={(e) =>
+                updateEditorValue("calendarAction", e.target.value)
+              }
             >
               <option value="check-availability">Check Availability</option>
               <option value="book">Book Appointment</option>
@@ -644,9 +657,7 @@ function BuilderInner() {
             <input
               className={inputClass}
               value={editorValues.placeholder || ""}
-              onChange={(e) =>
-                updateEditorValue("placeholder", e.target.value)
-              }
+              onChange={(e) => updateEditorValue("placeholder", e.target.value)}
               placeholder="Enter placeholder…"
               autoComplete="off"
             />
@@ -748,6 +759,7 @@ function BuilderInner() {
 
   return (
     <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4">
+      {/* ===== Header ===== */}
       <div className="rounded-2xl border bg-white shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
           <div>
@@ -800,6 +812,7 @@ function BuilderInner() {
               </select>
             </div>
 
+            {/* Mode toggle */}
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase text-foreground/70">
                 Mode
@@ -807,7 +820,9 @@ function BuilderInner() {
               <div className="flex items-center gap-2">
                 <button
                   className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                    mode === "basic" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
+                    mode === "basic"
+                      ? "bg-indigo-100"
+                      : "hover:bg-muted/40 bg-white"
                   }`}
                   onClick={() => onModeChange("basic")}
                 >
@@ -815,7 +830,9 @@ function BuilderInner() {
                 </button>
                 <button
                   className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                    mode === "custom" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
+                    mode === "custom"
+                      ? "bg-indigo-100"
+                      : "hover:bg-muted/40 bg-white"
                   }`}
                   onClick={() => onModeChange("custom")}
                 >
@@ -824,6 +841,7 @@ function BuilderInner() {
               </div>
             </div>
 
+            {/* Add Node */}
             <div className="relative">
               <button
                 onClick={() => setAddMenuOpen((v) => !v)}
@@ -836,23 +854,27 @@ function BuilderInner() {
               {addMenuOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 mt-2 w-40 rounded-lg border-2 border-black bg-white shadow-xl z-20"
+                  className="absolute right-0 mt-2 w-44 rounded-lg border-2 border-black bg-white shadow-xl z-20"
                 >
-                  {(["message", "choice", "input", "action", "phone", "calendar"] as const).map(
-                    (t) => (
-                      <button
-                        key={t}
-                        role="menuitem"
-                        onClick={() => {
-                          setPendingType(t);
-                          setAddMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-                      >
-                        {t === "phone" ? "☎️ Phone" : t === "calendar" ? "📅 Calendar" : t[0].toUpperCase() + t.slice(1)}
-                      </button>
-                    )
-                  )}
+                  {(
+                    ["message", "choice", "input", "action", "phone", "calendar"] as const
+                  ).map((t) => (
+                    <button
+                      key={t}
+                      role="menuitem"
+                      onClick={() => {
+                        setPendingType(t);
+                        setAddMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+                    >
+                      {t === "phone"
+                        ? "☎️ Phone"
+                        : t === "calendar"
+                        ? "📅 Calendar"
+                        : t[0].toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -860,6 +882,7 @@ function BuilderInner() {
         </div>
       </div>
 
+      {/* ===== Canvas ===== */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
         <div
           className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
@@ -888,12 +911,7 @@ function BuilderInner() {
             panOnDrag={true}
             zoomOnScroll={true}
           >
-            <Background
-              gap={20}
-              size={1}
-              color="#e9d5ff"
-              style={{ opacity: 0.3 }}
-            />
+            <Background gap={20} size={1} color="#e9d5ff" style={{ opacity: 0.3 }} />
             <Controls
               showInteractive={false}
               className="bg-white/80 backdrop-blur-sm rounded-lg shadow-lg border border-purple-200"
@@ -912,11 +930,17 @@ function BuilderInner() {
         {pendingType && (
           <div className="mt-2 text-xs font-bold text-purple-700">
             Click on the canvas to place your new{" "}
-            {pendingType === "phone" ? "Phone" : pendingType === "calendar" ? "Calendar" : pendingType[0].toUpperCase() + pendingType.slice(1)} node.
+            {pendingType === "phone"
+              ? "Phone"
+              : pendingType === "calendar"
+              ? "Calendar"
+              : pendingType[0].toUpperCase() + pendingType.slice(1)}{" "}
+            node.
           </div>
         )}
       </div>
 
+      {/* ===== Editor ===== */}
       <div
         ref={editorRef}
         className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg"
@@ -949,6 +973,10 @@ function BuilderInner() {
     </div>
   );
 }
+
+/* =========================================================================
+   4)  Export with Provider wrapper to satisfy useReactFlow()
+   ========================================================================= */
 
 export default function Builder() {
   return (
