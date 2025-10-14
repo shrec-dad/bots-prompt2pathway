@@ -1,4 +1,4 @@
-// src/pages/admin/Builder.tsx - COMPLETE UPDATED FILE WITH PHONE & CALENDAR NODES
+// src/pages/admin/Builder.tsx - COMPLETE WORKING FILE
 import React, {
   useMemo,
   useState,
@@ -19,8 +19,8 @@ import ReactFlow, {
   Position,
   useReactFlow,
   ReactFlowProvider,
-} from "@xyflow/react";  // ← CHANGED: Use @xyflow/react
-import "@xyflow/react/dist/style.css";  // ← CHANGED: Correct CSS path
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 
 import { useSearchParams } from "react-router-dom";
 import { useAdminStore } from "@/lib/AdminStore";
@@ -67,7 +67,7 @@ function writeInstMeta(instId: string, meta: InstMeta) {
 }
 
 /* =========================================================================
-   1)  Custom Node components (INCLUDING NEW PHONE & CALENDAR NODES)
+   1)  Custom Node components (INCLUDING PHONE & CALENDAR NODES)
    ========================================================================= */
 
 const MessageNode = ({ data }: { data: any }) => (
@@ -108,7 +108,6 @@ const InputNode = ({ data }: { data: any }) => (
   </div>
 );
 
-// ← NEW: Phone Node
 const PhoneNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-sky-50 border-2 border-sky-400">
     <Handle type="target" position={Position.Top} />
@@ -123,7 +122,6 @@ const PhoneNode = ({ data }: { data: any }) => (
   </div>
 );
 
-// ← NEW: Calendar Node
 const CalendarNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-emerald-50 border-2 border-emerald-400">
     <Handle type="target" position={Position.Top} />
@@ -138,14 +136,13 @@ const CalendarNode = ({ data }: { data: any }) => (
   </div>
 );
 
-// ← UPDATED: Register new node types
 const nodeTypes = {
   message: MessageNode,
   choice: ChoiceNode,
   action: ActionNode,
   input: InputNode,
-  phone: PhoneNode,      // ← ADDED
-  calendar: CalendarNode, // ← ADDED
+  phone: PhoneNode,
+  calendar: CalendarNode,
 };
 
 /* =========================================================================
@@ -161,8 +158,8 @@ type RFNode = Node & {
     | "message"
     | "choice"
     | "action"
-    | "phone"      // ← ADDED
-    | "calendar";  // ← ADDED
+    | "phone"
+    | "calendar";
   data?: any;
 };
 
@@ -230,7 +227,7 @@ function BuilderInner() {
     "CustomerSupport",
     "Waitlist",
     "SocialMedia",
-    "Receptionist", // ← ADDED
+    "Receptionist",
   ] as BotKey[]);
 
   const { currentBot, setCurrentBot } = useAdminStore() as {
@@ -284,7 +281,7 @@ function BuilderInner() {
     if (source.kind === "tpl" && BUILTIN_KEYS.has(bot as BotKey)) {
       if (setCurrentBot && bot !== currentBot) setCurrentBot(bot);
     }
-  }, [bot, source.kind]);
+  }, [bot, source.kind, setCurrentBot, currentBot, BUILTIN_KEYS]);
 
   useEffect(() => {
     if (
@@ -299,7 +296,7 @@ function BuilderInner() {
           "custom"
       );
     }
-  }, [currentBot]);
+  }, [currentBot, source.kind, bot, BUILTIN_KEYS]);
 
   const activeInstId = source.kind === "inst" ? source.id : undefined;
 
@@ -389,7 +386,7 @@ function BuilderInner() {
 
   const rf = useReactFlow<RFNode, Edge>();
   const [pendingType, setPendingType] = useState<
-    null | "message" | "choice" | "input" | "action" | "phone" | "calendar" // ← UPDATED
+    null | "message" | "choice" | "input" | "action" | "phone" | "calendar"
   >(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
 
@@ -398,7 +395,6 @@ function BuilderInner() {
       .toString(36)
       .slice(2, 6)}`;
 
-  // ← UPDATED: Add default data for new node types
   const defaultDataFor = (t: Exclude<typeof pendingType, null>) => {
     switch (t) {
       case "message":
@@ -562,7 +558,6 @@ function BuilderInner() {
     </div>
   );
 
-  // ← UPDATED: Editor with Phone and Calendar support
   const Editor = () => {
     if (!selected)
       return (
@@ -571,7 +566,6 @@ function BuilderInner() {
         </div>
       );
 
-    // Phone Node Editor
     if (selected.type === "phone") {
       return (
         <div className="space-y-3">
@@ -602,7 +596,6 @@ function BuilderInner() {
       );
     }
 
-    // Calendar Node Editor
     if (selected.type === "calendar") {
       return (
         <div className="space-y-3">
@@ -755,7 +748,6 @@ function BuilderInner() {
 
   return (
     <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4">
-      {/* ===== Header ===== */}
       <div className="rounded-2xl border bg-white shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
           <div>
@@ -815,6 +807,14 @@ function BuilderInner() {
               <div className="flex items-center gap-2">
                 <button
                   className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
+                    mode === "basic" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
+                  }`}
+                  onClick={() => onModeChange("basic")}
+                >
+                  basic
+                </button>
+                <button
+                  className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
                     mode === "custom" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
                   }`}
                   onClick={() => onModeChange("custom")}
@@ -822,8 +822,8 @@ function BuilderInner() {
                   custom
                 </button>
               </div>
+            </div>
 
-            {/* Add Node */}
             <div className="relative">
               <button
                 onClick={() => setAddMenuOpen((v) => !v)}
@@ -860,7 +860,6 @@ function BuilderInner() {
         </div>
       </div>
 
-      {/* ===== Canvas ===== */}
       <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
         <div
           className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
@@ -918,7 +917,6 @@ function BuilderInner() {
         )}
       </div>
 
-      {/* ===== Editor ===== */}
       <div
         ref={editorRef}
         className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg"
@@ -952,10 +950,6 @@ function BuilderInner() {
   );
 }
 
-/* =========================================================================
-   4)  Export with Provider wrapper to satisfy useReactFlow()
-   ========================================================================= */
-
 export default function Builder() {
   return (
     <ErrorBoundary>
@@ -964,12 +958,4 @@ export default function Builder() {
       </ReactFlowProvider>
     </ErrorBoundary>
   );
-}d px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                    mode === "basic" ? "bg-indigo-100" : "hover:bg-muted/40 bg-white"
-                  }`}
-                  onClick={() => onModeChange("basic")}
-                >
-                  basic
-                </button>
-                <button
-                  className={`rounded-m
+}
