@@ -1,9 +1,9 @@
 // src/lib/templates.ts
 // Central library of all bot templates used by the Builder.
 // Each template is a ReactFlow graph: nodes[] + edges[].
-// Node types expected by your Builder: "message" | "choice" | "input" | "action".
+// Node types supported by your Builder: "message" | "choice" | "input" | "action" | "phone" | "calendar".
 
-import type { Edge, Node } from "reactflow";
+import type { Edge, Node } from "@xyflow/react";
 
 /* ---------- Types ---------- */
 
