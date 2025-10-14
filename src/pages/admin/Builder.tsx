@@ -6,7 +6,8 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import ReactFlow, {
+import {
+  ReactFlow,
   Background,
   Controls,
   addEdge,
