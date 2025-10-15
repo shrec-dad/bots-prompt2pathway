@@ -208,11 +208,9 @@ const LeadQualifier_custom: BotTemplate = {
     { id: "e12-13", source: id("crm", 12), target: id("abtest", 13), type: "smoothstep" },
     { id: "e13-14", source: id("abtest", 13), target: id("dupcheck", 14), type: "smoothstep" },
     { id: "e14-8", source: id("dupcheck", 14), target: id("submitEmail", 8), type: "smoothstep" },
-    { id: "e8-9", source: id("submitEmail", 8), target: id("thanks", 9), type: "smoothstep" },
+    { id: "e8-9", source: id: "e8-9", source: id("submitEmail", 8), target: id("thanks", 9), type: "smoothstep" },
   ],
 };
-
-/* ====== Appointment Booking (refined to use a calendar node) ====== */
 
 const AppointmentBooking_basic: BotTemplate = {
   nodes: [
@@ -229,21 +227,22 @@ const AppointmentBooking_basic: BotTemplate = {
       position: { x: 60, y: 190 },
     },
     {
-      id: id("calendar", 3),
-      type: "calendar",
-      data: {
-        label: "Choose a time",
-        // Optional hints your runtime/renderer may use:
-        durationMins: 30,
-        timezone: "{{visitor.tz}}",
-      },
+      id: id("date", 3),
+      type: "input",
+      data: { label: "Date", placeholder: "MM/DD/YYYY" },
       position: { x: 320, y: 190 },
+    },
+    {
+      id: id("time", 4),
+      type: "input",
+      data: { label: "Time", placeholder: "HH:MM" },
+      position: { x: 580, y: 190 },
     },
     {
       id: id("contact", 5),
       type: "input",
       data: { label: "Your email", placeholder: "name@example.com", required: true },
-      position: { x: 580, y: 190 },
+      position: { x: 60, y: 340 },
     },
     {
       id: id("confirm", 6),
@@ -260,8 +259,9 @@ const AppointmentBooking_basic: BotTemplate = {
   ],
   edges: [
     { id: "e1-2", source: id("welcome", 1), target: id("service", 2), type: "smoothstep" },
-    { id: "e2-3", source: id("service", 2), target: id("calendar", 3), type: "smoothstep" },
-    { id: "e3-5", source: id("calendar", 3), target: id("contact", 5), type: "smoothstep" },
+    { id: "e2-3", source: id("service", 2), target: id("date", 3), type: "smoothstep" },
+    { id: "e3-4", source: id("date", 3), target: id("time", 4), type: "smoothstep" },
+    { id: "e4-5", source: id("time", 4), target: id("contact", 5), type: "smoothstep" },
     { id: "e5-6", source: id("contact", 5), target: id("confirm", 6), type: "smoothstep" },
     { id: "e6-7", source: id("confirm", 6), target: id("ics", 7), type: "smoothstep" },
   ],
@@ -296,13 +296,8 @@ const AppointmentBooking_custom: BotTemplate = {
     },
   ],
   edges: [
-    // same as basic, plus custom branches
-    { id: "e1-2", source: id("welcome", 1), target: id("service", 2), type: "smoothstep" },
-    { id: "e2-3", source: id("service", 2), target: id("calendar", 3), type: "smoothstep" },
-    { id: "e3-8", source: id("calendar", 3), target: id("staff", 8), type: "smoothstep" },
-    { id: "e3-5", source: id("calendar", 3), target: id("contact", 5), type: "smoothstep" },
-    { id: "e5-6", source: id("contact", 5), target: id("confirm", 6), type: "smoothstep" },
-    { id: "e6-7", source: id("confirm", 6), target: id("ics", 7), type: "smoothstep" },
+    ...AppointmentBooking_basic.edges,
+    { id: "e4-8", source: id("time", 4), target: id("staff", 8), type: "smoothstep" },
     { id: "e7-9", source: id("ics", 7), target: id("payment", 9), type: "smoothstep" },
     { id: "e9-10", source: id("payment", 9), target: id("calendarAPI", 10), type: "smoothstep" },
     { id: "e10-11", source: id("calendarAPI", 10), target: id("rules", 11), type: "smoothstep" },
@@ -503,6 +498,87 @@ const Waitlist_custom: BotTemplate = {
     { id: "e8-9", source: id("vip", 8), target: id("deposit", 9), type: "smoothstep" },
     { id: "e9-10", source: id("deposit", 9), target: id("updates", 10), type: "smoothstep" },
     { id: "e10-11", source: id("updates", 10), target: id("rewards", 11), type: "smoothstep" },
+  ],
+};
+
+const SocialMedia_basic: BotTemplate = {
+  nodes: [
+    {
+      id: id("welcome", 1),
+      type: "message",
+      data: { title: "Social Bot", text: "Pick a platform and how I should help." },
+      position: { x: 60, y: 40 },
+    },
+    {
+      id: id("platform", 2),
+      type: "choice",
+      data: { label: "Platform", options: ["Instagram", "Facebook", "Twitter/X", "TikTok"] },
+      position: { x: 60, y: 190 },
+    },
+    {
+      id: id("purpose", 3),
+      type: "choice",
+      data: {
+        label: "I should…",
+        options: ["Auto-reply DMs", "Manage comments", "Share links", "FAQ replies"],
+      },
+      position: { x: 320, y: 190 },
+    },
+    {
+      id: id("contact", 4),
+      type: "input",
+      data: { label: "Contact capture (optional)", placeholder: "email or phone" },
+      position: { x: 580, y: 190 },
+    },
+    {
+      id: id("done", 5),
+      type: "message",
+      data: { title: "Saved", text: "Your social automation preferences are set." },
+      position: { x: 320, y: 340 },
+    },
+  ],
+  edges: [
+    { id: "e1-2", source: id("welcome", 1), target: id("platform", 2), type: "smoothstep" },
+    { id: "e2-3", source: id("platform", 2), target: id("purpose", 3), type: "smoothstep" },
+    { id: "e3-4", source: id("purpose", 3), target: id("contact", 4), type: "smoothstep" },
+    { id: "e4-5", source: id("contact", 4), target: id("done", 5), type: "smoothstep" },
+  ],
+};
+
+const SocialMedia_custom: BotTemplate = {
+  nodes: [
+    ...SocialMedia_basic.nodes,
+    {
+      id: id("multip", 6),
+      type: "action",
+      data: { label: "Multi-platform Manager", to: "system:multi_platform" },
+      position: { x: 840, y: 190 },
+    },
+    {
+      id: id("recommend", 7),
+      type: "action",
+      data: { label: "Content Recommendations", to: "system:content_recs" },
+      position: { x: 840, y: 340 },
+    },
+    {
+      id: id("contest", 8),
+      type: "action",
+      data: { label: "Contest / Giveaway", to: "system:contest_mgr" },
+      position: { x: 1060, y: 340 },
+    },
+    {
+      id: id("analytics", 9),
+      type: "action",
+      data: { label: "Social Analytics", to: "system:social_analytics" },
+      position: { x: 1280, y: 340 },
+    },
+  ],
+  edges: [
+    ...SocialMedia_basic.edges,
+    { id: "e5-6", source: id("done", 5), target: id("multip", 6), type: "smoothstep" },
+    { id: "e6-7", source: id("multip", 6), target: id("recommend", 7), type: "smoothstep" },
+    { id: "e7-8", source: id("recommend", 7), target: id("contest", 8), type: "smoothstep" },
+    { id: "e8-9", source: id("contest", 8), target: id("analytics", 9), type: "smoothstep" },
   ],
 };
 
