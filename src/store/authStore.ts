@@ -1,4 +1,4 @@
-// src/store/authStore.ts - FINAL WITH ROLE SUPPORT
+// src/store/authStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -20,20 +20,19 @@ type AuthState = {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
-      user: {
-        id: "1",
-        name: "Demo Admin",
-        email: "admin@example.com",
-        role: "admin", // 👈 default role for testing
-      },
+    (set, get) => ({
+      user: null, // ⬅️ important change
+
       login: (userData) => set({ user: userData }),
+
       logout: () => set({ user: null }),
-      setRole: (role) =>
-        set((state) =>
-          state.user ? { user: { ...state.user, role } } : state
-        ),
+
+      setRole: (role) => {
+        const current = get().user;
+        if (current) set({ user: { ...current, role } });
+      },
     }),
     { name: "auth-store" }
   )
 );
+
