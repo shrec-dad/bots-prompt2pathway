@@ -1,4 +1,3 @@
-// src/pages/admin/Login.tsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
@@ -7,7 +6,6 @@ export default function Login() {
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -28,8 +26,7 @@ export default function Login() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-        
-          />
+
           <button
             type="submit"
             className="w-full rounded bg-gradient-to-r from-sky-500 to-emerald-500 py-2 font-bold text-white"
@@ -39,7 +36,9 @@ export default function Login() {
         </form>
         <div className="mt-4 text-center text-sm">
           <button
-            onClick={() => alert("🔜 Forgot password feature will trigger backend email reset")}
+            onClick={() =>
+              alert("🔜 Forgot password feature will trigger backend email reset")
+            }
             className="text-blue-600 underline"
           >
             Forgot password?
