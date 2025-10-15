@@ -1,17 +1,39 @@
-// src/store/authStore.ts
+// src/store/authStore.ts - FINAL WITH ROLE SUPPORT
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-type UserRole = "admin" | "manager" | "viewer";
+export type Role = "admin" | "editor" | "viewer";
 
-interface AuthState {
-  user: { email: string; role: UserRole } | null;
-  login: (email: string, role?: UserRole) => void;
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+};
+
+type AuthState = {
+  user: User | null;
+  login: (userData: User) => void;
   logout: () => void;
-}
+  setRole: (role: Role) => void;
+};
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  login: (email, role = "admin") => set({ user: { email, role } }),
-  logout: () => set({ user: null }),
-}));
-
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: {
+        id: "1",
+        name: "Demo Admin",
+        email: "admin@example.com",
+        role: "admin", // 👈 default role for testing
+      },
+      login: (userData) => set({ user: userData }),
+      logout: () => set({ user: null }),
+      setRole: (role) =>
+        set((state) =>
+          state.user ? { user: { ...state.user, role } } : state
+        ),
+    }),
+    { name: "auth-store" }
+  )
+);
