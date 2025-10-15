@@ -40,8 +40,7 @@ function saveDays(instId: string, days: Day[]) {
 }
 
 /** ───────────────────────────────────────────────────────────────────────────
- * Starter sequences (Lead Qualifier & Waitlist) — unchanged from your source
- * (kept verbatim to avoid regressions)
+ * Starter sequences (Lead Qualifier & Waitlist) — unchanged
  * ───────────────────────────────────────────────────────────────────────────*/
 
 function seqLeadQualifier(): Day[] {
@@ -242,7 +241,9 @@ function Block({
   onFocus?: () => void;
 }) {
   return (
-    <div className="rounded-2xl border-2 border-purple-200 bg-white p-5">
+    <div className="rounded-2xl border-[3px] border-black/80 bg-white p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)]">
+      {/* Header stripe (Option D) */}
+      <div className="h-2 rounded-md bg-black mb-4" />
       <div className="flex items-center justify-between">
         <div className="text-[28px] font-black text-purple-900">Day {index + 1}</div>
         <label className="inline-flex items-center gap-2 text-sm font-bold">
@@ -311,13 +312,13 @@ export default function Nurture() {
     instFromUrl ? loadDays(instFromUrl) : Array.from({ length: DAY_COUNT }, () => blankDay())
   );
 
-  // NEW: length setting UI preference per instance
+  // length setting UI preference per instance
   const [lengthSetting, setLengthSetting] = useState<"7" | "14">("14");
 
-  // NEW: which day shows in preview (defaults to first index)
+  // which day shows in preview
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
 
-  // NEW: live preview context (editable)
+  // live preview context (editable)
   const [previewCtx, setPreviewCtx] = useState<PreviewContext>({
     name: "Jessica",
     company: "Your Company",
@@ -550,12 +551,12 @@ export default function Nurture() {
       <div className="rounded-2xl border bg-white shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">
+            <h1 className="text-2xl font-extrabold tracking-tight whitespace-nowrap">
               Nurture (Day 1–14)
             </h1>
             <p className="text-sm text-foreground/70">
-              Create simple 7–14 day sequences now. This page has placeholders ready
-              to wire to your email service later.
+              Create simple 7–14 day sequences now.
+              This page has placeholders ready to wire to your email service later.
             </p>
             {!instId && (
               <div className="text-xs font-bold text-rose-700 mt-1">
@@ -619,7 +620,7 @@ export default function Nurture() {
           </div>
         </div>
 
-        {/* NEW: Controls row for Length + Import/Export */}
+        {/* Controls row for Length + Import/Export */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 border-t bg-white">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase text-foreground/70">Length</span>
@@ -674,10 +675,10 @@ export default function Nurture() {
       </div>
 
       {/* Main content: Grid + Live Preview */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Grid of days (2-up on md, full-width on mobile, spans 2 cols on xl) */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {/* Grid of days */}
         <div className="xl:col-span-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {visibleDays.map((d, i) => (
               <Block
                 key={i}
@@ -696,9 +697,10 @@ export default function Nurture() {
           </div>
         </div>
 
-        {/* NEW: Live Preview panel */}
+        {/* Live Preview panel */}
         <div className="xl:col-span-1">
-          <div className="rounded-2xl border-2 border-purple-200 bg-white p-5">
+          <div className="rounded-2xl border-[3px] border-black/80 bg-white p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)]">
+            <div className="h-2 rounded-md bg-black mb-4" />
             <div className="mb-3 flex items-center justify-between">
               <div className="text-[22px] font-black text-purple-900">
                 Live Preview
@@ -708,7 +710,7 @@ export default function Nurture() {
               </div>
             </div>
 
-            {/* Preview Context (editable small form) */}
+            {/* Preview Context */}
             <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3 mb-4">
               <div className="text-xs font-extrabold uppercase text-purple-700 mb-2">
                 Preview Context
