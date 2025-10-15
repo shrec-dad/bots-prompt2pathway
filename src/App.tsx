@@ -1,11 +1,15 @@
 // src/App.tsx
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 // Public
 const Index = lazy(() => import("@/pages/Index"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const Widget = lazy(() => import("@/pages/Widget"));
+
+// Auth
+const Login = lazy(() => import("@/pages/admin/Login"));
 
 // Admin
 const AdminLayout = lazy(() => import("@/pages/admin/AdminLayout"));
@@ -21,8 +25,8 @@ const Nurture = lazy(() => import("@/pages/admin/Nurture"));
 const Settings = lazy(() => import("@/pages/admin/Settings"));
 const Preview = lazy(() => import("@/pages/admin/Preview"));
 const Embed = lazy(() => import("@/pages/admin/Embed"));
+const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers")); // if you added it
 const ReceptionistSettings = lazy(() => import("@/pages/admin/ReceptionistSettings"));
-const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers")); // ← NEW
 
 export default function App() {
   return (
@@ -33,8 +37,18 @@ export default function App() {
           <Route path="/" element={<Index />} />
           <Route path="/widget" element={<Widget />} />
 
-          {/* Admin */}
-          <Route path="/admin" element={<AdminLayout />}>
+          {/* Admin login */}
+          <Route path="/admin/login" element={<Login />} />
+
+          {/* Admin (guarded) */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route index element={<Dashboard />} />
             <Route path="clients" element={<Clients />} />
             <Route path="bots" element={<Bots />} />
@@ -47,8 +61,8 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="preview" element={<Preview />} />
             <Route path="embed" element={<Embed />} />
+            <Route path="admins" element={<AdminUsers />} />
             <Route path="receptionist" element={<ReceptionistSettings />} />
-            <Route path="admins" element={<AdminUsers />} /> {/* ← NEW */}
           </Route>
 
           {/* Optional redirect */}
