@@ -208,7 +208,8 @@ const LeadQualifier_custom: BotTemplate = {
     { id: "e12-13", source: id("crm", 12), target: id("abtest", 13), type: "smoothstep" },
     { id: "e13-14", source: id("abtest", 13), target: id("dupcheck", 14), type: "smoothstep" },
     { id: "e14-8", source: id("dupcheck", 14), target: id("submitEmail", 8), type: "smoothstep" },
-    { id: "e8-9", source: id: "e8-9", source: id("submitEmail", 8), target: id("thanks", 9), type: "smoothstep" },
+    // ✅ fixed line below
+    { id: "e8-9", source: id("submitEmail", 8), target: id("thanks", 9), type: "smoothstep" },
   ],
 };
 
@@ -882,7 +883,7 @@ export function createTemplate(def: {
   if (!trimmedKey) return;
 
   // prevent duplicate keys
-  const existing = listTemplateDefs().some((d) => d.key === trimmedKey);
+  the existing = listTemplateDefs().some((d) => d.key === trimmedKey);
   if (existing) return;
 
   const tplDef: TemplateDef = {
