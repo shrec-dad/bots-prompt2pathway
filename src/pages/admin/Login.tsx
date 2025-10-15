@@ -6,22 +6,24 @@ export default function Login() {
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
 
-  const [email, setEmail] = useState("");
+  // Pre-fill email so you can just click "Continue as demo"
+  const [email, setEmail] = useState("admin@example.com");
   const [password, setPassword] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    // 👉 Temporary hardcoded login
-    // Replace with real backend validation later
+  function doLogin(targetEmail: string) {
     login({
       id: crypto.randomUUID(),
       name: "Admin",
-      email: email.trim(),
+      email: targetEmail.trim() || "admin@example.com",
       role: "admin",
     });
-
     navigate("/admin", { replace: true });
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    // NOTE: password is ignored on purpose for the temporary frontend-only login
+    doLogin(email);
   }
 
   return (
@@ -33,19 +35,22 @@ export default function Login() {
           <input
             type="email"
             placeholder="Email"
+            className="w-full rounded border p-2"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full rounded border p-2"
           />
+
+          {/* Password is OPTIONAL and not validated during demo */}
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Password (ignored in demo)"
+            className="w-full rounded border p-2"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full rounded border p-2"
+            // no "required" here on purpose
           />
+
           <button
             type="submit"
             className="w-full rounded bg-gradient-to-r from-sky-500 to-emerald-500 py-2 font-bold text-white hover:opacity-90 transition"
@@ -54,12 +59,19 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="mt-4 text-center text-sm">
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <button
+            onClick={() => doLogin("admin@example.com")}
+            className="w-full rounded border py-2 font-semibold hover:bg-gray-50 transition"
+          >
+            Continue as demo (no password)
+          </button>
+
           <button
             onClick={() =>
-              alert("🔐 Forgot password feature will be added after backend setup.")
+              alert("🔐 Forgot password emails will work after the backend is added.")
             }
-            className="text-blue-600 underline"
+            className="text-blue-600 underline text-sm"
           >
             Forgot password?
           </button>
