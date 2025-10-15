@@ -208,7 +208,6 @@ const LeadQualifier_custom: BotTemplate = {
     { id: "e12-13", source: id("crm", 12), target: id("abtest", 13), type: "smoothstep" },
     { id: "e13-14", source: id("abtest", 13), target: id("dupcheck", 14), type: "smoothstep" },
     { id: "e14-8", source: id("dupcheck", 14), target: id("submitEmail", 8), type: "smoothstep" },
-    // ✅ fixed line below
     { id: "e8-9", source: id("submitEmail", 8), target: id("thanks", 9), type: "smoothstep" },
   ],
 };
@@ -668,7 +667,7 @@ const Receptionist_basic: BotTemplate = {
 
 const Receptionist_custom: BotTemplate = {
   nodes: [
-    // reuse the basic nodes as a base
+    // reuse the basic nodes as a base (drop final tag/send/thanks to branch)
     ...Receptionist_basic.nodes.filter(
       (n) => ![id("r_tag_main", 6), id("r_sendTeam", 7), id("r_thanks", 8)].includes(n.id as string)
     ),
@@ -883,7 +882,7 @@ export function createTemplate(def: {
   if (!trimmedKey) return;
 
   // prevent duplicate keys
-  the existing = listTemplateDefs().some((d) => d.key === trimmedKey);
+  const existing = listTemplateDefs().some((d) => d.key === trimmedKey);
   if (existing) return;
 
   const tplDef: TemplateDef = {
