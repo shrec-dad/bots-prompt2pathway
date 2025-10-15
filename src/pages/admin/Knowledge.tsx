@@ -316,12 +316,7 @@ export default function Knowledge() {
               >
                 + Upload
               </button>
-              <button
-                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
-                onClick={() => alert("Source management UI coming soon.")}
-              >
-                Manage Sources
-              </button>
+              {/* Removed “Manage Sources” button */}
             </div>
           </div>
 
