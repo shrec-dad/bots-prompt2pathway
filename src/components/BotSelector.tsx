@@ -3,9 +3,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   getCatalog,
   subscribeCatalog,
-  type CatalogTemplate,
+  type CatalogTemplate, // kept for backward-compat typing in this file
   type CatalogInstance,
 } from "@/lib/botCatalog";
+import { useTemplateCatalog } from "@/hooks/useTemplateCatalog";
 
 type Scope = "template" | "instance" | "both";
 
@@ -70,18 +71,32 @@ export default function BotSelector({
   showGroups = true,
   ariaLabel,
 }: Props) {
-  const [templates, setTemplates] = useState<CatalogTemplate[]>([]);
-  const [instances, setInstances] = useState<CatalogInstance[]>([]);
+  /** Templates now come from the single source of truth (templates.ts) via the hook */
+  const { templates: hookTemplates } = useTemplateCatalog();
 
+  /** Instances continue to come from botCatalog (which already tracks instance CRUD) */
+  const [instances, setInstances] = useState<CatalogInstance[]>([]);
   useEffect(() => {
     const refresh = () => {
       const cat = getCatalog();
-      setTemplates(cat.templates);
       setInstances(cat.instances);
     };
     refresh();
     return subscribeCatalog(refresh);
   }, []);
+
+  // Keep prop parity for downstream code that might rely on CatalogTemplate type
+  const templates: CatalogTemplate[] = useMemo(
+    () =>
+      hookTemplates.map((t) => ({
+        key: t.key,
+        name: t.name,
+        emoji: t.emoji,
+        gradient: t.gradient,
+        description: t.description,
+      })),
+    [hookTemplates]
+  );
 
   const hasTemplates = templates.length > 0;
   const hasInstances = instances.length > 0;
@@ -222,3 +237,4 @@ export default function BotSelector({
     </select>
   );
 }
+
