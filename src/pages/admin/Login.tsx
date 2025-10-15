@@ -28,11 +28,7 @@ export default function Login() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <input
-  type="password"
-  placeholder="Password (not required)"
-  className="w-full border rounded px-3 py-2 mb-4"
-/>
+        
           />
           <button
             type="submit"
