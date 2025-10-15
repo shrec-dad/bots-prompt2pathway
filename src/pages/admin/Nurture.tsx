@@ -1,26 +1,32 @@
 // src/pages/admin/Nurture.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
 
 /** ───────────────────────────────────────────────────────────────────────────
- * Storage model
+ * Storage model (unchanged)
  * Each instance stores its own nurture schedule:
- *   localStorage["nurture:inst:<id>"] = Day[]
+ *   localStorage["nurture:inst:<id>"] = Day[]  // always normalized to 14 slots
  * where Day = { enabled:boolean, subject:string, body:string }
+ *
+ * NEW (additive, non-breaking):
+ *   localStorage["nurture:length:inst:<id>"] = "7" | "14"  // UI preference only
  * ───────────────────────────────────────────────────────────────────────────*/
 
 type Day = { enabled: boolean; subject: string; body: string };
 const DAY_COUNT = 14;
 
 const keyForInst = (instId: string) => `nurture:inst:${instId}`;
+const keyLenForInst = (instId: string) => `nurture:length:inst:${instId}`;
+
+const blankDay = (): Day => ({ enabled: false, subject: "", body: "" });
 
 function loadDays(instId: string): Day[] {
   try {
     const raw = localStorage.getItem(keyForInst(instId));
     if (!raw) return Array.from({ length: DAY_COUNT }, () => blankDay());
     const parsed = JSON.parse(raw) as Day[];
-    // ensure array length is normalized
+    // normalize to 14
     const out = Array.from({ length: DAY_COUNT }, (_, i) => parsed[i] ?? blankDay());
     return out;
   } catch {
@@ -33,14 +39,9 @@ function saveDays(instId: string, days: Day[]) {
   localStorage.setItem(keyForInst(instId), JSON.stringify(normalized));
 }
 
-const blankDay = (): Day => ({ enabled: false, subject: "", body: "" });
-
 /** ───────────────────────────────────────────────────────────────────────────
- * Starter sequences (Lead Qualifier & Waitlist)
- * - Universal placeholders you can tweak per client:
- *   {{name}}, {{company}}, {{inst_name}}, {{product}}, {{booking_link}},
- *   {{contact_email}}, {{phone}}, {{cta_link}}
- * - All days default to enabled for an easy start.
+ * Starter sequences (Lead Qualifier & Waitlist) — unchanged from your source
+ * (kept verbatim to avoid regressions)
  * ───────────────────────────────────────────────────────────────────────────*/
 
 function seqLeadQualifier(): Day[] {
@@ -193,7 +194,6 @@ function seqWaitlist(): Day[] {
   ];
 }
 
-/** Detect sequence by instance.bot key */
 function getStarterSequenceFor(botKey?: string | null): Day[] | null {
   switch (botKey) {
     case "LeadQualifier":
@@ -206,20 +206,40 @@ function getStarterSequenceFor(botKey?: string | null): Day[] | null {
 }
 
 /** ───────────────────────────────────────────────────────────────────────────
- * UI bits
+ * Helpers for UI / Preview
  * ───────────────────────────────────────────────────────────────────────────*/
 
 const input =
   "w-full rounded-xl border border-purple-200 bg-white px-3 py-2 text-[15px] font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
+type PreviewContext = {
+  name: string;
+  company: string;
+  inst_name: string;
+  product: string;
+  booking_link: string;
+  contact_email: string;
+  phone: string;
+};
+
+function applyPlaceholders(text: string, ctx: PreviewContext) {
+  return text.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const k = key as keyof PreviewContext;
+    // @ts-expect-error safe lookup
+    return (ctx[k] as string) ?? `{{${key}}}`;
+  });
+}
+
 function Block({
   index,
   value,
   onChange,
+  onFocus,
 }: {
   index: number;
   value: Day;
   onChange: (d: Day) => void;
+  onFocus?: () => void;
 }) {
   return (
     <div className="rounded-2xl border-2 border-purple-200 bg-white p-5">
@@ -230,29 +250,32 @@ function Block({
             type="checkbox"
             checked={value.enabled}
             onChange={(e) => onChange({ ...value, enabled: e.target.checked })}
+            onFocus={onFocus}
           />
           Enabled
         </label>
       </div>
 
       <div className="mt-3">
-        <div className="text-xs font-extrabold uppercase text-purple-700 mb-1">Subject</div>
+        <div className="mb-1 text-xs font-extrabold uppercase text-purple-700">Subject</div>
         <input
           className={input}
           value={value.subject}
           placeholder="Subject for Day X"
           onChange={(e) => onChange({ ...value, subject: e.target.value })}
+          onFocus={onFocus}
         />
       </div>
 
       <div className="mt-3">
-        <div className="text-xs font-extrabold uppercase text-purple-700 mb-1">Message</div>
+        <div className="mb-1 text-xs font-extrabold uppercase text-purple-700">Message</div>
         <textarea
           className={input}
           rows={5}
           placeholder="Short message for Day X"
           value={value.body}
           onChange={(e) => onChange({ ...value, body: e.target.value })}
+          onFocus={onFocus}
         />
       </div>
     </div>
@@ -283,22 +306,55 @@ export default function Nurture() {
   // currently selected instance
   const [instId, setInstId] = useState<string>(instFromUrl);
 
-  // schedule model
+  // schedule model (always 14 in storage)
   const [days, setDays] = useState<Day[]>(
     instFromUrl ? loadDays(instFromUrl) : Array.from({ length: DAY_COUNT }, () => blankDay())
   );
+
+  // NEW: length setting UI preference per instance
+  const [lengthSetting, setLengthSetting] = useState<"7" | "14">("14");
+
+  // NEW: which day shows in preview (defaults to first index)
+  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+
+  // NEW: live preview context (editable)
+  const [previewCtx, setPreviewCtx] = useState<PreviewContext>({
+    name: "Jessica",
+    company: "Your Company",
+    inst_name: instFromUrl || "Lead Qualifier",
+    product: "Your Product",
+    booking_link: "https://example.com/book",
+    contact_email: "info@example.com",
+    phone: "(804) 555-0199",
+  });
 
   // reload when instance changes
   useEffect(() => {
     if (!instId) return;
     setDays(loadDays(instId));
-    // keep URL in sync
+    // read length preference
+    const savedLen = (localStorage.getItem(keyLenForInst(instId)) as "7" | "14") || "14";
+    setLengthSetting(savedLen);
+    // sync URL
     setSearch((prev) => {
       const next = new URLSearchParams(prev);
       next.set("inst", instId);
       return next;
     });
-  }, [instId, setSearch]);
+    // update preview default context
+    setPreviewCtx((prev) => ({
+      ...prev,
+      inst_name: instances.find((x) => x.id === instId)?.bot || instId,
+      company: instances.find((x) => x.id === instId)?.name || prev.company,
+    }));
+    setFocusedIndex(0);
+  }, [instId, setSearch, instances]);
+
+  // persist length preference when it changes
+  useEffect(() => {
+    if (!instId) return;
+    localStorage.setItem(keyLenForInst(instId), lengthSetting);
+  }, [instId, lengthSetting]);
 
   const selectedInst = useMemo(
     () => instances.find((m) => m.id === instId),
@@ -326,6 +382,8 @@ export default function Nurture() {
     );
     if (!targetId) return;
     saveDays(targetId, days);
+    // also copy length preference
+    localStorage.setItem(keyLenForInst(targetId), lengthSetting);
     window.location.href = `/admin/nurture?inst=${encodeURIComponent(targetId)}`;
   }
 
@@ -337,7 +395,6 @@ export default function Nurture() {
     const to = prompt("Send test to (email address):", "you@example.com");
     if (!to) return;
 
-    // Build a simple preview using the first enabled day.
     const enabled = days
       .map((d, i) => ({ ...d, day: i + 1 }))
       .filter((d) => d.enabled && (d.subject || d.body));
@@ -352,7 +409,7 @@ export default function Nurture() {
     const body =
       `This is a test send for instance "${selectedInst?.name || instId}".\n\n` +
       enabled
-        .slice(0, 3) // keep it short
+        .slice(0, 3)
         .map(
           (d) =>
             `Day ${d.day}\nSubject: ${d.subject || "(none)"}\nMessage:\n${d.body || "(none)"}\n`
@@ -386,8 +443,106 @@ export default function Nurture() {
     if (!ok) return;
     setDays(seq);
     saveDays(instId, seq);
+    // also set length to 14 since starter is 14
+    setLengthSetting("14");
+    localStorage.setItem(keyLenForInst(instId), "14");
     alert("Starter sequence loaded and saved.");
   }
+
+  /** Toggle between 7 and 14 without destroying data (we hide 8–14 in UI) */
+  function setLen(newLen: "7" | "14") {
+    if (!instId) {
+      alert("Pick a Client Bot (instance) first.");
+      return;
+    }
+    setLengthSetting(newLen);
+    localStorage.setItem(keyLenForInst(instId), newLen);
+  }
+
+  /** Export JSON respects current visible length */
+  function exportJSON() {
+    const visible = lengthSetting === "7" ? days.slice(0, 7) : days.slice(0, 14);
+    const payload = {
+      instance: instId,
+      length: visible.length,
+      schedule: visible,
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const base = `nurture_${instId || "instance"}_${visible.length}d_${new Date()
+      .toISOString()
+      .slice(0, 10)}`;
+    a.href = url;
+    a.download = `${base}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  function importClick() {
+    if (!instId) {
+      alert("Pick a Client Bot (instance) first.");
+      return;
+    }
+    fileInputRef.current?.click();
+  }
+
+  function isValidDay(d: any): d is Day {
+    return (
+      d &&
+      typeof d === "object" &&
+      typeof d.enabled === "boolean" &&
+      typeof d.subject === "string" &&
+      typeof d.body === "string"
+    );
+  }
+
+  async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed || !Array.isArray(parsed.schedule) || !parsed.schedule.every(isValidDay)) {
+        alert("Invalid JSON. Expecting { schedule: Day[] } with enabled/subject/body.");
+        return;
+      }
+      const incoming: Day[] = parsed.schedule.slice(0, 14);
+      // Map into our 14 slots (fill remaining with blanks)
+      const next = Array.from({ length: 14 }, (_, i) => incoming[i] ?? blankDay());
+      setDays(next);
+      saveDays(instId, next);
+      // set length by incoming size
+      const newLen: "7" | "14" = incoming.length <= 7 ? "7" : "14";
+      setLengthSetting(newLen);
+      localStorage.setItem(keyLenForInst(instId), newLen);
+      alert("Imported schedule applied and saved.");
+    } catch {
+      alert("Could not read JSON file.");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  // derived
+  const visibleDays = lengthSetting === "7" ? days.slice(0, 7) : days;
+  const selectedInstMeta = useMemo(
+    () => instances.find((m) => m.id === instId),
+    [instances, instId]
+  );
+
+  const previewDay: Day | null =
+    visibleDays[focusedIndex] ??
+    visibleDays.find((d) => d.enabled) ??
+    visibleDays[0] ??
+    null;
+
+  const previewSubject = previewDay ? applyPlaceholders(previewDay.subject || "", previewCtx) : "";
+  const previewBody = previewDay ? applyPlaceholders(previewDay.body || "", previewCtx) : "";
 
   return (
     <div className="space-y-6">
@@ -463,26 +618,148 @@ export default function Nurture() {
             </button>
           </div>
         </div>
+
+        {/* NEW: Controls row for Length + Import/Export */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 border-t bg-white">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase text-foreground/70">Length</span>
+            <button
+              onClick={() => setLen("7")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-bold ring-1 ${
+                lengthSetting === "7"
+                  ? "bg-yellow-100 ring-black"
+                  : "bg-gray-50 ring-gray-300 hover:bg-gray-100"
+              }`}
+              title="Show days 1–7 (keeps 8–14 saved in background)"
+            >
+              7 days
+            </button>
+            <button
+              onClick={() => setLen("14")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-bold ring-1 ${
+                lengthSetting === "14"
+                  ? "bg-green-100 ring-black"
+                  : "bg-gray-50 ring-gray-300 hover:bg-gray-100"
+              }`}
+              title="Show all 14 days"
+            >
+              14 days
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportJSON}
+              className="rounded-xl px-3 py-1.5 text-sm font-bold ring-1 ring-black bg-gradient-to-r from-indigo-50 to-blue-50 hover:from-indigo-100 hover:to-blue-100"
+              title="Download current schedule as JSON"
+            >
+              Export JSON
+            </button>
+            <button
+              onClick={importClick}
+              className="rounded-xl px-3 py-1.5 text-sm font-bold ring-1 ring-black bg-gradient-to-r from-pink-50 to-rose-50 hover:from-pink-100 hover:to-rose-100"
+              title="Import schedule JSON"
+            >
+              Import JSON
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={onImportFile}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Grid of days (2-up) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {days.map((d, i) => (
-          <Block
-            key={i}
-            index={i}
-            value={d}
-            onChange={(next) =>
-              setDays((prev) => {
-                const out = [...prev];
-                out[i] = next;
-                return out;
-              })
-            }
-          />
-        ))}
+      {/* Main content: Grid + Live Preview */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Grid of days (2-up on md, full-width on mobile, spans 2 cols on xl) */}
+        <div className="xl:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {visibleDays.map((d, i) => (
+              <Block
+                key={i}
+                index={i}
+                value={d}
+                onChange={(next) =>
+                  setDays((prev) => {
+                    const out = [...prev];
+                    out[i] = next; // i aligns with visible index for 7 or 14
+                    return out;
+                  })
+                }
+                onFocus={() => setFocusedIndex(i)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* NEW: Live Preview panel */}
+        <div className="xl:col-span-1">
+          <div className="rounded-2xl border-2 border-purple-200 bg-white p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-[22px] font-black text-purple-900">
+                Live Preview
+              </div>
+              <div className="text-xs font-bold text-purple-700">
+                Day {Math.min(focusedIndex + 1, visibleDays.length)}
+              </div>
+            </div>
+
+            {/* Preview Context (editable small form) */}
+            <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3 mb-4">
+              <div className="text-xs font-extrabold uppercase text-purple-700 mb-2">
+                Preview Context
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {(
+                  [
+                    ["name", "Jessica"],
+                    ["company", selectedInstMeta?.name || "Your Company"],
+                    ["inst_name", selectedInstMeta?.bot || instId || "Lead Qualifier"],
+                    ["product", "Your Product"],
+                    ["booking_link", "https://example.com/book"],
+                    ["contact_email", "info@example.com"],
+                    ["phone", "(804) 555-0199"],
+                  ] as Array<[keyof PreviewContext, string]>
+                ).map(([k, placeholder]) => (
+                  <input
+                    key={k}
+                    className="rounded-lg border border-purple-200 bg-white px-2 py-1 text-sm"
+                    placeholder={placeholder}
+                    value={previewCtx[k]}
+                    onChange={(e) => setPreviewCtx((prev) => ({ ...prev, [k]: e.target.value }))}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Rendered subject/body */}
+            <div className="rounded-xl border border-purple-200 bg-white p-3">
+              <div className="text-xs font-extrabold uppercase text-purple-700 mb-1">
+                Subject (rendered)
+              </div>
+              <div className="rounded-md border border-purple-200 bg-purple-50/40 p-2 text-[15px] font-semibold">
+                {previewSubject || <span className="text-gray-400">(empty)</span>}
+              </div>
+
+              <div className="mt-3 text-xs font-extrabold uppercase text-purple-700 mb-1">
+                Body (rendered)
+              </div>
+              <div className="rounded-md border border-purple-200 bg-purple-50/40 p-2 whitespace-pre-wrap text-[15px] font-semibold">
+                {previewBody || <span className="text-gray-400">(empty)</span>}
+              </div>
+            </div>
+
+            <div className="mt-3 text-[12px] text-gray-600">
+              Tip: Unknown placeholders (e.g., <code>{"{{unknown}}"}</code>) are shown as-is so you
+              can spot and fix them before exporting.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-
