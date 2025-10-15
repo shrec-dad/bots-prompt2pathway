@@ -1,4 +1,4 @@
-// src/pages/admin/AdminLayout.tsx - FINAL WITH LOGOUT BUTTON
+// src/pages/admin/AdminLayout.tsx - FINAL WITH WELCOME + LOGOUT
 import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
@@ -33,7 +33,10 @@ const links = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const logout = useAuthStore((state) => state.logout);
+  const { user, logout } = useAuthStore((state) => ({
+    user: state.user,
+    logout: state.logout,
+  }));
 
   const handleLogout = () => {
     logout();
@@ -82,8 +85,17 @@ export default function AdminLayout() {
           </nav>
         </div>
 
-        {/* Footer / Logout */}
+        {/* Footer / User Info + Logout */}
         <div className="p-4 border-t">
+          {user && (
+            <div className="mb-3 px-2">
+              <p className="text-sm text-gray-600">Welcome back,</p>
+              <p className="font-semibold text-gray-800">
+                {user.name || user.email}
+              </p>
+            </div>
+          )}
+
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 w-full rounded-xl px-4 py-3 border hover:bg-red-50 transition"
