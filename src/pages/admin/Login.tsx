@@ -29,12 +29,10 @@ export default function Login() {
             required
           />
           <input
-            type="password"
-            placeholder="Password"
-            className="w-full rounded border p-2"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
+  type="password"
+  placeholder="Password (not required)"
+  className="w-full border rounded px-3 py-2 mb-4"
+/>
           />
           <button
             type="submit"
