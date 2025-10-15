@@ -14,7 +14,7 @@ import {
   Plug,
   Code2,
   LogOut,
-  ShieldCheck, // ← NEW
+  ShieldCheck,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
@@ -30,7 +30,7 @@ const links = [
   { to: "/admin/analytics", label: "Analytics", icon: LineChart },
   { to: "/admin/integrations", label: "Integrations", icon: Plug },
   { to: "/admin/embed", label: "Embed Code", icon: Code2 },
-  { to: "/admin/admins", label: "Admins", icon: ShieldCheck }, // ← NEW
+  { to: "/admin/admins", label: "Admins", icon: ShieldCheck },
 ];
 
 export default function AdminLayout() {
@@ -40,7 +40,8 @@ export default function AdminLayout() {
 
   function handleLogout() {
     logout();
-    navigate("/");
+    // Go straight to the guarded login route
+    navigate("/admin/login", { replace: true });
   }
 
   return (
@@ -105,4 +106,3 @@ export default function AdminLayout() {
     </div>
   );
 }
-
