@@ -1,10 +1,6 @@
-// src/App.tsx - FINAL WITH LOGIN & PROTECTED ADMIN ROUTES
+// src/App.tsx
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
-// ✅ Auth components
-import ProtectedRoute from "@/components/ProtectedRoute";
-const Login = lazy(() => import("@/pages/admin/Login"));
 
 // Public
 const Index = lazy(() => import("@/pages/Index"));
@@ -26,28 +22,19 @@ const Settings = lazy(() => import("@/pages/admin/Settings"));
 const Preview = lazy(() => import("@/pages/admin/Preview"));
 const Embed = lazy(() => import("@/pages/admin/Embed"));
 const ReceptionistSettings = lazy(() => import("@/pages/admin/ReceptionistSettings"));
+const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers")); // ← NEW
 
 export default function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<div className="p-6">Loading…</div>}>
         <Routes>
-          {/* --------------------- PUBLIC ROUTES --------------------- */}
+          {/* Public */}
           <Route path="/" element={<Index />} />
           <Route path="/widget" element={<Widget />} />
 
-          {/* --------------------- AUTH ROUTES --------------------- */}
-          <Route path="/admin/login" element={<Login />} />
-
-          {/* --------------------- PROTECTED ADMIN ROUTES --------------------- */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute>
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
+          {/* Admin */}
+          <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="clients" element={<Clients />} />
             <Route path="bots" element={<Bots />} />
@@ -61,15 +48,13 @@ export default function App() {
             <Route path="preview" element={<Preview />} />
             <Route path="embed" element={<Embed />} />
             <Route path="receptionist" element={<ReceptionistSettings />} />
+            <Route path="admins" element={<AdminUsers />} /> {/* ← NEW */}
           </Route>
 
-          {/* Redirect Preview deep links */}
-          <Route
-            path="/admin/preview/*"
-            element={<Navigate to="/admin/preview" replace />}
-          />
+          {/* Optional redirect */}
+          <Route path="/admin/preview/*" element={<Navigate to="/admin/preview" replace />} />
 
-          {/* --------------------- 404 --------------------- */}
+          {/* 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
