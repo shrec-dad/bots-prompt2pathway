@@ -1,3 +1,4 @@
+// src/pages/admin/AdminLayout.tsx
 import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
@@ -12,7 +13,8 @@ import {
   LineChart,
   Plug,
   Code2,
-  LogOut
+  LogOut,
+  ShieldCheck, // ← NEW
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
@@ -28,6 +30,7 @@ const links = [
   { to: "/admin/analytics", label: "Analytics", icon: LineChart },
   { to: "/admin/integrations", label: "Integrations", icon: Plug },
   { to: "/admin/embed", label: "Embed Code", icon: Code2 },
+  { to: "/admin/admins", label: "Admins", icon: ShieldCheck }, // ← NEW
 ];
 
 export default function AdminLayout() {
@@ -64,9 +67,11 @@ export default function AdminLayout() {
               end={end}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-xl border px-4 py-3 transition
-                 ${isActive
-                  ? "bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 border-foreground"
-                  : "bg-white hover:bg-muted/40"}`
+                 ${
+                   isActive
+                     ? "bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 border-foreground"
+                     : "bg-white hover:bg-muted/40"
+                 }`
               }
             >
               <Icon className="h-5 w-5" />
@@ -100,3 +105,4 @@ export default function AdminLayout() {
     </div>
   );
 }
+
