@@ -4,20 +4,46 @@ import { useSearchParams } from "react-router-dom";
 import { listInstances, type InstanceMeta } from "@/lib/instances";
 
 /** ───────────────────────────────────────────────────────────────────────────
- * Storage model (unchanged)
- * Each instance stores its own nurture schedule:
- *   localStorage["nurture:inst:<id>"] = Day[]  // always normalized to 14 slots
- * where Day = { enabled:boolean, subject:string, body:string }
- *
- * NEW (additive, non-breaking):
- *   localStorage["nurture:length:inst:<id>"] = "7" | "14"  // UI preference only
+ * Storage model (unchanged + small additions)
+ * Per-instance schedule:
+ *   localStorage["nurture:inst:<id>"] = Day[]  // normalized to 14 slots
+ * Per-instance length preference (UI only):
+ *   localStorage["nurture:length:inst:<id>"] = "7" | "14"
+ * NEW: Per-instance delivery settings (UI only, provider-agnostic):
+ *   localStorage["nurture:delivery:inst:<id>"] = DeliverySettings
+ * NEW: Per-instance preview options (unsubscribe/tracking toggles):
+ *   localStorage["nurture:previewopts:inst:<id>"] = PreviewOptions
  * ───────────────────────────────────────────────────────────────────────────*/
 
 type Day = { enabled: boolean; subject: string; body: string };
 const DAY_COUNT = 14;
 
+type Provider =
+  | "sendgrid"
+  | "mailgun"
+  | "ses"
+  | "gmail"
+  | "smtp"
+  | null;
+
+type DeliverySettings = {
+  provider: Provider;               // chosen provider (UI-only)
+  integrationAccountId: string | null; // filled by backend later; null for now
+  fromName: string;
+  fromEmail: string;
+  replyTo: string;
+  tagPrefix: string;
+};
+
+type PreviewOptions = {
+  addUnsubscribeFooter: boolean;
+  addTrackingPixelHint: boolean; // visual hint only
+};
+
 const keyForInst = (instId: string) => `nurture:inst:${instId}`;
 const keyLenForInst = (instId: string) => `nurture:length:inst:${instId}`;
+const keyDeliveryForInst = (instId: string) => `nurture:delivery:inst:${instId}`;
+const keyPreviewOptsForInst = (instId: string) => `nurture:previewopts:inst:${instId}`;
 
 const blankDay = (): Day => ({ enabled: false, subject: "", body: "" });
 
@@ -26,9 +52,7 @@ function loadDays(instId: string): Day[] {
     const raw = localStorage.getItem(keyForInst(instId));
     if (!raw) return Array.from({ length: DAY_COUNT }, () => blankDay());
     const parsed = JSON.parse(raw) as Day[];
-    // normalize to 14
-    const out = Array.from({ length: DAY_COUNT }, (_, i) => parsed[i] ?? blankDay());
-    return out;
+    return Array.from({ length: DAY_COUNT }, (_, i) => parsed[i] ?? blankDay());
   } catch {
     return Array.from({ length: DAY_COUNT }, () => blankDay());
   }
@@ -37,6 +61,40 @@ function loadDays(instId: string): Day[] {
 function saveDays(instId: string, days: Day[]) {
   const normalized = Array.from({ length: DAY_COUNT }, (_, i) => days[i] ?? blankDay());
   localStorage.setItem(keyForInst(instId), JSON.stringify(normalized));
+}
+
+function loadDelivery(instId: string, fallbackName: string, fallbackTag: string): DeliverySettings {
+  try {
+    const raw = localStorage.getItem(keyDeliveryForInst(instId));
+    if (raw) return JSON.parse(raw) as DeliverySettings;
+  } catch {}
+  return {
+    provider: null,
+    integrationAccountId: null,
+    fromName: fallbackName,
+    fromEmail: "",
+    replyTo: "",
+    tagPrefix: fallbackTag,
+  };
+}
+
+function saveDelivery(instId: string, d: DeliverySettings) {
+  localStorage.setItem(keyDeliveryForInst(instId), JSON.stringify(d));
+}
+
+function loadPreviewOpts(instId: string): PreviewOptions {
+  try {
+    const raw = localStorage.getItem(keyPreviewOptsForInst(instId));
+    if (raw) return JSON.parse(raw) as PreviewOptions;
+  } catch {}
+  return {
+    addUnsubscribeFooter: false,
+    addTrackingPixelHint: false,
+  };
+}
+
+function savePreviewOpts(instId: string, p: PreviewOptions) {
+  localStorage.setItem(keyPreviewOptsForInst(instId), JSON.stringify(p));
 }
 
 /** ───────────────────────────────────────────────────────────────────────────
@@ -242,7 +300,7 @@ function Block({
 }) {
   return (
     <div className="rounded-2xl border-[3px] border-black/80 bg-white p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)]">
-      {/* Header stripe (Option D) */}
+      {/* Header stripe */}
       <div className="h-2 rounded-md bg-black mb-4" />
       <div className="flex items-center justify-between">
         <div className="text-[28px] font-black text-purple-900">Day {index + 1}</div>
@@ -329,25 +387,39 @@ export default function Nurture() {
     phone: "(804) 555-0199",
   });
 
+  // delivery settings drawer state
+  const [showDelivery, setShowDelivery] = useState<boolean>(false);
+  const [delivery, setDelivery] = useState<DeliverySettings>(() =>
+    loadDelivery(instFromUrl, "Sender", instFromUrl || "campaign")
+  );
+  const [previewOpts, setPreviewOpts] = useState<PreviewOptions>(() =>
+    loadPreviewOpts(instFromUrl)
+  );
+
   // reload when instance changes
   useEffect(() => {
     if (!instId) return;
     setDays(loadDays(instId));
-    // read length preference
+
     const savedLen = (localStorage.getItem(keyLenForInst(instId)) as "7" | "14") || "14";
     setLengthSetting(savedLen);
-    // sync URL
+
     setSearch((prev) => {
       const next = new URLSearchParams(prev);
       next.set("inst", instId);
       return next;
     });
-    // update preview default context
+
+    const instMeta = instances.find((x) => x.id === instId);
     setPreviewCtx((prev) => ({
       ...prev,
-      inst_name: instances.find((x) => x.id === instId)?.bot || instId,
-      company: instances.find((x) => x.id === instId)?.name || prev.company,
+      inst_name: instMeta?.bot || instId,
+      company: instMeta?.name || prev.company,
     }));
+
+    setDelivery(loadDelivery(instId, instMeta?.name || "Sender", instId || "campaign"));
+    setPreviewOpts(loadPreviewOpts(instId));
+
     setFocusedIndex(0);
   }, [instId, setSearch, instances]);
 
@@ -356,6 +428,17 @@ export default function Nurture() {
     if (!instId) return;
     localStorage.setItem(keyLenForInst(instId), lengthSetting);
   }, [instId, lengthSetting]);
+
+  // persist delivery + preview opts when they change
+  useEffect(() => {
+    if (!instId) return;
+    saveDelivery(instId, delivery);
+  }, [instId, delivery]);
+
+  useEffect(() => {
+    if (!instId) return;
+    savePreviewOpts(instId, previewOpts);
+  }, [instId, previewOpts]);
 
   const selectedInst = useMemo(
     () => instances.find((m) => m.id === instId),
@@ -383,8 +466,9 @@ export default function Nurture() {
     );
     if (!targetId) return;
     saveDays(targetId, days);
-    // also copy length preference
     localStorage.setItem(keyLenForInst(targetId), lengthSetting);
+    localStorage.setItem(keyDeliveryForInst(targetId), JSON.stringify(delivery));
+    localStorage.setItem(keyPreviewOptsForInst(targetId), JSON.stringify(previewOpts));
     window.location.href = `/admin/nurture?inst=${encodeURIComponent(targetId)}`;
   }
 
@@ -444,13 +528,12 @@ export default function Nurture() {
     if (!ok) return;
     setDays(seq);
     saveDays(instId, seq);
-    // also set length to 14 since starter is 14
     setLengthSetting("14");
     localStorage.setItem(keyLenForInst(instId), "14");
     alert("Starter sequence loaded and saved.");
   }
 
-  /** Toggle between 7 and 14 without destroying data (we hide 8–14 in UI) */
+  /** Toggle between 7 and 14 without destroying data (hide 8–14 in UI) */
   function setLen(newLen: "7" | "14") {
     if (!instId) {
       alert("Pick a Client Bot (instance) first.");
@@ -460,7 +543,7 @@ export default function Nurture() {
     localStorage.setItem(keyLenForInst(instId), newLen);
   }
 
-  /** Export JSON respects current visible length */
+  /** Export current visible schedule as basic JSON (kept from prior version) */
   function exportJSON() {
     const visible = lengthSetting === "7" ? days.slice(0, 7) : days.slice(0, 14);
     const payload = {
@@ -475,6 +558,36 @@ export default function Nurture() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const base = `nurture_${instId || "instance"}_${visible.length}d_${new Date()
+      .toISOString()
+      .slice(0, 10)}`;
+    a.href = url;
+    a.download = `${base}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /** NEW: Export backend-ready JSON (includes delivery + placeholders + full 14 slots) */
+  function exportBackendJSON() {
+    const payload = {
+      instanceId: instId,
+      delivery: {
+        integrationAccountId: delivery.integrationAccountId, // null until real connection
+        provider: delivery.provider,                         // "sendgrid" | "mailgun" | "ses" | "gmail" | "smtp" | null
+        fromName: delivery.fromName,
+        fromEmail: delivery.fromEmail,
+        replyTo: delivery.replyTo || delivery.fromEmail || "",
+        tagPrefix: delivery.tagPrefix,
+      },
+      sequence: Array.from({ length: 14 }, (_, i) => days[i] ?? blankDay()),
+      placeholders: { ...previewCtx },
+      length: lengthSetting === "7" ? 7 : 14,
+      exportedAt: new Date().toISOString(),
+      previewOptions: { ...previewOpts }, // so backend can optionally mirror footer behavior
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const base = `nurture_backend_${instId || "instance"}_${payload.length}d_${new Date()
       .toISOString()
       .slice(0, 10)}`;
     a.href = url;
@@ -513,11 +626,9 @@ export default function Nurture() {
         return;
       }
       const incoming: Day[] = parsed.schedule.slice(0, 14);
-      // Map into our 14 slots (fill remaining with blanks)
       const next = Array.from({ length: 14 }, (_, i) => incoming[i] ?? blankDay());
       setDays(next);
       saveDays(instId, next);
-      // set length by incoming size
       const newLen: "7" | "14" = incoming.length <= 7 ? "7" : "14";
       setLengthSetting(newLen);
       localStorage.setItem(keyLenForInst(instId), newLen);
@@ -542,8 +653,19 @@ export default function Nurture() {
     visibleDays[0] ??
     null;
 
-  const previewSubject = previewDay ? applyPlaceholders(previewDay.subject || "", previewCtx) : "";
-  const previewBody = previewDay ? applyPlaceholders(previewDay.body || "", previewCtx) : "";
+  // Render preview subject/body, with optional unsubscribe footer (preview only)
+  const renderedSubject = previewDay ? applyPlaceholders(previewDay.subject || "", previewCtx) : "";
+  let renderedBody = previewDay ? applyPlaceholders(previewDay.body || "", previewCtx) : "";
+  if (previewOpts.addUnsubscribeFooter) {
+    const footer =
+      `\n\n—\nYou’re receiving this because you engaged with {{company}}.\n` +
+      `Unsubscribe: {{unsubscribe_link}}`;
+    renderedBody += "\n" + applyPlaceholders(footer, {
+      ...previewCtx,
+      // @ts-ignore (allow placeholder)
+      unsubscribe_link: "https://example.com/unsubscribe",
+    } as any);
+  }
 
   return (
     <div className="space-y-6">
@@ -555,8 +677,7 @@ export default function Nurture() {
               Nurture (Day 1–14)
             </h1>
             <p className="text-sm text-foreground/70">
-              Create simple 7–14 day sequences now.
-              This page has placeholders ready to wire to your email service later.
+              Provider-agnostic editor. Keep sequences independent; connect or change ESPs anytime.
             </p>
             {!instId && (
               <div className="text-xs font-bold text-rose-700 mt-1">
@@ -617,6 +738,21 @@ export default function Nurture() {
             >
               Save Schedule
             </button>
+
+            {/* NEW: Delivery Settings */}
+            <button
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-black bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100"
+              onClick={() => {
+                if (!instId) {
+                  alert("Pick a Client Bot (instance) first.");
+                  return;
+                }
+                setShowDelivery(true);
+              }}
+              title="Per-instance sender & provider (UI-only). Providers are managed on Integrations."
+            >
+              Delivery Settings
+            </button>
           </div>
         </div>
 
@@ -670,7 +806,62 @@ export default function Nurture() {
               className="hidden"
               onChange={onImportFile}
             />
+
+            {/* NEW: Export Backend */}
+            <button
+              onClick={exportBackendJSON}
+              className="rounded-xl px-3 py-1.5 text-sm font-bold ring-1 ring-black bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100"
+              title="Export backend-ready payload (delivery + placeholders + 14-slot sequence)"
+            >
+              Export for Backend (.json)
+            </button>
           </div>
+        </div>
+      </div>
+
+      {/* NEW: Readiness Checklist (non-blocking) */}
+      <div className="rounded-2xl border-[3px] border-black/80 bg-white p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)]">
+        <div className="h-2 rounded-md bg-black mb-4" />
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-[22px] font-black text-purple-900">Readiness Checklist</div>
+          <a
+            className="text-sm font-bold underline"
+            href="/admin/integrations"
+            title="Manage providers and accounts"
+          >
+            Manage on Integrations →
+          </a>
+        </div>
+        <ul className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          <li className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
+            <div className="font-extrabold text-purple-700 mb-1">Provider connected?</div>
+            <div>
+              {delivery.provider && delivery.integrationAccountId
+                ? `Connected: ${delivery.provider.toUpperCase()}`
+                : "Not connected — connect on Integrations"}
+            </div>
+          </li>
+          <li className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
+            <div className="font-extrabold text-purple-700 mb-1">From email set?</div>
+            <div>{delivery.fromEmail ? delivery.fromEmail : "Add a sender in Delivery Settings"}</div>
+          </li>
+          <li className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
+            <div className="font-extrabold text-purple-700 mb-1">Unsubscribe footer?</div>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={previewOpts.addUnsubscribeFooter}
+                onChange={(e) =>
+                  setPreviewOpts((p) => ({ ...p, addUnsubscribeFooter: e.target.checked }))
+                }
+              />
+              Preview-only footer in rendered body
+            </label>
+          </li>
+        </ul>
+        <div className="mt-3 text-xs text-gray-600">
+          Note: Domain verification & tracking pixel support depend on the connected provider and will
+          be displayed after Integrations are wired. Toggle above is preview-only.
         </div>
       </div>
 
@@ -719,8 +910,8 @@ export default function Nurture() {
                 {(
                   [
                     ["name", "Jessica"],
-                    ["company", selectedInstMeta?.name || "Your Company"],
-                    ["inst_name", selectedInstMeta?.bot || instId || "Lead Qualifier"],
+                    ["company", selectedInst?.name || "Your Company"],
+                    ["inst_name", selectedInst?.bot || instId || "Lead Qualifier"],
                     ["product", "Your Product"],
                     ["booking_link", "https://example.com/book"],
                     ["contact_email", "info@example.com"],
@@ -744,14 +935,14 @@ export default function Nurture() {
                 Subject (rendered)
               </div>
               <div className="rounded-md border border-purple-200 bg-purple-50/40 p-2 text-[15px] font-semibold">
-                {previewSubject || <span className="text-gray-400">(empty)</span>}
+                {renderedSubject || <span className="text-gray-400">(empty)</span>}
               </div>
 
               <div className="mt-3 text-xs font-extrabold uppercase text-purple-700 mb-1">
                 Body (rendered)
               </div>
               <div className="rounded-md border border-purple-200 bg-purple-50/40 p-2 whitespace-pre-wrap text-[15px] font-semibold">
-                {previewBody || <span className="text-gray-400">(empty)</span>}
+                {renderedBody || <span className="text-gray-400">(empty)</span>}
               </div>
             </div>
 
@@ -762,6 +953,136 @@ export default function Nurture() {
           </div>
         </div>
       </div>
+
+      {/* Delivery Settings Drawer (UI-only) */}
+      {showDelivery && (
+        <div className="fixed inset-0 z-50">
+          {/* backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setShowDelivery(false)}
+          />
+          {/* panel */}
+          <div className="absolute right-0 top-0 h-full w-full sm:w-[520px] bg-white border-l-2 border-black/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.0)]">
+            <div className="p-5 border-b-2 border-black/80 bg-gradient-to-r from-amber-50 to-yellow-50">
+              <div className="text-xl font-black">Delivery Settings (UI-only)</div>
+              <div className="text-xs text-gray-600">
+                Choose a provider and sender for this instance. Providers are connected on{" "}
+                <a className="underline font-semibold" href="/admin/integrations">Integrations</a>.
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Provider row */}
+              <div className="rounded-xl border-[2px] border-black/80 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-extrabold">Delivery Provider</div>
+                  <span className="text-xs font-bold px-2 py-1 rounded bg-gray-100 border">
+                    {delivery.provider
+                      ? (delivery.integrationAccountId
+                          ? `Connected: ${delivery.provider.toUpperCase()}`
+                          : `Selected (local): ${delivery.provider.toUpperCase()}`)
+                      : "Not connected"}
+                  </span>
+                </div>
+                <select
+                  className="w-full rounded-lg border px-3 py-2 font-semibold bg-white"
+                  value={delivery.provider || ""}
+                  onChange={(e) =>
+                    setDelivery((d) => ({
+                      ...d,
+                      provider: (e.target.value || null) as Provider,
+                    }))
+                  }
+                >
+                  <option value="">Select provider (universal)</option>
+                  <option value="sendgrid">SendGrid</option>
+                  <option value="mailgun">Mailgun</option>
+                  <option value="ses">AWS SES</option>
+                  <option value="gmail">Gmail / Google Workspace</option>
+                  <option value="smtp">Generic SMTP</option>
+                </select>
+                <div className="mt-2 text-xs text-gray-600">
+                  This selection is stored locally until your Integrations backend links an account.
+                </div>
+                <div className="mt-3">
+                  <a className="text-sm font-bold underline" href="/admin/integrations">
+                    Manage on Integrations →
+                  </a>
+                </div>
+              </div>
+
+              {/* Sender block */}
+              <div className="rounded-xl border-[2px] border-black/80 p-4">
+                <div className="font-extrabold mb-2">Sender</div>
+                <div className="grid grid-cols-1 gap-3">
+                  <input
+                    className="rounded-lg border px-3 py-2 font-semibold"
+                    placeholder="From Name"
+                    value={delivery.fromName}
+                    onChange={(e) => setDelivery((d) => ({ ...d, fromName: e.target.value }))}
+                  />
+                  <input
+                    className="rounded-lg border px-3 py-2 font-semibold"
+                    placeholder="From Email"
+                    value={delivery.fromEmail}
+                    onChange={(e) => setDelivery((d) => ({ ...d, fromEmail: e.target.value }))}
+                  />
+                  <input
+                    className="rounded-lg border px-3 py-2 font-semibold"
+                    placeholder="Reply-To (optional)"
+                    value={delivery.replyTo}
+                    onChange={(e) => setDelivery((d) => ({ ...d, replyTo: e.target.value }))}
+                  />
+                  <input
+                    className="rounded-lg border px-3 py-2 font-semibold"
+                    placeholder="Tag Prefix (e.g., instance id)"
+                    value={delivery.tagPrefix}
+                    onChange={(e) => setDelivery((d) => ({ ...d, tagPrefix: e.target.value }))}
+                  />
+                </div>
+                <div className="mt-2 text-xs text-gray-600">
+                  These values are per instance. Your backend can validate domains & policy later.
+                </div>
+              </div>
+
+              {/* Actions (preview-only) */}
+              <div className="rounded-xl border-[2px] border-black/80 p-4">
+                <div className="font-extrabold mb-2">Actions</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    className="rounded-lg px-3 py-2 font-bold ring-1 ring-gray-300 bg-gray-100 cursor-not-allowed"
+                    title="Connect a provider on Integrations to enable sending"
+                    disabled
+                  >
+                    Send via ESP (coming soon)
+                  </button>
+                  <button
+                    className="rounded-lg px-3 py-2 font-bold ring-1 ring-black bg-white"
+                    onClick={() => {
+                      saveDelivery(instId, delivery);
+                      savePreviewOpts(instId, previewOpts);
+                      alert("Delivery settings saved locally for this instance.");
+                    }}
+                  >
+                    Save Settings
+                  </button>
+                  <button
+                    className="rounded-lg px-3 py-2 font-bold ring-1 ring-black bg-white"
+                    onClick={() => setShowDelivery(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="mt-3 text-xs text-gray-600">
+                  Once the backend is ready, this button will send through the selected provider with
+                  the instance’s sender details — without locking you to any single ESP.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
