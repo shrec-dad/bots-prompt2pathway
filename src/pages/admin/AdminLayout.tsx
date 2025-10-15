@@ -1,4 +1,4 @@
-// src/pages/admin/AdminLayout.tsx - FINAL WITH WELCOME + LOGOUT
+// src/pages/admin/AdminLayout.tsx - FINAL WITH ROLE-BASED MENU
 import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
@@ -17,18 +17,20 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
-const links = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/admin/clients", label: "Clients", icon: Users },
-  { to: "/admin/bots", label: "Bots", icon: Bot },
-  { to: "/admin/builder", label: "Builder", icon: Puzzle },
-  { to: "/admin/knowledge", label: "Knowledge", icon: Book },
-  { to: "/admin/nurture", label: "Nurture", icon: Workflow },
-  { to: "/admin/settings", label: "Settings", icon: Settings },
-  { to: "/admin/preview", label: "Preview", icon: Eye },
-  { to: "/admin/analytics", label: "Analytics", icon: LineChart },
-  { to: "/admin/integrations", label: "Integrations", icon: Plug },
-  { to: "/admin/embed", label: "Embed Code", icon: Code2 },
+type Role = "admin" | "editor" | "viewer";
+
+const allLinks = [
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "editor", "viewer"], end: true },
+  { to: "/admin/clients", label: "Clients", icon: Users, roles: ["admin", "editor"] },
+  { to: "/admin/bots", label: "Bots", icon: Bot, roles: ["admin", "editor"] },
+  { to: "/admin/builder", label: "Builder", icon: Puzzle, roles: ["admin", "editor"] },
+  { to: "/admin/knowledge", label: "Knowledge", icon: Book, roles: ["admin", "editor"] },
+  { to: "/admin/nurture", label: "Nurture", icon: Workflow, roles: ["admin"] },
+  { to: "/admin/settings", label: "Settings", icon: Settings, roles: ["admin"] },
+  { to: "/admin/preview", label: "Preview", icon: Eye, roles: ["admin", "editor"] },
+  { to: "/admin/analytics", label: "Analytics", icon: LineChart, roles: ["admin"] },
+  { to: "/admin/integrations", label: "Integrations", icon: Plug, roles: ["admin"] },
+  { to: "/admin/embed", label: "Embed Code", icon: Code2, roles: ["admin", "editor"] },
 ];
 
 export default function AdminLayout() {
@@ -38,10 +40,14 @@ export default function AdminLayout() {
     logout: state.logout,
   }));
 
+  const role: Role = (user?.role as Role) || "viewer"; // default to viewer if missing
+
   const handleLogout = () => {
     logout();
     navigate("/admin/login");
   };
+
+  const visibleLinks = allLinks.filter((link) => link.roles.includes(role));
 
   return (
     <div className="min-h-screen flex bg-muted/10">
@@ -64,7 +70,7 @@ export default function AdminLayout() {
 
           {/* Navigation */}
           <nav className="p-4 space-y-3">
-            {links.map(({ to, label, icon: Icon, end }) => (
+            {visibleLinks.map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -93,6 +99,7 @@ export default function AdminLayout() {
               <p className="font-semibold text-gray-800">
                 {user.name || user.email}
               </p>
+              <p className="text-xs text-gray-500 mt-1 uppercase">{role}</p>
             </div>
           )}
 
