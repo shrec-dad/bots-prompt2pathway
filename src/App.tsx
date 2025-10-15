@@ -1,6 +1,10 @@
-// src/App.tsx - UPDATED WITH RECEPTIONIST SETTINGS ROUTE
+// src/App.tsx - FINAL WITH LOGIN & PROTECTED ADMIN ROUTES
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+// ✅ Auth components
+import ProtectedRoute from "@/components/ProtectedRoute";
+const Login = lazy(() => import("@/pages/admin/Login"));
 
 // Public
 const Index = lazy(() => import("@/pages/Index"));
@@ -21,19 +25,29 @@ const Nurture = lazy(() => import("@/pages/admin/Nurture"));
 const Settings = lazy(() => import("@/pages/admin/Settings"));
 const Preview = lazy(() => import("@/pages/admin/Preview"));
 const Embed = lazy(() => import("@/pages/admin/Embed"));
-const ReceptionistSettings = lazy(() => import("@/pages/admin/ReceptionistSettings")); // ← ADDED
+const ReceptionistSettings = lazy(() => import("@/pages/admin/ReceptionistSettings"));
 
 export default function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<div className="p-6">Loading…</div>}>
         <Routes>
-          {/* Public */}
+          {/* --------------------- PUBLIC ROUTES --------------------- */}
           <Route path="/" element={<Index />} />
           <Route path="/widget" element={<Widget />} />
-          
-          {/* Admin */}
-          <Route path="/admin" element={<AdminLayout />}>
+
+          {/* --------------------- AUTH ROUTES --------------------- */}
+          <Route path="/admin/login" element={<Login />} />
+
+          {/* --------------------- PROTECTED ADMIN ROUTES --------------------- */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route index element={<Dashboard />} />
             <Route path="clients" element={<Clients />} />
             <Route path="bots" element={<Bots />} />
@@ -46,13 +60,16 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="preview" element={<Preview />} />
             <Route path="embed" element={<Embed />} />
-            <Route path="receptionist" element={<ReceptionistSettings />} /> {/* ← ADDED */}
+            <Route path="receptionist" element={<ReceptionistSettings />} />
           </Route>
-          
-          {/* Optional redirect */}
-          <Route path="/admin/preview/*" element={<Navigate to="/admin/preview" replace />} />
-          
-          {/* 404 */}
+
+          {/* Redirect Preview deep links */}
+          <Route
+            path="/admin/preview/*"
+            element={<Navigate to="/admin/preview" replace />}
+          />
+
+          {/* --------------------- 404 --------------------- */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
