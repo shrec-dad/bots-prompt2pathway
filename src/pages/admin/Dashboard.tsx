@@ -1,4 +1,3 @@
-// src/pages/admin/Dashboard.tsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getJSON, setJSON } from "@/lib/storage";
@@ -7,13 +6,11 @@ import { getJSON, setJSON } from "@/lib/storage";
 type Metrics = {
   conversations: number;
   leads: number;
-  avgResponseSecs: number; // seconds
-  csatPct: number;         // 0–100
-  // Other metrics can exist here; we ignore them on this page.
+  avgResponseSecs: number;
+  csatPct: number;
 };
 
 const METRICS_KEY = "analytics:metrics";
-
 const DEFAULT_METRICS: Metrics = {
   conversations: 0,
   leads: 0,
@@ -21,18 +18,22 @@ const DEFAULT_METRICS: Metrics = {
   csatPct: 0,
 };
 
-/** Small helpers */
 function classNames(...xs: (string | false | undefined)[]) {
   return xs.filter(Boolean).join(" ");
 }
+
 const Grad =
   "bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55";
+
+/** Strong card style for all KPI & quick links */
+const strongCard =
+  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
 
 /** KPI card with optional delta pill */
 type KpiProps = {
   title: string;
   value: string;
-  deltaPct?: number; // if undefined => hide the delta chip
+  deltaPct?: number;
   onClick?: () => void;
 };
 function KpiCard({ title, value, deltaPct, onClick }: KpiProps) {
@@ -46,8 +47,8 @@ function KpiCard({ title, value, deltaPct, onClick }: KpiProps) {
     <button
       onClick={onClick}
       className={classNames(
-        "w-full text-left rounded-2xl border shadow-sm transition hover:shadow-md",
-        "ring-1 ring-border px-5 py-5",
+        "w-full text-left px-5 py-5",
+        strongCard,
         Grad
       )}
     >
@@ -70,7 +71,6 @@ function KpiCard({ title, value, deltaPct, onClick }: KpiProps) {
         </div>
       )}
 
-      {/* tiny spark box */}
       <div className="mt-4 h-10 w-20 rounded-md bg-white/65 ring-1 ring-border flex items-center justify-center">
         <div className="h-[2px] w-14 bg-foreground/60 rounded" />
       </div>
@@ -81,12 +81,10 @@ function KpiCard({ title, value, deltaPct, onClick }: KpiProps) {
 export default function Dashboard() {
   const nav = useNavigate();
 
-  // Load metrics from storage (or defaults)
   const [m, setM] = useState<Metrics>(() =>
     getJSON<Metrics>(METRICS_KEY, DEFAULT_METRICS)
   );
 
-  // Format helpers
   const fmtInt = (n: number) =>
     Number.isFinite(n) ? Math.max(0, Math.round(n)).toLocaleString() : "0";
   const fmtSecs = (n: number) =>
@@ -94,7 +92,6 @@ export default function Dashboard() {
   const fmtPct = (n: number) =>
     `${Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0}%`;
 
-  // Reset ONLY the four KPIs requested
   function resetTopKpis() {
     const next: Metrics = {
       ...m,
@@ -109,32 +106,35 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* title bar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold">Dashboard</h1>
-          <p className="text-foreground/80">
-            Welcome to your admin dashboard. Tap any card to dive deeper.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30"
-            onClick={resetTopKpis}
-            title="Reset Conversations, Leads, Avg. Response, and CSAT"
-          >
-            Reset
-          </button>
-          <button
-            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
-            onClick={() => nav("/admin/bots?new=1")}
-          >
-            + Create New Bot
-          </button>
+      {/* Header Section */}
+      <div className={classNames("p-5", strongCard)}>
+        <div className="h-2 rounded-md bg-black mb-4" />
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-extrabold">Dashboard</h1>
+            <p className="text-foreground/80">
+              Welcome to your admin dashboard. Tap any card to dive deeper.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30"
+              onClick={resetTopKpis}
+              title="Reset Conversations, Leads, Avg. Response, and CSAT"
+            >
+              Reset
+            </button>
+            <button
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+              onClick={() => nav("/admin/bots?new=1")}
+            >
+              + Create New Bot
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* KPIs (no demo stats; shows stored values) */}
+      {/* KPI Grid */}
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           title="Conversations (7d)"
@@ -158,12 +158,13 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Quick links (unchanged) */}
+      {/* Quick Links */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <a
           onClick={() => nav("/admin/bots")}
           className={classNames(
-            "cursor-pointer rounded-2xl border p-5 ring-1 ring-border hover:shadow-md transition",
+            "cursor-pointer p-5",
+            strongCard,
             Grad
           )}
         >
@@ -176,7 +177,8 @@ export default function Dashboard() {
         <a
           onClick={() => nav("/admin/builder")}
           className={classNames(
-            "cursor-pointer rounded-2xl border p-5 ring-1 ring-border hover:shadow-md transition",
+            "cursor-pointer p-5",
+            strongCard,
             Grad
           )}
         >
@@ -189,7 +191,8 @@ export default function Dashboard() {
         <a
           onClick={() => nav("/admin/knowledge")}
           className={classNames(
-            "cursor-pointer rounded-2xl border p-5 ring-1 ring-border hover:shadow-md transition",
+            "cursor-pointer p-5",
+            strongCard,
             Grad
           )}
         >
