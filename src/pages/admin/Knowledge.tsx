@@ -1,4 +1,3 @@
-// src/pages/admin/Knowledge.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAdminStore } from "@/lib/AdminStore";
 import { BotKey } from "@/lib/botSettings";
@@ -182,14 +181,16 @@ export default function Knowledge() {
   const selectedInstLabel =
     scope.kind === "inst"
       ? instanceOptions.find((m) => m.id === scope.id)
-        ? instanceLabel(instanceOptions.find((m) => m.id === scope.id) as InstanceMeta)
+        ? instanceLabel(instanceOptions.find((m) => m.id) as InstanceMeta)
         : "Select an instance"
       : "";
 
   return (
     <div className="space-y-6">
       {/* Header / Pickers */}
-      <div className="rounded-2xl border bg-white shadow-sm">
+      <div className="rounded-2xl border-[3px] border-black/80 bg-white shadow-[0_6px_0_rgba(0,0,0,0.8)]">
+        {/* header stripe */}
+        <div className="h-2 rounded-md bg-black mx-5 mt-5 mb-4" />
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight">Knowledge</h1>
@@ -316,7 +317,6 @@ export default function Knowledge() {
               >
                 + Upload
               </button>
-              {/* Removed “Manage Sources” button */}
             </div>
           </div>
 
@@ -329,7 +329,9 @@ export default function Knowledge() {
       </div>
 
       {/* Uploaded list */}
-      <div className="rounded-2xl border bg-white shadow-sm">
+      <div className="rounded-2xl border-[3px] border-black/80 bg-white shadow-[0_6px_0_rgba(0,0,0,0.8)]">
+        {/* header stripe */}
+        <div className="h-2 rounded-md bg-black mx-5 mt-5 mb-4" />
         <div className="p-5 border-b bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl">
           <div className="text-xl font-extrabold">Uploaded Documents</div>
           <div className="text-sm text-foreground/70">
@@ -339,7 +341,7 @@ export default function Knowledge() {
 
         <div className="p-5">
           {docs.length === 0 ? (
-            <div className="rounded-xl border bg-muted/10 px-4 py-6 text-sm text-foreground/70">
+            <div className="rounded-xl border-[3px] border-black/20 bg-muted/10 px-4 py-6 text-sm text-foreground/70">
               No documents yet. Use <span className="font-semibold">+ Upload</span> to add PDF/Word/Excel.
             </div>
           ) : (
@@ -347,7 +349,7 @@ export default function Knowledge() {
               {docs.map((d) => (
                 <li
                   key={d.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3 bg-white hover:bg-muted/20"
+                  className="flex items-center justify-between gap-3 rounded-xl border-[3px] border-black/20 px-4 py-3 bg-white hover:bg-muted/20"
                 >
                   <a
                     className="min-w-0 flex-1 truncate font-semibold hover:underline"
