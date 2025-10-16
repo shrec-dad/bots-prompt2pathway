@@ -1,4 +1,3 @@
-// src/pages/admin/Bots.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { getBotSettings, setBotSettings } from "@/lib/botSettings";
 import {
@@ -296,14 +295,18 @@ export default function Bots() {
         <div className="mb-8">
           <div className="text-lg font-extrabold mb-3">Hidden Templates</div>
           {hiddenCards.length === 0 ? (
-            <div className="rounded-xl border bg-card p-4 text-sm">No hidden templates right now.</div>
+            <div className="rounded-2xl border-[3px] border-black/80 bg-card p-4 shadow-[0_6px_0_rgba(0,0,0,0.8)]">
+              No hidden templates right now.
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {hiddenCards.map((b) => (
                 <div
                   key={b.key}
-                  className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
+                  className="rounded-2xl border-[3px] border-black/80 bg-card p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition group flex flex-col"
                 >
+                  {/* header stripe */}
+                  <div className="h-2 rounded-md bg-black mb-4" />
                   <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}>
                     <div className="flex items-center gap-3">
                       <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
@@ -348,8 +351,10 @@ export default function Bots() {
         {defs.map((b) => (
           <div
             key={b.key}
-            className="rounded-2xl border bg-card p-5 hover:shadow-md transition group flex flex-col"
+            className="rounded-2xl border-[3px] border-black/80 bg-card p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition group flex flex-col"
           >
+            {/* header stripe */}
+            <div className="h-2 rounded-md bg-black mb-4" />
             <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br ${b.gradient}`}>
               <div className="flex items-center gap-3">
                 <div className="relative h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
@@ -414,25 +419,25 @@ export default function Bots() {
                 Duplicate
               </button>
 
-              <button
-                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-rose-50"
-                onClick={() => {
-                  const builtin = isBuiltInKey(b.key);
-                  const ok = confirm(
-                    builtin
-                      ? `Hide "${b.name}" (built-in) from your Templates?\n\nThis does NOT delete existing instances and can be restored later.`
-                      : `Delete custom template "${b.name}"?\n\nThis removes it from your Templates and deletes its stored graphs.\nExisting instances remain intact.`
-                  );
-                  if (!ok) return;
-                  deleteTemplate(b.key);
-                  setDefs(listTemplateDefs());
-                  setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
-                }}
-                aria-label={`Delete ${b.name}`}
-                title="Delete (built-ins are hidden; customs are removed)"
-              >
-                Delete
-              </button>
+                <button
+                  className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-rose-50"
+                  onClick={() => {
+                    const builtin = isBuiltInKey(b.key);
+                    const ok = confirm(
+                      builtin
+                        ? `Hide "${b.name}" (built-in) from your Templates?\n\nThis does NOT delete existing instances and can be restored later.`
+                        : `Delete custom template "${b.name}"?\n\nThis removes it from your Templates and deletes its stored graphs.\nExisting instances remain intact.`
+                    );
+                    if (!ok) return;
+                    deleteTemplate(b.key);
+                    setDefs(listTemplateDefs());
+                    setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
+                  }}
+                  aria-label={`Delete ${b.name}`}
+                  title="Delete (built-ins are hidden; customs are removed)"
+                >
+                  Delete
+                </button>
             </div>
           </div>
         ))}
@@ -443,7 +448,7 @@ export default function Bots() {
         <div className="text-lg font-extrabold mb-3">My Bots</div>
 
         {sortedInstances.length === 0 ? (
-          <div className="rounded-xl border bg-card p-4 text-sm">
+          <div className="rounded-2xl border-[3px] border-black/80 bg-card p-4 shadow-[0_6px_0_rgba(0,0,0,0.8)]">
             You don’t have any instances yet. Click <b>Duplicate</b> on a card above or use{" "}
             <b>Create New Bot</b>.
           </div>
@@ -456,8 +461,10 @@ export default function Bots() {
               const emoji = emojiFor(m.bot);
 
               return (
-                <div key={m.id} className="rounded-2xl border bg-card overflow-visible flex flex-col">
-                  <div className={`p-4 ring-1 ring-border bg-gradient-to-br ${grad}`}>
+                <div key={m.id} className="rounded-2xl border-[3px] border-black/80 bg-card overflow-visible flex flex-col shadow-[0_6px_0_rgba(0,0,0,0.8)]">
+                  {/* header stripe */}
+                  <div className="h-2 rounded-md bg-black mx-4 mt-4 mb-3" />
+                  <div className={`px-4 pb-1 ring-1 ring-border bg-gradient-to-br ${grad}`}>
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 grid place-items-center rounded-xl bg-white/70 ring-1 ring-border text-xl">
                         {emoji}
@@ -611,7 +618,7 @@ export default function Bots() {
 /* ---------- Small Stat component ---------- */
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border bg-card px-4 py-3">
+    <div className="rounded-2xl border-[3px] border-black/80 bg-card px-4 py-3 shadow-[0_6px_0_rgba(0,0,0,0.8)]">
       <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
         {label}
       </div>
