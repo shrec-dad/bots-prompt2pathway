@@ -7,7 +7,7 @@ type AdminUser = {
   id: string;
   name: string;
   email: string;
-  role: Role;      // "admin" | "editor" | "viewer"
+  role: Role; // "admin" | "editor" | "viewer"
   active: boolean; // simple enable/disable toggle
 };
 
@@ -88,13 +88,15 @@ export default function AdminUsers() {
             Manage who can access the admin dashboard and what they can do.
           </p>
         </div>
-        <div className="rounded-xl border ring-1 ring-border bg-white px-4 py-2 text-sm font-semibold">
+        <div className="rounded-xl border-[3px] border-black/80 bg-white px-4 py-2 text-sm font-semibold shadow-[0_6px_0_rgba(0,0,0,0.8)]">
           Total: {counts.total} • Admins: {counts.admins} • Disabled: {counts.disabled}
         </div>
       </div>
 
       {/* add user */}
-      <div className="rounded-2xl border ring-1 ring-border bg-white p-4">
+      <div className="rounded-2xl border-[3px] border-black/80 bg-white p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)]">
+        {/* header stripe */}
+        <div className="h-2 rounded-md bg-black mb-4" />
         <div className="text-lg font-bold mb-3">Add teammate</div>
         <form
           className="grid gap-3 sm:grid-cols-5"
@@ -141,10 +143,12 @@ export default function AdminUsers() {
       </div>
 
       {/* list */}
-      <div className="rounded-2xl border ring-1 ring-border bg-white">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-muted/40 text-left">
+      <div className="rounded-2xl border-[3px] border-black/80 bg-white shadow-[0_6px_0_rgba(0,0,0,0.8)]">
+        {/* header stripe */}
+        <div className="h-2 rounded-md bg-black mx-5 mt-5 mb-4" />
+        <div className="overflow-x-auto px-5 pb-5">
+          <table className="min-w-full text-sm rounded-2xl overflow-hidden">
+            <thead className="bg-muted/40 text-left border-b-2 border-black/60">
               <tr>
                 <th className="px-4 py-3 font-semibold">Name</th>
                 <th className="px-4 py-3 font-semibold">Email</th>
@@ -157,7 +161,7 @@ export default function AdminUsers() {
               {items.map((u) => {
                 const isMe = me && me.email === u.email;
                 return (
-                  <tr key={u.id} className="border-t">
+                  <tr key={u.id} className="border-t-2 border-black/60">
                     <td className="px-4 py-3 font-semibold">{u.name}</td>
                     <td className="px-4 py-3">{u.email}</td>
                     <td className="px-4 py-3">
@@ -212,7 +216,7 @@ export default function AdminUsers() {
                 );
               })}
               {items.length === 0 && (
-                <tr>
+                <tr className="border-t-2 border-black/60">
                   <td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>
                     No admins yet. Add your first teammate above.
                   </td>
@@ -225,3 +229,4 @@ export default function AdminUsers() {
     </div>
   );
 }
+
