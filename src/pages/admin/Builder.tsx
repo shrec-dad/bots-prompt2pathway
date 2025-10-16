@@ -68,7 +68,7 @@ function writeInstMeta(instId: string, meta: InstMeta) {
 }
 
 /* =========================================================================
-   1)  Custom Node components (INCLUDING NEW PHONE & CALENDAR NODES)
+   1)  Custom Node components (INCLUDING PHONE & CALENDAR NODES)
    ========================================================================= */
 
 const MessageNode = ({ data }: { data: any }) => (
@@ -109,7 +109,6 @@ const InputNode = ({ data }: { data: any }) => (
   </div>
 );
 
-/* NEW: Phone Node */
 const PhoneNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-sky-50 border-2 border-sky-400">
     <Handle type="target" position={Position.Top} />
@@ -126,7 +125,6 @@ const PhoneNode = ({ data }: { data: any }) => (
   </div>
 );
 
-/* NEW: Calendar Node */
 const CalendarNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-emerald-50 border-2 border-emerald-400">
     <Handle type="target" position={Position.Top} />
@@ -143,7 +141,6 @@ const CalendarNode = ({ data }: { data: any }) => (
   </div>
 );
 
-/* Register node types */
 const nodeTypes = {
   message: MessageNode,
   choice: ChoiceNode,
@@ -201,7 +198,20 @@ function saveOverrides(
 }
 
 /* =========================================================================
-   3)  The actual Builder body (inside ReactFlowProvider)
+   3)  Utility functions
+   ========================================================================= */
+
+function classNames(...xs: (string | false | undefined)[]) {
+  return xs.filter(Boolean).join(" ");
+}
+
+const Grad =
+  "bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55";
+const strongCard =
+  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
+
+/* =========================================================================
+   4)  The actual Builder body (inside ReactFlowProvider)
    ========================================================================= */
 
 type Source =
@@ -562,9 +572,9 @@ function BuilderInner() {
   }
 
   const inputClass =
-    "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
+    "w-full rounded-lg border px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400";
   const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-purple-700 mb-1">
+    <div className="text-xs font-bold uppercase text-foreground/80 mb-1">
       {children}
     </div>
   );
@@ -573,7 +583,7 @@ function BuilderInner() {
   const Editor = () => {
     if (!selected)
       return (
-        <div className="text-sm text-purple-600">
+        <div className="text-sm text-foreground/80">
           Select a node above to edit its text and labels.
         </div>
       );
@@ -759,134 +769,136 @@ function BuilderInner() {
   };
 
   return (
-    <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4">
+    <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4 p-6">
       {/* ===== Header ===== */}
-      <div className="rounded-2xl border bg-white shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">
-              Builder {source.kind === "inst" ? "· Instance" : ""}
-            </h1>
-            <p className="text-sm text-foreground/70">
-              Drag-and-drop flow editor.{" "}
-              {source.kind === "inst"
-                ? "Editing a duplicated bot instance."
-                : "Pick a bot and edit the copy of each node below."}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-bold uppercase text-foreground/70">
-                Bot
-              </label>
-              <select
-                className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[260px]"
-                value={selectValue}
-                onChange={onSelectChange}
-                title="Choose a Template Bot or a Client Bot (instance)"
-              >
-                <optgroup label="Client Bots (instances)">
-                  {instances.length === 0 ? (
-                    <option value="inst:" disabled>
-                      No client bots yet — duplicate or create one first
-                    </option>
-                  ) : (
-                    instances
-                      .slice()
-                      .sort((a, b) => b.updatedAt - a.updatedAt)
-                      .map((m) => (
-                        <option key={m.id} value={`inst:${m.id}`}>
-                          {(m.name || `${m.bot} Instance`).toString()} • {m.mode}
-                        </option>
-                      ))
-                  )}
-                </optgroup>
-
-                <optgroup label="Templates">
-                  {defs.map((d) => (
-                    <option key={d.key} value={`tpl:${d.key}`}>
-                      {d.name}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
+      <div className={classNames(strongCard)}>
+        <div className="h-2 rounded-md bg-black mb-4" />
+        <div className="p-5 space-y-3">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-extrabold">Builder</h1>
+              <p className="text-foreground/80 text-sm mt-1">
+                Drag-and-drop flow editor.{" "}
+                {source.kind === "inst"
+                  ? "Editing a duplicated bot instance."
+                  : "Pick a bot and edit the copy of each node."}
+              </p>
             </div>
 
-            {/* Mode toggle */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase text-foreground/70">
-                Mode
-              </span>
+            <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
-                <button
-                  className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                    mode === "basic"
-                      ? "bg-indigo-100"
-                      : "hover:bg-muted/40 bg-white"
-                  }`}
-                  onClick={() => onModeChange("basic")}
+                <label className="text-xs font-bold uppercase text-foreground/70">
+                  Bot
+                </label>
+                <select
+                  className="rounded-lg border px-3 py-2 font-semibold bg-white min-w-[260px]"
+                  value={selectValue}
+                  onChange={onSelectChange}
+                  title="Choose a Template Bot or a Client Bot (instance)"
                 >
-                  basic
-                </button>
-                <button
-                  className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                    mode === "custom"
-                      ? "bg-indigo-100"
-                      : "hover:bg-muted/40 bg-white"
-                  }`}
-                  onClick={() => onModeChange("custom")}
-                >
-                  custom
-                </button>
-              </div>
-            </div>
+                  <optgroup label="Client Bots (instances)">
+                    {instances.length === 0 ? (
+                      <option value="inst:" disabled>
+                        No client bots yet — duplicate or create one first
+                      </option>
+                    ) : (
+                      instances
+                        .slice()
+                        .sort((a, b) => b.updatedAt - a.updatedAt)
+                        .map((m) => (
+                          <option key={m.id} value={`inst:${m.id}`}>
+                            {(m.name || `${m.bot} Instance`).toString()} • {m.mode}
+                          </option>
+                        ))
+                    )}
+                  </optgroup>
 
-            {/* Add Node */}
-            <div className="relative">
-              <button
-                onClick={() => setAddMenuOpen((v) => !v)}
-                className="rounded-md px-3 py-2 text-xs font-extrabold ring-1 ring-border bg-white hover:bg-gray-50"
-                aria-expanded={addMenuOpen}
-                aria-haspopup="menu"
-              >
-                + Add Node
-              </button>
-              {addMenuOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 mt-2 w-44 rounded-lg border-2 border-black bg-white shadow-xl z-20"
-                >
-                  {(
-                    ["message", "choice", "input", "action", "phone", "calendar"] as const
-                  ).map((t) => (
-                    <button
-                      key={t}
-                      role="menuitem"
-                      onClick={() => {
-                        setPendingType(t);
-                        setAddMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-                    >
-                      {t === "phone"
-                        ? "☎️ Phone"
-                        : t === "calendar"
-                        ? "📅 Calendar"
-                        : t[0].toUpperCase() + t.slice(1)}
-                    </button>
-                  ))}
+                  <optgroup label="Templates">
+                    {defs.map((d) => (
+                      <option key={d.key} value={`tpl:${d.key}`}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Mode toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase text-foreground/70">
+                  Mode
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
+                      mode === "basic"
+                        ? "bg-indigo-100"
+                        : "hover:bg-muted/40 bg-white"
+                    }`}
+                    onClick={() => onModeChange("basic")}
+                  >
+                    basic
+                  </button>
+                  <button
+                    className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
+                      mode === "custom"
+                        ? "bg-indigo-100"
+                        : "hover:bg-muted/40 bg-white"
+                    }`}
+                    onClick={() => onModeChange("custom")}
+                  >
+                    custom
+                  </button>
                 </div>
-              )}
+              </div>
+
+              {/* Add Node */}
+              <div className="relative">
+                <button
+                  onClick={() => setAddMenuOpen((v) => !v)}
+                  className="rounded-md px-3 py-2 text-xs font-extrabold ring-1 ring-border bg-white hover:bg-gray-50 border-2 border-black"
+                  aria-expanded={addMenuOpen}
+                  aria-haspopup="menu"
+                >
+                  + Add Node
+                </button>
+                {addMenuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 mt-2 w-44 rounded-lg border-2 border-black bg-white shadow-xl z-20"
+                  >
+                    {(
+                      ["message", "choice", "input", "action", "phone", "calendar"] as const
+                    ).map((t) => (
+                      <button
+                        key={t}
+                        role="menuitem"
+                        onClick={() => {
+                          setPendingType(t);
+                          setAddMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-100"
+                      >
+                        {t === "phone"
+                          ? "☎️ Phone"
+                          : t === "calendar"
+                          ? "📅 Calendar"
+                          : t[0].toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* ===== Canvas ===== */}
-      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-pink-100 via-purple-100 to-indigo-100 p-1 shadow-xl">
+      <div className={classNames(strongCard, Grad)}>
+        <div className="h-2 rounded-md bg-black mb-4" />
         <div
-          className="rounded-xl overflow-hidden border border-white/50 shadow-inner"
+          className="rounded-xl overflow-hidden"
           style={{
             width: "100%",
             minHeight: 480,
@@ -929,7 +941,7 @@ function BuilderInner() {
         )}
 
         {pendingType && (
-          <div className="mt-2 text-xs font-bold text-purple-700">
+          <div className="mt-2 px-4 text-xs font-bold text-foreground/80">
             Click on the canvas to place your new{" "}
             {pendingType === "phone"
               ? "Phone"
@@ -944,39 +956,44 @@ function BuilderInner() {
       {/* ===== Editor ===== */}
       <div
         ref={editorRef}
-        className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-4 shadow-lg"
+        className={classNames(strongCard, Grad)}
       >
-        <div className="text-sm font-extrabold mb-3 text-purple-900">
-          Edit Text <span className="font-normal text-purple-700">(per node)</span>
-        </div>
-        <Editor />
-        {selected && (
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button
-              onClick={saveChanges}
-              className="py-2 px-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-semibold text-sm"
-            >
-              Save Changes
-            </button>
-            <button
-              onClick={deleteSelected}
-              className="py-2 px-4 bg-white border-2 border-black rounded-lg hover:bg-rose-50 font-semibold text-sm"
-              title="Delete selected node and its connections"
-            >
-              Delete Node
-            </button>
-            <div className="col-span-full text-xs text-purple-600 text-center">
-              Changes are saved when you click the Save button
-            </div>
+        <div className="h-2 rounded-md bg-black mb-4" />
+        <div className="p-5 space-y-4">
+          <div className="text-sm font-extrabold text-foreground">
+            Edit Text <span className="font-normal text-foreground/70">(per node)</span>
           </div>
-        )}
+          <Editor />
+          {selected && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={saveChanges}
+                  className="py-2 px-4 bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 text-white rounded-xl hover:shadow-lg transition-all font-semibold text-sm border-2 border-black shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={deleteSelected}
+                  className="py-2 px-4 bg-white border-2 border-black rounded-xl hover:bg-rose-50 font-semibold text-sm shadow-[0_3px_0_rgba(0,0,0,0.8)] active:translate-y-[1px]"
+                  title="Delete selected node and its connections"
+                >
+                  Delete Node
+                </button>
+              </div>
+              <div className="text-xs text-foreground/70 text-center">
+                Changes are saved when you click the Save button
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 /* =========================================================================
-   4)  Export with Provider wrapper to satisfy useReactFlow()
+   5)  Export with Provider wrapper to satisfy useReactFlow()
    ========================================================================= */
 
 export default function Builder() {
