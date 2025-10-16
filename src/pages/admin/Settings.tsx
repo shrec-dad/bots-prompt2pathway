@@ -1,4 +1,3 @@
-// src/pages/admin/Settings.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { getJSON, setJSON } from "@/lib/storage";
 import { BotKey } from "@/lib/botSettings";
@@ -56,13 +55,19 @@ const INST_KEY = (instId: string) => `app:settings:inst:${instId}`;
 /* UI helpers                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/* page wrapper (keep your pastel gradient) */
 const wrapper =
-  "p-6 rounded-2xl border-2 border-purple-200 shadow-lg bg-[linear-gradient(135deg,#ffeef8_0%,#f3e7fc_25%,#e7f0ff_50%,#e7fcf7_75%,#fff9e7_100%)]";
+  "p-6 rounded-2xl border-2 border-purple-200 shadow-lg bg-[linear-gradient(135deg,#ffeef8_0%,#f3e7fc_25%,#e7f0ff_50%,#e7fcf7_75%,#fff9e7_100%)] space-y-6";
 
-const sectionCard = "rounded-2xl border bg-white/95 p-5 shadow-sm";
+/* strong cards + header */
+const sectionCard =
+  "rounded-2xl border-[3px] border-black/80 bg-white p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)]";
 const sectionHeader =
-  "rounded-2xl border-2 border-black bg-white p-5 shadow mb-6";
-const labelSm = "text-xs font-bold uppercase tracking-wide text-purple-700";
+  "rounded-2xl border-[3px] border-black/80 bg-white p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)] mb-6";
+
+/* stripes & inputs */
+const labelSm =
+  "text-xs font-bold uppercase tracking-wide text-purple-700";
 const inputCls =
   "w-full rounded-lg border px-3 py-2 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
 
@@ -150,11 +155,9 @@ export default function Settings() {
   /* -------------------------------- Actions -------------------------------- */
 
   function save() {
-    // persist app settings
     const key = activeStorageKey(instId);
     setJSON(key, s);
 
-    // persist + apply platform theme
     if (s.palette) savePalette(s.palette);
     alert(`Settings saved to ${instId ? `Instance ${instId}` : "Global"}.`);
   }
@@ -255,6 +258,8 @@ export default function Settings() {
     <div className={wrapper}>
       {/* Header with Scope Picker */}
       <div className={sectionHeader}>
+        {/* header stripe */}
+        <div className="h-2 rounded-md bg-black mb-4" />
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-3xl font-extrabold">Settings</div>
@@ -297,6 +302,8 @@ export default function Settings() {
       <div className="grid grid-cols-1 gap-6">
         {/* Preferences */}
         <div className={sectionCard}>
+          {/* header stripe */}
+          <div className="h-2 rounded-md bg-black mb-4" />
           <div className="text-xl font-extrabold mb-3">Preferences</div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -386,6 +393,8 @@ export default function Settings() {
 
         {/* Branding + Palette */}
         <div className={sectionCard}>
+          {/* header stripe */}
+          <div className="h-2 rounded-md bg-black mb-4" />
           <div className="text-xl font-extrabold mb-3">Branding & Palette</div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -509,6 +518,8 @@ export default function Settings() {
 
         {/* Notifications */}
         <div className={sectionCard}>
+          {/* header stripe */}
+          <div className="h-2 rounded-md bg-black mb-4" />
           <div className="text-xl font-extrabold mb-3">Notifications</div>
 
           <label className="flex items-center gap-2">
@@ -543,6 +554,8 @@ export default function Settings() {
 
         {/* Data Sync */}
         <div className={sectionCard}>
+          {/* header stripe */}
+          <div className="h-2 rounded-md bg-black mb-4" />
           <div className="text-xl font-extrabold mb-3">Data Sync</div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -588,6 +601,8 @@ export default function Settings() {
 
         {/* Footer actions */}
         <div className={sectionCard}>
+          {/* header stripe */}
+          <div className="h-2 rounded-md bg-black mb-4" />
           <div className="flex items-center gap-3">
             <button
               className="rounded-xl px-4 py-2 font-bold text-[var(--grad-text)] shadow-[0_3px_0_#000]"
@@ -626,3 +641,4 @@ export default function Settings() {
     </div>
   );
 }
+
