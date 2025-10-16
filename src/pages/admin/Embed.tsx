@@ -175,7 +175,7 @@ export default function Embed() {
     if (found.avatar) setAvatar(found.avatar);
   }, [instId, instances]);
 
-  /* Helpers to read the “active” visual state */
+  /* Helpers to read the "active" visual state */
   const active = useMemo(() => {
     if (syncWithPreview) {
       const b = branding;
@@ -188,7 +188,7 @@ export default function Embed() {
         imageFit: (b.chatBubbleImageFit as Fit) ?? "cover",
         label: b.chatBubbleLabel ?? "Chat",
         labelColor: b.chatBubbleLabelColor ?? "#ffffff",
-        avatar: "", // optional; Preview doesn’t manage this today
+        avatar: "", // optional; Preview doesn't manage this today
         hideLabelWhenImage: !!b.chatHideLabelWhenImage, // <<< align with Preview storage key
       };
     }
@@ -299,10 +299,10 @@ export default function Embed() {
     [embedUrl, active.position, active.size, active.shape, mode]
   );
 
-  /* UI helpers */
+  /* UI helpers - UPDATED WITH BOLD STYLING */
   const headerCard =
-    "rounded-2xl border bg-gradient-to-r from-purple-100 via-indigo-100 to-teal-100 p-6";
-  const sectionCard = "rounded-2xl border bg-white/90 p-4 md:p-5 shadow-sm";
+    "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] bg-white px-5 py-4 mb-6";
+  const sectionCard = "rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] bg-card p-4 md:p-5";
   const labelCls = "text-sm font-bold uppercase text-purple-700";
   const inputCls =
     "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
@@ -314,8 +314,9 @@ export default function Embed() {
   return (
     <div className="p-6 space-y-6">
       <div className={headerCard}>
+        <div className="h-2 rounded-md bg-black mb-4" />
         <h1 className="text-3xl font-extrabold">Embed Code</h1>
-        <p className="mt-2 text-muted-foreground">
+        <p className="mt-2 text-foreground/80">
           Choose your bot or a saved instance, then copy a snippet. By default,
           this page <strong>uses the look you saved on Preview</strong>. Toggle
           off to override visuals just for this snippet.
@@ -584,11 +585,10 @@ export default function Embed() {
           <code>{scriptSnippet}</code>
         </pre>
         <p className="text-xs text-muted-foreground mt-2">
-          Use this when your platform doesn’t let you add raw iframes in a good spot. It injects the
+          Use this when your platform doesn't let you add raw iframes in a good spot. It injects the
           iframe programmatically at the end of <code>&lt;body&gt;</code>.
         </p>
       </div>
     </div>
   );
 }
-
