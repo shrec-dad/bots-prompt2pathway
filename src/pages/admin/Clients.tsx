@@ -57,9 +57,12 @@ const ts = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
    Style helpers
    ========================= */
 
+const strongCard =
+  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
 const headerCard =
-  "rounded-2xl border bg-white shadow-sm mb-6 flex items-center justify-between px-5 py-4";
-const statCard = "rounded-2xl border bg-card px-4 py-3 flex items-center gap-3";
+  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] bg-white mb-6 px-5 py-4";
+const statCard = 
+  "rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] bg-card px-4 py-3 flex items-center gap-3";
 const badge =
   "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-border";
 const actionBtn =
@@ -268,24 +271,27 @@ export default function Clients() {
     <div className="w-full">
       {/* Header */}
       <div className={headerCard}>
-        <div>
-          <div className="text-3xl font-extrabold">Clients</div>
-          <div className="text-sm text-foreground/70">
-            Manage your clients and their bot configurations.
+        <div className="h-2 rounded-md bg-black mb-4" />
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-extrabold">Clients</h1>
+            <p className="text-foreground/80">
+              Manage your clients and their bot configurations.
+            </p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className={actionBtn}
-            onClick={downloadXlsx}
-            aria-label="Download clients Excel"
-            title="Download Excel (.xlsx)"
-          >
-            ⬇︎ Export XLSX
-          </button>
-          <button className={actionBtn} onClick={() => setOpenAdd(true)}>
-            + Add Client
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className={actionBtn}
+              onClick={downloadXlsx}
+              aria-label="Download clients Excel"
+              title="Download Excel (.xlsx)"
+            >
+              ⬇︎ Export XLSX
+            </button>
+            <button className={actionBtn} onClick={() => setOpenAdd(true)}>
+              + Add Client
+            </button>
+          </div>
         </div>
       </div>
 
@@ -338,7 +344,7 @@ export default function Clients() {
       </div>
 
       {/* List */}
-      <div className="rounded-2xl border bg-card p-5">
+      <div className={strongCard + " bg-card p-5"}>
         <div className="text-xl font-extrabold mb-2">All Clients</div>
         <div className="text-sm font-semibold text-foreground/80 mb-4">
           Overview of all your clients and their activity
@@ -357,7 +363,7 @@ export default function Clients() {
               return (
                 <div
                   key={c.id}
-                  className="rounded-2xl border bg-white p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                  className="rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] bg-white p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                 >
                   <div className="flex items-center gap-4">
                     <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white ring-1 ring-border text-2xl">
