@@ -183,10 +183,10 @@ function recomputeInstanceMetrics(instId: string): Metrics {
 }
 
 /** ------------------------------------------------------------
- * Small UI helpers
+ * Small UI helpers - UPDATED WITH BOLD STYLING
  * ------------------------------------------------------------ */
 const sectionCls =
-  "rounded-2xl border-2 border-black bg-gradient-to-r from-violet-100 via-sky-100 to-emerald-100 p-4 md:p-5";
+  "rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] bg-gradient-to-r from-violet-100 via-sky-100 to-emerald-100 p-4 md:p-5";
 
 const Card = ({
   title,
@@ -195,7 +195,7 @@ const Card = ({
   title: React.ReactNode;
   value: React.ReactNode;
 }) => (
-  <div className="rounded-xl border-2 border-black bg-white p-4 md:p-3 shadow-sm">
+  <div className="rounded-xl border-[3px] border-black/80 shadow-[0_3px_0_rgba(0,0,0,0.8)] bg-white p-4 md:p-3">
     <div className="text-base md:text-sm font-extrabold leading-tight">{title}</div>
     <div className="mt-1.5 text-3xl md:text-2xl font-black">{value}</div>
   </div>
@@ -342,21 +342,16 @@ export default function Analytics() {
   };
 
   return (
-    <div
-      className="p-5 md:p-6 rounded-2xl border-2 border-purple-200 shadow-lg"
-      style={{
-        background:
-          "linear-gradient(135deg,#ffeef8 0%,#f3e7fc 25%,#e7f0ff 50%,#e7fcf7 75%,#fff9e7 100%)",
-      }}
-    >
+    <div className="p-5 md:p-6 space-y-6">
       {/* Header */}
-      <div className="rounded-2xl border-2 border-black bg-white p-4 md:p-5 shadow mb-5">
+      <div className="rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] bg-white p-4 md:p-5">
+        <div className="h-2 rounded-md bg-black mb-4" />
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-2xl md:text-3xl font-extrabold">Analytics</div>
-            <div className="text-foreground/80 mt-1">
+            <h1 className="text-2xl md:text-3xl font-extrabold">Analytics</h1>
+            <p className="text-foreground/80 mt-1">
               Track performance, usage, and engagement metrics.
-            </div>
+            </p>
           </div>
 
           {/* Scope Picker */}
@@ -388,7 +383,7 @@ export default function Analytics() {
       </div>
 
       {/* Controls */}
-      <div className="mb-5 rounded-2xl border-2 border-black bg-white p-4 shadow">
+      <div className="rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] bg-white p-4">
         <div className="flex items-center gap-2">
           <button
             onClick={exportXLSX}
@@ -448,4 +443,3 @@ export default function Analytics() {
     </div>
   );
 }
-
