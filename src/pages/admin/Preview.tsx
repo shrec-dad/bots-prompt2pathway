@@ -30,7 +30,6 @@ const BOT_TITLES: Record<string, string> = {
   Receptionist: "Receptionist",
 };
 
-/** Defensive title-case helper (won’t explode on non-strings) */
 function titleCaseSlug(s: unknown) {
   if (typeof s === "string") {
     return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -38,7 +37,6 @@ function titleCaseSlug(s: unknown) {
   return "";
 }
 
-/** Extract a string id/key from BotSelector values (string | object | null) */
 function toId(val: unknown): string {
   if (typeof val === "string") return val;
   if (val && typeof val === "object") {
@@ -59,7 +57,7 @@ type Branding = {
   primaryColor: string;
   secondaryColor: string;
   fontFamily: string;
-  chatBubbleImage?: string; // may be a URL or a data: URI
+  chatBubbleImage?: string;
   chatBubbleColor: string;
   chatBubbleSize: number;
   chatBubblePosition: Pos;
@@ -97,6 +95,15 @@ function setBranding(next: Partial<Branding>) {
   return merged as Branding;
 }
 
+function classNames(...xs: (string | false | undefined)[]) {
+  return xs.filter(Boolean).join(" ");
+}
+
+const Grad =
+  "bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55";
+const strongCard =
+  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
+
 export default function Preview() {
   /* ---------- sources (instances) ---------- */
   const [instances, setInstances] = useState<InstanceMeta[]>(() =>
@@ -116,12 +123,11 @@ export default function Preview() {
 
   /* ---------- selection state ---------- */
   const [instId, setInstId] = useState<string>("");
-  const [botKey, setBotKey] = useState<string>("Waitlist"); // fallback
+  const [botKey, setBotKey] = useState<string>("Waitlist");
 
-  /** Change handlers with guards so BotSelector can pass objects safely */
   const onInstanceChange = (val: unknown) => {
     const id = toId(val);
-    setInstId(id); // empty string clears selection
+    setInstId(id);
     trackEvent(
       "preview_select_instance",
       id ? { kind: "inst", id } : { kind: "bot", key: botKey }
@@ -146,7 +152,6 @@ export default function Preview() {
     [instances, instId]
   );
 
-  // The *template key* behind the selection (used for the bubble widget source)
   const activeBotKey = activeInst?.bot || botKey;
 
   /* ---------- widget look state ---------- */
@@ -188,21 +193,18 @@ export default function Preview() {
     setStep((s) => Math.max(s - 1, 0));
   };
 
-  // Headline: for instances show the instance name; otherwise the friendly template title
   const headline = activeInst
     ? `Welcome to ${activeInst.name}`
     : `Welcome to ${BOT_TITLES[activeBotKey] ?? titleCaseSlug(activeBotKey)}`;
 
-  // Demo subtext varies slightly per step
   const subtext = (() => {
     if (step === 0)
-      return "I’ll ask a few quick questions to help our team help you.";
-    if (step === 1) return "What’s the best email to reach you?";
+      return "I'll ask a few quick questions to help our team help you.";
+    if (step === 1) return "What's the best email to reach you?";
     if (step === 2) return "Choose your interest level.";
-    return "Thanks! You’re on the list — we’ll be in touch.";
+    return "Thanks! You're on the list — we'll be in touch.";
   })();
 
-  // Embed URL preview (uses inst if chosen, else bot)
   const widgetSrc = useMemo(() => {
     const qp = new URLSearchParams();
     if (activeInst) qp.set("inst", activeInst.id);
@@ -289,53 +291,53 @@ export default function Preview() {
     setSavedNote("Reset");
   };
 
-  /* ---------- file upload -> data URL for bubble image ---------- */
   async function onPickBubbleImage(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     const reader = new FileReader();
     reader.onload = () => setImg(String(reader.result || ""));
     reader.readAsDataURL(f);
-    e.currentTarget.value = ""; // allow re-upload of same file
+    e.currentTarget.value = "";
   }
-
-  /* ---------- UI ---------- */
-
-  const gradientHeader =
-    "bg-gradient-to-r from-purple-500 via-indigo-400 to-teal-400 text-white";
 
   return (
     <ErrorBoundary>
-      <div className="p-6 space-y-6">
-        {/* Controls */}
-        <div className="rounded-2xl border bg-white shadow-sm">
-          <div className={`rounded-t-2xl p-4 ${gradientHeader}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xl font-extrabold">Widget Preview</div>
-                <div className="text-sm opacity-90">
-                  Tune the customer-facing widget style.
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
-                  onClick={onSave}
-                >
-                  Save
-                </button>
-                <button
-                  className="rounded-2xl px-3 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 hover:from-indigo-500/20 hover:to-emerald-500/20"
-                  onClick={onReset}
-                >
-                  Reset
-                </button>
-              </div>
+      <div className="space-y-6 p-6">
+        {/* Header Section */}
+        <div className={classNames("p-5", strongCard)}>
+          <div className="h-2 rounded-md bg-black mb-4" />
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-extrabold">Widget Preview</h1>
+              <p className="text-foreground/80">
+                Tune the customer-facing widget style and see it live.
+              </p>
             </div>
-            {savedNote && <div className="mt-2 text-xs font-bold">{savedNote}</div>}
+            <div className="flex gap-2">
+              <button
+                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+                onClick={onSave}
+              >
+                Save
+              </button>
+              <button
+                className="rounded-2xl px-3 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+                onClick={onReset}
+              >
+                Reset
+              </button>
+            </div>
           </div>
+          {savedNote && (
+            <div className="mt-3 text-xs font-bold text-emerald-700">{savedNote}</div>
+          )}
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+        {/* Controls Card */}
+        <div className={classNames(strongCard, Grad)}>
+          <div className="h-2 rounded-md bg-black mb-0" />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5">
             {/* Instance via BotSelector (optional) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -514,7 +516,7 @@ export default function Preview() {
             {/* Open modal + embed url (copy) */}
             <div className="md:col-span-2 flex items-center gap-3">
               <button
-                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-teal-500/10 hover:from-purple-500/20 hover:to-teal-500/20"
+                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-teal-500/20 hover:from-purple-500/30 hover:to-teal-500/30"
                 onClick={() => {
                   const scope = activeInst
                     ? ({ kind: "inst", id: activeInst.id } as const)
@@ -554,7 +556,13 @@ export default function Preview() {
         </div>
 
         {/* Live area: bubble + modal */}
-        <div className="relative min-h-[70vh] rounded-2xl border bg-gradient-to-br from-purple-50 via-indigo-50 to-teal-50 p-6 overflow-visible">
+        <div className={classNames(
+          "relative min-h-[70vh] rounded-2xl p-6 overflow-visible",
+          strongCard,
+          Grad
+        )}>
+          <div className="h-2 rounded-md bg-black mb-4" />
+          
           {mode === "popup" && (
             <ChatWidget
               mode="popup"
@@ -582,7 +590,6 @@ export default function Preview() {
           {openModal && (
             <div
               className="absolute inset-0 grid place-items-center"
-              // close on ESC
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
                   const scope = activeInst
@@ -597,12 +604,12 @@ export default function Preview() {
                 role="dialog"
                 aria-modal="true"
                 aria-label="Widget Preview"
-                className="w-[480px] max-w-[94vw] rounded-2xl border bg-white shadow-2xl outline-none"
+                className="w-[480px] max-w-[94vw] rounded-2xl border-[3px] border-black/80 bg-white shadow-2xl outline-none"
                 tabIndex={-1}
               >
                 {/* top strip */}
                 <div
-                  className={`rounded-t-2xl p-4 ${gradientHeader}`}
+                  className="rounded-t-2xl p-4 h-2 bg-black"
                   aria-hidden="true"
                 />
 
