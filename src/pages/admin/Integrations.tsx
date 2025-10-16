@@ -74,6 +74,15 @@ function resolveStorageKey(selection: unknown): string {
   return "";
 }
 
+function classNames(...xs: (string | false | undefined)[]) {
+  return xs.filter(Boolean).join(" ");
+}
+
+const Grad =
+  "bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55";
+const strongCard =
+  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
+
 export default function Integrations() {
   const { bots } = useAdminStore();
 
@@ -127,166 +136,174 @@ export default function Integrations() {
     setJSON(KEY(key), {});
   };
 
-  const header =
-    "rounded-2xl border-2 border-black p-5 bg-gradient-to-r from-purple-100 via-indigo-100 to-emerald-100";
-  const group =
-    "rounded-2xl border-2 border-black p-5 bg-gradient-to-r from-violet-100 via-sky-100 to-green-100";
-  const card =
-    "rounded-2xl border-2 border-black bg-white p-4 shadow space-y-3";
-
-  const label = "text-xs font-bold uppercase text-purple-700";
   const input =
-    "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent";
+    "w-full rounded-lg border px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400";
+  const label = "text-xs font-bold uppercase tracking-wide text-foreground/80";
 
   // Little hint message when editing an instance
   const instanceHint =
     typeof appliesTo === "string" && appliesTo.startsWith("inst_") ? (
-      <div className="text-[12px] font-semibold text-black/70">
-        Editing <span className="font-extrabold">client bot instance</span>. Blank
-        fields effectively started as inherited from its base template when this form loaded.
-        Any values you save here are stored only for this instance.
+      <div className="text-xs font-semibold text-black/70">
+        Editing <span className="font-extrabold">client bot instance</span>. Blank fields effectively started as inherited from its base template when this form loaded. Any values you save here are stored only for this instance.
       </div>
     ) : null;
 
   return (
-    <div
-      className="p-6 space-y-6 rounded-2xl border-2 border-purple-200 shadow-lg"
-      style={{
-        background:
-          "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
-      }}
-    >
-      <div className={header}>
-        <div className="text-3xl font-extrabold">Integrations</div>
-        <div className="text-black/80">
-          Connect your bot universally—no provider dropdowns. Use your own webhook URLs or API
-          endpoints. This keeps you future-proof across any CRM or calendar.
+    <div className="space-y-6 p-6">
+      {/* Header Section */}
+      <div className={classNames("p-5", strongCard)}>
+        <div className="h-2 rounded-md bg-black mb-4" />
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-extrabold">Integrations</h1>
+            <p className="text-foreground/80">
+              Connect your bot universally with webhook URLs and API endpoints. Stay future-proof across any CRM or calendar.
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Applies-to selector */}
-      <div className={group}>
-        <div className="text-lg font-extrabold mb-3">Applies to</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <label className="block">
-            <div className={label}>Target</div>
-            <BotSelector
-              scope="both"
-              value={appliesTo}
-              onChange={(v) => {
-                // Accept strings or objects; store as string state
-                const next = resolveStorageKey(v);
-                setAppliesTo(next);
-              }}
-              placeholderOption="— Select a Template or an Instance —"
-              showGroups
-            />
-          </label>
+      <div className={classNames(strongCard, Grad)}>
+        <div className="h-2 rounded-md bg-black mb-4" />
+        <div className="p-5 space-y-4">
+          <div className="text-lg font-extrabold">Applies to</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <label className="block">
+              <div className={label}>Target</div>
+              <BotSelector
+                scope="both"
+                value={appliesTo}
+                onChange={(v) => {
+                  const next = resolveStorageKey(v);
+                  setAppliesTo(next);
+                }}
+                placeholderOption="— Select a Template or an Instance —"
+                showGroups
+              />
+            </label>
 
-          <div className="flex items-end gap-3">
-            <button
-              onClick={save}
-              className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px] border-2 border-black"
-            >
-              Save
-            </button>
-            <button
-              onClick={reset}
-              className="rounded-xl px-4 py-2 font-bold border-2 border-black bg-white shadow hover:bg-muted/40"
-            >
-              Reset
-            </button>
+            <div className="flex items-end gap-3">
+              <button
+                onClick={save}
+                className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px] border-2 border-black hover:shadow-[0_4px_0_#000]"
+              >
+                Save
+              </button>
+              <button
+                onClick={reset}
+                className="rounded-xl px-4 py-2 font-bold border-2 border-black bg-white shadow hover:shadow-md"
+              >
+                Reset
+              </button>
+            </div>
           </div>
-          <div className="md:col-span-3">{instanceHint}</div>
+          {instanceHint && <div className="md:col-span-3">{instanceHint}</div>}
         </div>
       </div>
 
-      {/* Universal sections */}
+      {/* Integration cards */}
       <div className="grid grid-cols-1 gap-6">
-        {/* Email (optional) */}
-        <div className={card}>
-          <div className="text-lg font-extrabold">Email Integration (optional)</div>
-          <p className="text-black/80">
-            Use a webhook or relay endpoint to send emails (e.g., to your ESP, Zapier, or a serverless function).
-          </p>
+        {/* Email Integration */}
+        <div className={classNames(strongCard, Grad)}>
+          <div className="h-2 rounded-md bg-black mb-4" />
+          <div className="p-5 space-y-4">
+            <div>
+              <div className="text-lg font-extrabold">Email Integration (optional)</div>
+              <p className="text-foreground/80 text-sm mt-1">
+                Use a webhook or relay endpoint to send emails to your ESP, Zapier, or serverless function.
+              </p>
+            </div>
 
-          <label className="block">
-            <div className={label}>Email Webhook URL</div>
-            <input
-              className={input}
-              placeholder="https://api.yourdomain.com/email/send"
-              value={form.emailWebhook || ""}
-              onChange={(e) => setForm({ ...form, emailWebhook: e.target.value })}
-            />
-          </label>
+            <label className="block">
+              <div className={label}>Email Webhook URL</div>
+              <input
+                className={input}
+                placeholder="https://api.yourdomain.com/email/send"
+                value={form.emailWebhook || ""}
+                onChange={(e) => setForm({ ...form, emailWebhook: e.target.value })}
+              />
+            </label>
 
-          <label className="block">
-            <div className={label}>Email API Key / Secret (optional)</div>
-            <input
-              className={input}
-              placeholder="sk_live_***"
-              value={form.emailApiKey || ""}
-              onChange={(e) => setForm({ ...form, emailApiKey: e.target.value })}
-            />
-          </label>
+            <label className="block">
+              <div className={label}>Email API Key / Secret (optional)</div>
+              <input
+                className={input}
+                placeholder="sk_live_***"
+                type="password"
+                value={form.emailApiKey || ""}
+                onChange={(e) => setForm({ ...form, emailApiKey: e.target.value })}
+              />
+            </label>
+          </div>
         </div>
 
-        {/* Calendar (universal) */}
-        <div className={card}>
-          <div className="text-lg font-extrabold">Calendar Integration (universal)</div>
-          <p className="text-black/80">
-            Provide a single webhook that creates events on your system or a third-party calendar
-            (Google, Outlook, Cal.com, etc.). Your backend can route to the right provider.
-          </p>
+        {/* Calendar Integration */}
+        <div className={classNames(strongCard, Grad)}>
+          <div className="h-2 rounded-md bg-black mb-4" />
+          <div className="p-5 space-y-4">
+            <div>
+              <div className="text-lg font-extrabold">Calendar Integration (universal)</div>
+              <p className="text-foreground/80 text-sm mt-1">
+                Provide a single webhook that creates events on your system or third-party calendar (Google, Outlook, Cal.com, etc.).
+              </p>
+            </div>
 
-          <label className="block">
-            <div className={label}>Create Event Webhook URL</div>
-            <input
-              className={input}
-              placeholder="https://api.yourdomain.com/calendar/create"
-              value={form.calendarWebhook || ""}
-              onChange={(e) => setForm({ ...form, calendarWebhook: e.target.value })}
-            />
-          </label>
+            <label className="block">
+              <div className={label}>Create Event Webhook URL</div>
+              <input
+                className={input}
+                placeholder="https://api.yourdomain.com/calendar/create"
+                value={form.calendarWebhook || ""}
+                onChange={(e) => setForm({ ...form, calendarWebhook: e.target.value })}
+              />
+            </label>
 
-          <label className="block">
-            <div className={label}>Secret / API Key (optional)</div>
-            <input
-              className={input}
-              placeholder="calc_secret_***"
-              value={form.calendarSecret || ""}
-              onChange={(e) => setForm({ ...form, calendarSecret: e.target.value })}
-            />
-          </label>
+            <label className="block">
+              <div className={label}>Secret / API Key (optional)</div>
+              <input
+                className={input}
+                placeholder="calc_secret_***"
+                type="password"
+                value={form.calendarSecret || ""}
+                onChange={(e) => setForm({ ...form, calendarSecret: e.target.value })}
+              />
+            </label>
+          </div>
         </div>
 
-        {/* CRM (universal) */}
-        <div className={card}>
-          <div className="text-lg font-extrabold">CRM Integration (universal)</div>
-          <p className="text-black/80">
-            Post new leads to a universal endpoint on your side. From there you can map to any CRM
-            (HubSpot, Salesforce, Pipedrive, Close, etc.).
-          </p>
+        {/* CRM Integration */}
+        <div className={classNames(strongCard, Grad)}>
+          <div className="h-2 rounded-md bg-black mb-4" />
+          <div className="p-5 space-y-4">
+            <div>
+              <div className="text-lg font-extrabold">CRM Integration (universal)</div>
+              <p className="text-foreground/80 text-sm mt-1">
+                Post new leads to a universal endpoint that routes to any CRM (HubSpot, Salesforce, Pipedrive, Close, etc.).
+              </p>
+            </div>
 
-          <label className="block">
-            <div className={label}>Lead Webhook URL</div>
-            <input
-              className={input}
-              placeholder="https://api.yourdomain.com/crm/leads"
-              value={form.crmWebhook || ""}
-              onChange={(e) => setForm({ ...form, crmWebhook: e.target.value })}
-            />
-          </label>
+            <label className="block">
+              <div className={label}>Lead Webhook URL</div>
+              <input
+                className={input}
+                placeholder="https://api.yourdomain.com/crm/leads"
+                value={form.crmWebhook || ""}
+                onChange={(e) => setForm({ ...form, crmWebhook: e.target.value })}
+              />
+            </label>
 
-          <label className="block">
-            <div className={label}>Auth Token (optional)</div>
-            <input
-              className={input}
-              placeholder="crm_token_***"
-              value={form.crmAuthToken || ""}
-              onChange={(e) => setForm({ ...form, crmAuthToken: e.target.value })}
-            />
-          </label>
+            <label className="block">
+              <div className={label}>Auth Token (optional)</div>
+              <input
+                className={input}
+                placeholder="crm_token_***"
+                type="password"
+                value={form.crmAuthToken || ""}
+                onChange={(e) => setForm({ ...form, crmAuthToken: e.target.value })}
+              />
+            </label>
+          </div>
         </div>
       </div>
     </div>
