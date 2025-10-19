@@ -28,7 +28,7 @@ export type TemplateDef = {
 const TPL_INDEX_KEY = "botTemplates:index"; // TemplateDef[]
 const TPL_DATA_KEY = (key: string, mode: Mode) => `botTemplates:data:${key}_${mode}`;
 
-// Hidden list for “deleting” built-ins safely
+// Hidden list for "deleting" built-ins safely
 const TPL_HIDDEN_KEY = "botTemplates:hiddenKeys"; // string[] of keys
 
 /* ---------- Helpers ---------- */
@@ -47,7 +47,7 @@ function writeJSON<T>(k: string, v: T) {
 const id = (p: string, n: number) => `${p}_${n}`;
 
 /* =========================================================================
-   Built-in 6 Templates (graphs)
+   Built-in 5 Templates (graphs) - SOCIAL MEDIA REMOVED
    ======================================================================== */
 /**
  * NOTE ABOUT ACTION DATA:
@@ -71,7 +71,7 @@ const LeadQualifier_basic: BotTemplate = {
     {
       id: id("welcome", 1),
       type: "message",
-      data: { title: "Welcome", text: "Hi! Let’s see if we’re a fit. Ready to begin?" },
+      data: { title: "Welcome", text: "Hi! Let's see if we're a fit. Ready to begin?" },
       position: { x: 60, y: 40 },
     },
     {
@@ -131,7 +131,7 @@ const LeadQualifier_basic: BotTemplate = {
     {
       id: id("thanks", 9),
       type: "message",
-      data: { title: "Thanks!", text: "We’ll review and follow up with next steps." },
+      data: { title: "Thanks!", text: "We'll review and follow up with next steps." },
       position: { x: 580, y: 510 },
     },
   ],
@@ -247,7 +247,7 @@ const AppointmentBooking_basic: BotTemplate = {
     {
       id: id("confirm", 6),
       type: "message",
-      data: { title: "Confirmation", text: "We’ve booked it and sent a calendar invite." },
+      data: { title: "Confirmation", text: "We've booked it and sent a calendar invite." },
       position: { x: 320, y: 340 },
     },
     {
@@ -333,7 +333,7 @@ const CustomerSupport_basic: BotTemplate = {
     {
       id: id("hours", 5),
       type: "message",
-      data: { title: "Business Hours", text: "Mon–Fri 9am–6pm. We’ll reply ASAP." },
+      data: { title: "Business Hours", text: "Mon–Fri 9am–6pm. We'll reply ASAP." },
       position: { x: 60, y: 340 },
     },
     {
@@ -414,7 +414,7 @@ const Waitlist_basic: BotTemplate = {
     {
       id: id("welcome", 1),
       type: "message",
-      data: { title: "Join Waitlist", text: "Add your info and we’ll save your place in line." },
+      data: { title: "Join Waitlist", text: "Add your info and we'll save your place in line." },
       position: { x: 60, y: 40 },
     },
     {
@@ -444,7 +444,7 @@ const Waitlist_basic: BotTemplate = {
     {
       id: id("queue", 6),
       type: "message",
-      data: { title: "You’re In!", text: "We’ll email your position & updates." },
+      data: { title: "You're In!", text: "We'll email your position & updates." },
       position: { x: 320, y: 340 },
     },
     {
@@ -498,87 +498,6 @@ const Waitlist_custom: BotTemplate = {
     { id: "e8-9", source: id("vip", 8), target: id("deposit", 9), type: "smoothstep" },
     { id: "e9-10", source: id("deposit", 9), target: id("updates", 10), type: "smoothstep" },
     { id: "e10-11", source: id("updates", 10), target: id("rewards", 11), type: "smoothstep" },
-  ],
-};
-
-const SocialMedia_basic: BotTemplate = {
-  nodes: [
-    {
-      id: id("welcome", 1),
-      type: "message",
-      data: { title: "Social Bot", text: "Pick a platform and how I should help." },
-      position: { x: 60, y: 40 },
-    },
-    {
-      id: id("platform", 2),
-      type: "choice",
-      data: { label: "Platform", options: ["Instagram", "Facebook", "Twitter/X", "TikTok"] },
-      position: { x: 60, y: 190 },
-    },
-    {
-      id: id("purpose", 3),
-      type: "choice",
-      data: {
-        label: "I should…",
-        options: ["Auto-reply DMs", "Manage comments", "Share links", "FAQ replies"],
-      },
-      position: { x: 320, y: 190 },
-    },
-    {
-      id: id("contact", 4),
-      type: "input",
-      data: { label: "Contact capture (optional)", placeholder: "email or phone" },
-      position: { x: 580, y: 190 },
-    },
-    {
-      id: id("done", 5),
-      type: "message",
-      data: { title: "Saved", text: "Your social automation preferences are set." },
-      position: { x: 320, y: 340 },
-    },
-  ],
-  edges: [
-    { id: "e1-2", source: id("welcome", 1), target: id("platform", 2), type: "smoothstep" },
-    { id: "e2-3", source: id("platform", 2), target: id("purpose", 3), type: "smoothstep" },
-    { id: "e3-4", source: id("purpose", 3), target: id("contact", 4), type: "smoothstep" },
-    { id: "e4-5", source: id("contact", 4), target: id("done", 5), type: "smoothstep" },
-  ],
-};
-
-const SocialMedia_custom: BotTemplate = {
-  nodes: [
-    ...SocialMedia_basic.nodes,
-    {
-      id: id("multip", 6),
-      type: "action",
-      data: { label: "Multi-platform Manager", to: "system:multi_platform" },
-      position: { x: 840, y: 190 },
-    },
-    {
-      id: id("recommend", 7),
-      type: "action",
-      data: { label: "Content Recommendations", to: "system:content_recs" },
-      position: { x: 840, y: 340 },
-    },
-    {
-      id: id("contest", 8),
-      type: "action",
-      data: { label: "Contest / Giveaway", to: "system:contest_mgr" },
-      position: { x: 1060, y: 340 },
-    },
-    {
-      id: id("analytics", 9),
-      type: "action",
-      data: { label: "Social Analytics", to: "system:social_analytics" },
-      position: { x: 1280, y: 340 },
-    },
-  ],
-  edges: [
-    ...SocialMedia_basic.edges,
-    { id: "e5-6", source: id("done", 5), target: id("multip", 6), type: "smoothstep" },
-    { id: "e6-7", source: id("multip", 6), target: id("recommend", 7), type: "smoothstep" },
-    { id: "e7-8", source: id("recommend", 7), target: id("contest", 8), type: "smoothstep" },
-    { id: "e8-9", source: id("contest", 8), target: id("analytics", 9), type: "smoothstep" },
   ],
 };
 
@@ -759,7 +678,7 @@ const Receptionist_custom: BotTemplate = {
     {
       id: id("r_done", 26),
       type: "message",
-      data: { title: "Thank you!", text: "We’ve got it and will follow up shortly." },
+      data: { title: "Thank you!", text: "We've got it and will follow up shortly." },
       position: { x: 1280, y: 520 },
     },
   ],
@@ -785,7 +704,7 @@ const Receptionist_custom: BotTemplate = {
   ],
 };
 
-/* ---------- Built-in registry (metadata for the 6 cards) ---------- */
+/* ---------- Built-in registry (metadata for the 5 cards) - SOCIAL MEDIA REMOVED ---------- */
 const BUILTIN_DEFS: TemplateDef[] = [
   {
     key: "LeadQualifier",
@@ -816,13 +735,6 @@ const BUILTIN_DEFS: TemplateDef[] = [
     description: "Collect interest, show queue status and notify customers.",
   },
   {
-    key: "SocialMedia",
-    name: "Social Media",
-    emoji: "📣",
-    gradient: "from-pink-500/20 via-rose-400/20 to-red-500/20",
-    description: "Auto-DM replies, comment handling, and engagement prompts across platforms.",
-  },
-  {
     key: "Receptionist",
     name: "Receptionist",
     emoji: "☎️",
@@ -832,7 +744,7 @@ const BUILTIN_DEFS: TemplateDef[] = [
   },
 ];
 
-/* ---------- Built-in graphs map ---------- */
+/* ---------- Built-in graphs map - SOCIAL MEDIA REMOVED ---------- */
 const builtinGraphs: Record<string, BotTemplate> = {
   LeadQualifier_basic,
   LeadQualifier_custom,
@@ -842,8 +754,6 @@ const builtinGraphs: Record<string, BotTemplate> = {
   CustomerSupport_custom,
   Waitlist_basic,
   Waitlist_custom,
-  SocialMedia_basic,
-  SocialMedia_custom,
   Receptionist_basic,
   Receptionist_custom,
 };
