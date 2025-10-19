@@ -1,4 +1,4 @@
-// src/pages/admin/Builder.tsx
+// src/pages/admin/Builder.tsx - SOCIAL MEDIA REMOVED
 import React, {
   useMemo,
   useState,
@@ -239,12 +239,12 @@ function BuilderInner() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // BUILTIN_KEYS updated - SOCIAL MEDIA REMOVED
   const BUILTIN_KEYS = new Set<BotKey>([
     "LeadQualifier",
     "AppointmentBooking",
     "CustomerSupport",
     "Waitlist",
-    "SocialMedia",
     "Receptionist",
   ] as BotKey[]);
 
