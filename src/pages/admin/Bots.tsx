@@ -1,3 +1,4 @@
+// src/pages/admin/Bots.tsx - SOCIAL MEDIA REMOVED
 import React, { useEffect, useMemo, useState } from "react";
 import { getBotSettings, setBotSettings } from "@/lib/botSettings";
 import {
@@ -44,7 +45,7 @@ function rawEmojiFor(defs: ReturnType<typeof listTemplateDefs>, key: BotKey) {
   return defs.find((b) => b.key === key)?.emoji || "🤖";
 }
 
-/* Built-in metadata (for nice cards when they’re hidden) */
+/* Built-in metadata (for nice cards when they're hidden) - SOCIAL MEDIA REMOVED */
 const BUILTIN_META: Record<
   string,
   { name: string; emoji: string; gradient: string; description: string }
@@ -76,13 +77,6 @@ const BUILTIN_META: Record<
     gradient: "from-amber-500/25 via-orange-400/20 to-rose-500/20",
     description: "Collect interest, show queue status and notify customers.",
   },
-  SocialMedia: {
-    name: "Social Media",
-    emoji: "📣",
-    gradient: "from-pink-500/20 via-rose-400/20 to-red-500/20",
-    description:
-      "Auto-DM replies, comment handling, and engagement prompts across platforms.",
-  },
   Receptionist: {
     name: "Receptionist",
     emoji: "☎️",
@@ -103,7 +97,7 @@ function EmojiPickerModal({
   current?: string;
 }) {
   const emojis = [
-    "🎯", "📅", "💬", "⏳", "📣", "☎️", "🤖", "💼", "🌟", "🧭",
+    "🎯", "📅", "💬", "⏳", "☎️", "🤖", "💼", "🌟", "🧭",
     "🏥", "🛍️", "🧾", "🧰", "🛠️", "💡",
   ];
   return (
@@ -419,25 +413,25 @@ export default function Bots() {
                 Duplicate
               </button>
 
-                <button
-                  className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-rose-50"
-                  onClick={() => {
-                    const builtin = isBuiltInKey(b.key);
-                    const ok = confirm(
-                      builtin
-                        ? `Hide "${b.name}" (built-in) from your Templates?\n\nThis does NOT delete existing instances and can be restored later.`
-                        : `Delete custom template "${b.name}"?\n\nThis removes it from your Templates and deletes its stored graphs.\nExisting instances remain intact.`
-                    );
-                    if (!ok) return;
-                    deleteTemplate(b.key);
-                    setDefs(listTemplateDefs());
-                    setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
-                  }}
-                  aria-label={`Delete ${b.name}`}
-                  title="Delete (built-ins are hidden; customs are removed)"
-                >
-                  Delete
-                </button>
+              <button
+                className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-bold bg-white hover:bg-rose-50"
+                onClick={() => {
+                  const builtin = isBuiltInKey(b.key);
+                  const ok = confirm(
+                    builtin
+                      ? `Hide "${b.name}" (built-in) from your Templates?\n\nThis does NOT delete existing instances and can be restored later.`
+                      : `Delete custom template "${b.name}"?\n\nThis removes it from your Templates and deletes its stored graphs.\nExisting instances remain intact.`
+                  );
+                  if (!ok) return;
+                  deleteTemplate(b.key);
+                  setDefs(listTemplateDefs());
+                  setHiddenKeys(getJSON<string[]>(HIDDEN_TEMPLATES_KEY, []));
+                }}
+                aria-label={`Delete ${b.name}`}
+                title="Delete (built-ins are hidden; customs are removed)"
+              >
+                Delete
+              </button>
             </div>
           </div>
         ))}
@@ -449,7 +443,7 @@ export default function Bots() {
 
         {sortedInstances.length === 0 ? (
           <div className="rounded-2xl border-[3px] border-black/80 bg-card p-4 shadow-[0_6px_0_rgba(0,0,0,0.8)]">
-            You don’t have any instances yet. Click <b>Duplicate</b> on a card above or use{" "}
+            You don't have any instances yet. Click <b>Duplicate</b> on a card above or use{" "}
             <b>Create New Bot</b>.
           </div>
         ) : (
@@ -557,7 +551,7 @@ export default function Bots() {
 
             <label className="font-semibold block mb-2">Choose an Emoji</label>
             <div className="flex flex-wrap gap-3 mb-4">
-              {["🎯","📅","💬","⏳","📣","☎️","🤖","💼","🌟","🧭"].map((emj) => (
+              {["🎯","📅","💬","⏳","☎️","🤖","💼","🌟","🧭"].map((emj) => (
                 <button
                   key={emj}
                   type="button"
