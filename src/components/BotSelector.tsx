@@ -1,23 +1,27 @@
 // src/components/BotSelector.tsx
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  getCatalog,
-  subscribeCatalog,
-  type CatalogTemplate, // kept for backward-compat typing in this file
-  type CatalogInstance,
-} from "@/lib/botCatalog";
-import { useTemplateCatalog } from "@/hooks/useTemplateCatalog";
-
+import { useMemo } from "react";
 type Scope = "template" | "instance" | "both";
 
 export type BotSelectorValue =
-  | { kind: "template"; key: string }
+  | { kind: "template"; id: string }
   | { kind: "instance"; id: string }
   | null;
 
+type BotTemplate = {
+  _id: string;
+  name: string;
+};
+
+type BotInstance = {
+  _id: string;
+  name: string;
+  plan?: string;
+};
+
 type Props = {
   scope: Scope;
-
+  templates?: BotTemplate[];
+  instances?: BotInstance[];
   /** For template scope: pass template key; for instance: pass instance id; for both: pass template key or instance id */
   value?: string;
 
@@ -29,7 +33,7 @@ type Props = {
    */
   onChange: (next: BotSelectorValue) => void;
 
-  /** Optional secondary handler that emits a raw string (template key OR instance id), or null. */
+  /** Optional secondary handler that emits a raw string (template id OR instance id), or null. */
   onChangeString?: (next: string | null) => void;
 
   className?: string;
@@ -58,6 +62,8 @@ type Props = {
 
 export default function BotSelector({
   scope,
+  templates = [],
+  instances = [],
   value,
   onChange,
   onChangeString,
@@ -71,32 +77,6 @@ export default function BotSelector({
   showGroups = true,
   ariaLabel,
 }: Props) {
-  /** Templates now come from the single source of truth (templates.ts) via the hook */
-  const { templates: hookTemplates } = useTemplateCatalog();
-
-  /** Instances continue to come from botCatalog (which already tracks instance CRUD) */
-  const [instances, setInstances] = useState<CatalogInstance[]>([]);
-  useEffect(() => {
-    const refresh = () => {
-      const cat = getCatalog();
-      setInstances(cat.instances);
-    };
-    refresh();
-    return subscribeCatalog(refresh);
-  }, []);
-
-  // Keep prop parity for downstream code that might rely on CatalogTemplate type
-  const templates: CatalogTemplate[] = useMemo(
-    () =>
-      hookTemplates.map((t) => ({
-        key: t.key,
-        name: t.name,
-        emoji: t.emoji,
-        gradient: t.gradient,
-        description: t.description,
-      })),
-    [hookTemplates]
-  );
 
   const hasTemplates = templates.length > 0;
   const hasInstances = instances.length > 0;
@@ -110,15 +90,24 @@ export default function BotSelector({
       onChangeString?.(null);
       return;
     }
-    if (raw.startsWith("inst_")) {
-      const obj: BotSelectorValue = { kind: "instance", id: raw };
-      onChange(obj);
-      onChangeString?.(raw);
+
+    let obj: BotSelectorValue | null = null;
+
+    if (scope === "template") {
+      obj = { kind: "template", id: raw };
+    } else if (scope === "instance") {
+      obj = { kind: "instance", id: raw };
     } else {
-      const obj: BotSelectorValue = { kind: "template", key: raw };
-      onChange(obj);
-      onChangeString?.(raw);
+      // "both" scope: try to find in templates first, fallback to instances
+      const foundTemplate = templates.find((t) => t._id === raw);
+      const foundInstance = instances.find((m) => m._id === raw);
+      if (foundTemplate) obj = { kind: "template", id: raw };
+      else if (foundInstance) obj = { kind: "instance", id: raw };
+      else obj = null;
     }
+
+    onChange(obj);
+    onChangeString?.(raw);
   }
 
   const baseCls =
@@ -143,8 +132,8 @@ export default function BotSelector({
           </option>
         )}
         {templates.map((t) => (
-          <option key={t.key} value={t.key}>
-            {t.name} ({t.key})
+          <option key={t._id} value={t._id}>
+            {t.name}
           </option>
         ))}
       </select>
@@ -170,8 +159,8 @@ export default function BotSelector({
           </option>
         )}
         {instances.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.name} • {m.mode}
+          <option key={m._id} value={m._id}>
+            {m.name} • {m.plan}
           </option>
         ))}
       </select>
@@ -202,8 +191,8 @@ export default function BotSelector({
           <optgroup label="Base Bot Templates">
             {!hasTemplates && <option value="">No templates found</option>}
             {templates.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.name} ({t.key})
+              <option key={t._id} value={t._id}>
+                {t.name}
               </option>
             ))}
           </optgroup>
@@ -211,8 +200,8 @@ export default function BotSelector({
           <optgroup label="Client Bots (instances)">
             {!hasInstances && <option value="">No client bots yet</option>}
             {instances.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} • {m.mode}
+              <option key={m._id} value={m._id}>
+                {m.name} • {m.plan}
               </option>
             ))}
           </optgroup>
@@ -223,13 +212,13 @@ export default function BotSelector({
             <option value="">No templates or instances</option>
           )}
           {templates.map((t) => (
-            <option key={t.key} value={t.key}>
-              {t.name} ({t.key})
+            <option key={t._id} value={t._id}>
+              {t.name}
             </option>
           ))}
           {instances.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name} • {m.mode}
+            <option key={m._id} value={m._id}>
+              {m.name} • {m.plan}
             </option>
           ))}
         </>

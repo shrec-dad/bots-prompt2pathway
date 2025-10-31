@@ -1,16 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { getJSON, setJSON } from "@/lib/storage";
+import React, { useEffect, useState } from "react";
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/store';
 import { BotKey } from "@/lib/botSettings";
 import BotSelector from "@/components/BotSelector";
+import { fetchBots } from '@/store/botsSlice';
+import { fetchInstances } from '@/store/botInstancesSlice';
+import { fetchSettings, saveSettings } from '@/store/settingsSlice';
 
 /* THEME imports (single source of truth) */
-import {
-  DEFAULT_PALETTE,
-  applyTheme,
-  savePalette,
-  loadPalette,
-  resetPalette,
-} from "@/lib/theme";
+import { applyTheme } from "@/lib/theme";
 
 /* -------------------------------------------------------------------------- */
 /* Types & constants                                                          */
@@ -48,23 +46,6 @@ type AppSettings = {
   lastCloudBackupAt?: string;
 };
 
-const GLOBAL_KEY = "app:settings";
-const INST_KEY = (instId: string) => `app:settings:inst:${instId}`;
-
-/* -------------------------------------------------------------------------- */
-/* UI helpers                                                                 */
-/* -------------------------------------------------------------------------- */
-
-/* page wrapper (keep your pastel gradient) */
-const wrapper =
-  "p-6 rounded-2xl border-2 border-purple-200 shadow-lg bg-[linear-gradient(135deg,#ffeef8_0%,#f3e7fc_25%,#e7f0ff_50%,#e7fcf7_75%,#fff9e7_100%)] space-y-6";
-
-/* strong cards + header */
-const sectionCard =
-  "rounded-2xl border-[3px] border-black/80 bg-white p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)]";
-const sectionHeader =
-  "rounded-2xl border-[3px] border-black/80 bg-white p-5 shadow-[0_6px_0_rgba(0,0,0,0.8)] mb-6";
-
 /* stripes & inputs */
 const labelSm =
   "text-xs font-bold uppercase tracking-wide text-purple-700";
@@ -74,39 +55,37 @@ const inputCls =
 /* -------------------------------------------------------------------------- */
 /* Cloud stub helpers (replace with real API later)                           */
 /* -------------------------------------------------------------------------- */
+async function backupToCloudStub(key: string, payload: AppSettings) {
 
-const CLOUD_KEY = (scopeKey: string) => `cloud:${scopeKey}.v1`; // demo only
-
-async function backupToCloudStub(scopeKey: string, payload: AppSettings) {
-  await new Promise((r) => setTimeout(r, 350));
-  localStorage.setItem(CLOUD_KEY(scopeKey), JSON.stringify(payload));
 }
 
-async function restoreFromCloudStub(scopeKey: string): Promise<AppSettings | null> {
-  await new Promise((r) => setTimeout(r, 350));
-  try {
-    const raw = localStorage.getItem(CLOUD_KEY(scopeKey));
-    return raw ? (JSON.parse(raw) as AppSettings) : null;
-  } catch {
-    return null;
-  }
+async function restoreFromCloudStub(key: string): Promise<AppSettings | null> {
+  return null;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Small guards/utilities                                                     */
-/* -------------------------------------------------------------------------- */
-
-function normalizeInstId(val: unknown): string {
-  if (typeof val === "string") return val;
-  if (val && typeof val === "object" && "id" in (val as any)) {
-    const id = (val as any).id;
-    return typeof id === "string" ? id : String(id ?? "");
-  }
-  return "";
+function activeSettingsKey(instId: string): string {
+  return instId ? `inst:${instId}` : 'global';
 }
 
-function activeStorageKey(instId: string): string {
-  return instId ? INST_KEY(instId) : GLOBAL_KEY;
+const DEFAULT_PALETTE = {
+  from: '#c4b5fd',
+  via: '#a5b4fc',
+  to: '#86efac',
+}
+
+const DEFAULT_SETTINGS: AppSettings = {
+  mode: "basic",
+  domain: "",
+  language: "English",
+  darkMode: false,
+  defaultBot: "",
+  consentText: "By continuing, you agree to our Terms and Privacy Policy.",
+  brandLogoDataUrl: "",
+  emailNotifications: false,
+  notifyEmail: "",
+  palette: DEFAULT_PALETTE,
+  syncMode: "local" as SyncMode,
+  lastCloudBackupAt: null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -114,29 +93,27 @@ function activeStorageKey(instId: string): string {
 /* -------------------------------------------------------------------------- */
 
 export default function Settings() {
-  /** Scope picker (empty string = Global) */
+  const dispatch = useDispatch();
+
   const [instId, setInstId] = useState<string>("");
+  const bots = useSelector((state: RootState) => state.bots.list);
+  const instances = useSelector((state: RootState) => state.instances.list);
+  const settingsFromStore = useSelector((state: RootState) => state.settings.data);
 
-  /** Load initial from global; subsequent loads will re-read by scope */
-  const initial = useMemo<AppSettings>(
-    () =>
-      getJSON<AppSettings>(GLOBAL_KEY, {
-        mode: "basic",
-        domain: "",
-        language: "English",
-        darkMode: false,
-        defaultBot: "Waitlist",
-        consentText:
-          "By continuing, you agree to our Terms and Privacy Policy.",
-        palette: { ...DEFAULT_PALETTE },
-        emailNotifications: false,
-        notifyEmail: "",
-        syncMode: "local",
-      }),
-    []
-  );
+  const [s, setS] = useState<AppSettings>(DEFAULT_SETTINGS);
 
-  const [s, setS] = useState<AppSettings>(initial);
+  useEffect(() => {
+    if (settingsFromStore) {
+      setS({ ...s, ...settingsFromStore });
+    }
+  }, [settingsFromStore]);
+
+  useEffect(() => {
+    dispatch(fetchBots());
+    dispatch(fetchInstances());
+    dispatch(fetchSettings(activeSettingsKey(instId)));
+  }, [dispatch]);
+
   const [busyCloud, setBusyCloud] = useState(false);
 
   /** Apply platform theme on first mount and whenever palette changes */
@@ -147,25 +124,26 @@ export default function Settings() {
 
   /** Reload settings whenever scope changes */
   useEffect(() => {
-    const key = activeStorageKey(instId);
-    const next = getJSON<AppSettings>(key, s);
-    setS(next);
+    const key = activeSettingsKey(instId);
+    dispatch(fetchSettings(key));
   }, [instId]);
 
   /* -------------------------------- Actions -------------------------------- */
 
-  function save() {
-    const key = activeStorageKey(instId);
-    setJSON(key, s);
-
-    if (s.palette) savePalette(s.palette);
-    alert(`Settings saved to ${instId ? `Instance ${instId}` : "Global"}.`);
+  const save = async () => {
+    const key = activeSettingsKey(instId);
+    try {
+      await dispatch(saveSettings({key, data: s}));
+      alert(`Settings saved to ${instId ? `Instance ${instId}` : "Global"}.`);
+    } catch (e) {
+      alert(`Error`);
+    }
   }
 
   function resetAll() {
-    if (!confirm("Clear ALL local settings/data? This is not reversible.")) return;
-    localStorage.clear();
-    alert("Local data cleared. Refresh the page.");
+    if (!confirm("Clear ALL settings/data? This is not reversible.")) return;
+    setS(DEFAULT_SETTINGS);
+    alert("Settings data cleared. Refresh the page.");
   }
 
   function exportJson() {
@@ -187,10 +165,10 @@ export default function Settings() {
     const text = await file.text();
     try {
       const parsed = JSON.parse(text) as AppSettings;
+      const key = activeSettingsKey(instId);
+      
       setS(parsed);
-      const key = activeStorageKey(instId);
-      setJSON(key, parsed);
-      if (parsed.palette) savePalette(parsed.palette);
+
       alert(`Settings imported to ${instId ? `Instance ${instId}` : "Global"}.`);
     } catch {
       alert("Invalid JSON.");
@@ -211,11 +189,10 @@ export default function Settings() {
   async function backupToCloud() {
     try {
       setBusyCloud(true);
-      const key = activeStorageKey(instId);
+      const key = activeSettingsKey(instId);
       const next = { ...s, lastCloudBackupAt: new Date().toISOString() };
       await backupToCloudStub(key, next);
       setS(next);
-      setJSON(key, next);
       alert(
         `Backed up ${instId ? `Instance ${instId}` : "Global"} to cloud (demo stub).`
       );
@@ -229,15 +206,13 @@ export default function Settings() {
   async function restoreFromCloud() {
     try {
       setBusyCloud(true);
-      const key = activeStorageKey(instId);
+      const key = activeSettingsKey(instId);
       const remote = await restoreFromCloudStub(key);
       if (!remote) {
         alert("No cloud backup found for this scope.");
         return;
       }
       setS(remote);
-      setJSON(key, remote);
-      if (remote.palette) savePalette(remote.palette);
       alert("Restored from cloud (demo stub).");
     } catch {
       alert("Cloud restore failed.");
@@ -249,15 +224,14 @@ export default function Settings() {
   function resetPlatformGradient() {
     const next = { ...DEFAULT_PALETTE };
     setS((p) => ({ ...p, palette: next }));
-    savePalette(next);
   }
 
   /* --------------------------------- Render -------------------------------- */
 
   return (
-    <div className={wrapper}>
+    <div className="p-6 bg-[linear-gradient(135deg,#ffeef8_0%,#f3e7fc_25%,#e7f0ff_50%,#e7fcf7_75%,#fff9e7_100%)] space-y-6">
       {/* Header with Scope Picker */}
-      <div className={sectionHeader}>
+      <div className="strong-card mb-6">
         {/* header stripe */}
         <div className="h-2 rounded-md bg-black mb-4" />
         <div className="flex items-center justify-between gap-4">
@@ -275,8 +249,9 @@ export default function Settings() {
             <div className="min-w-[260px]">
               <BotSelector
                 scope="instance"
+                instances={instances}
                 value={instId}
-                onChange={(val) => setInstId(normalizeInstId(val))}
+                onChange={(val) => setInstId(val.id)}
                 placeholderOption="All (Global)"
               />
             </div>
@@ -294,14 +269,14 @@ export default function Settings() {
 
         <div className="mt-3">
           <span className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold bg-white">
-            Viewing: {instId ? `Instance ${instId}` : "Global"}
+            Viewing: {instId ? `Instance ${instances.find(m => m._id == instId)?.name}` : "Global"}
           </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">
         {/* Preferences */}
-        <div className={sectionCard}>
+        <div className="strong-card">
           {/* header stripe */}
           <div className="h-2 rounded-md bg-black mb-4" />
           <div className="text-xl font-extrabold mb-3">Preferences</div>
@@ -363,8 +338,9 @@ export default function Settings() {
               <div className={labelSm}>Default Bot</div>
               <BotSelector
                 scope="template"
+                templates={bots}
                 value={s.defaultBot || ""}
-                onChange={(key) => setS((p) => ({ ...p, defaultBot: key as BotKey }))}
+                onChange={(val) => setS((p) => ({ ...p, defaultBot: val.id }))}
               />
             </div>
           </div>
@@ -392,7 +368,7 @@ export default function Settings() {
         </div>
 
         {/* Branding + Palette */}
-        <div className={sectionCard}>
+        <div className="strong-card">
           {/* header stripe */}
           <div className="h-2 rounded-md bg-black mb-4" />
           <div className="text-xl font-extrabold mb-3">Branding & Palette</div>
@@ -442,7 +418,6 @@ export default function Settings() {
                   onChange={(e) => {
                     const next = { ...(s.palette || DEFAULT_PALETTE), from: e.target.value };
                     setS((p) => ({ ...p, palette: next }));
-                    savePalette(next);
                   }}
                 />
               </div>
@@ -455,7 +430,6 @@ export default function Settings() {
                   onChange={(e) => {
                     const next = { ...(s.palette || DEFAULT_PALETTE), via: e.target.value };
                     setS((p) => ({ ...p, palette: next }));
-                    savePalette(next);
                   }}
                 />
               </div>
@@ -468,7 +442,6 @@ export default function Settings() {
                   onChange={(e) => {
                     const next = { ...(s.palette || DEFAULT_PALETTE), to: e.target.value };
                     setS((p) => ({ ...p, palette: next }));
-                    savePalette(next);
                   }}
                 />
               </div>
@@ -496,9 +469,7 @@ export default function Settings() {
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={() => {
-                  const current = loadPalette();
-                  setS((p) => ({ ...p, palette: current }));
-                  applyTheme(current);
+                  applyTheme(s.palette);
                 }}
                 className="rounded-xl px-3 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
               >
@@ -517,7 +488,7 @@ export default function Settings() {
         </div>
 
         {/* Notifications */}
-        <div className={sectionCard}>
+        <div className="strong-card">
           {/* header stripe */}
           <div className="h-2 rounded-md bg-black mb-4" />
           <div className="text-xl font-extrabold mb-3">Notifications</div>
@@ -553,7 +524,7 @@ export default function Settings() {
         </div>
 
         {/* Data Sync */}
-        <div className={sectionCard}>
+        <div className="strong-card">
           {/* header stripe */}
           <div className="h-2 rounded-md bg-black mb-4" />
           <div className="text-xl font-extrabold mb-3">Data Sync</div>
@@ -600,7 +571,7 @@ export default function Settings() {
         </div>
 
         {/* Footer actions */}
-        <div className={sectionCard}>
+        <div className="strong-card">
           {/* header stripe */}
           <div className="h-2 rounded-md bg-black mb-4" />
           <div className="flex items-center gap-3">
@@ -633,7 +604,7 @@ export default function Settings() {
               className="ml-auto rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-rose-50"
               onClick={resetAll}
             >
-              Reset All Local Data
+              Reset All Data
             </button>
           </div>
         </div>

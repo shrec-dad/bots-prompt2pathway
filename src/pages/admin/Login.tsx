@@ -7,12 +7,13 @@ type Theme = "light" | "dark";
 
 function useTheme(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem("theme") as Theme | null;
-    if (saved === "light" || saved === "dark") return saved;
+    // const saved = localStorage.getItem("theme") as Theme | null;
+    // if (saved === "light" || saved === "dark") return saved;
     // fall back to system preference
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+    // return window.matchMedia("(prefers-color-scheme: dark)").matches
+    //   ? "dark"
+    //   : "light";
+    return "light";
   });
 
   useEffect(() => {
@@ -30,24 +31,35 @@ export default function Login() {
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
 
-  const [email, setEmail] = useState("admin@example.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const [theme, toggleTheme] = useTheme();
+  
+  const user = useAuthStore((s) => s.user);
 
-  function doLogin(targetEmail: string) {
-    login({
-      id: crypto.randomUUID(),
-      name: "Admin",
-      email: targetEmail.trim() || "admin@example.com",
-      role: "admin",
+  useEffect(() => {
+    if (user) navigate("/admin", { replace: true });
+  }, [user, navigate]);
+
+  async function doLogin(email: string, password: string) {
+    const res = await login({
+      email: email.trim(),
+      password
     });
-    navigate("/admin", { replace: true });
+
+    console.log(res);
+
+    if (res?.user) {
+      navigate("/admin", { replace: true });
+    } else {
+      alert("Login failed. Please check your credentials.");
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    doLogin(email);
+    doLogin(email, password);
   }
 
   // Background classes swap with theme
@@ -63,14 +75,14 @@ export default function Login() {
   return (
     <div className={bg}>
       {/* Theme toggle */}
-      <button
+      {/* <button
         onClick={toggleTheme}
         className="absolute right-4 top-4 rounded-full border border-white/40 bg-white/60 px-3 py-1 text-sm font-semibold shadow-sm backdrop-blur hover:bg-white/80 transition
                  dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
         aria-label="Toggle theme"
       >
         {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
-      </button>
+      </button> */}
 
       {/* Soft blobs for depth (auto-dim in dark) */}
       <div className="pointer-events-none absolute left-10 top-10 h-64 w-64 rounded-full bg-purple-400/30 blur-3xl dark:bg-purple-500/15" />
@@ -96,7 +108,7 @@ export default function Login() {
           />
           <input
             type="password"
-            placeholder="Password (ignored in demo)"
+            placeholder="Password"
             className="w-full rounded-lg border border-gray-300/70 bg-white/80 p-2 text-gray-900 placeholder-gray-500
                        focus:outline-none focus:ring-2 focus:ring-sky-500
                        dark:border-white/10 dark:bg-white/10 dark:text-white dark:placeholder-gray-400"
@@ -114,13 +126,13 @@ export default function Login() {
         </form>
 
         <div className="mt-4 flex flex-col items-center gap-2">
-          <button
-            onClick={() => doLogin("admin@example.com")}
+          {/* <button
+            onClick={() => doLogin()}
             className="w-full rounded-lg border border-gray-400/50 bg-white/60 py-2 font-semibold hover:bg-white/80 transition
                        dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
           >
             Continue as demo (no password)
-          </button>
+          </button> */}
 
           <button
             onClick={() =>

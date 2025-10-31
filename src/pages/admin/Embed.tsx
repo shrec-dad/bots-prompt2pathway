@@ -1,6 +1,10 @@
 // src/pages/admin/Embed.tsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/store';
 import { listInstances, type InstanceMeta } from "@/lib/instances";
+import { fetchBots, updateBot } from '@/store/botsSlice';
+import { fetchInstances, updateInstance } from '@/store/botInstancesSlice';
 import BotSelector from "@/components/BotSelector";
 
 function CopyButton({ getText }: { getText: () => string }) {
@@ -31,23 +35,8 @@ type Pos = "bottom-right" | "bottom-left";
 type Shape = "circle" | "rounded" | "square" | "oval" | "speech" | "speech-rounded";
 type Fit = "cover" | "contain" | "fill" | "center" | "none";
 type Mode = "popup" | "inline" | "sidebar";
-
-type SavedInstance = {
-  id: string;
-  name?: string;
-  bot?: string;
-  mode?: string;
-  createdAt?: number;
-  position?: Pos;
-  size?: number;
-  color?: string;
-  image?: string;
-  shape?: Shape;
-  imageFit?: Fit;
-  label?: string;
-  labelColor?: string;
-  avatar?: string;
-};
+type ImageFit = "cover" | "contain" | "center";
+type PanelStyle = "step-by-step" | "conversation";
 
 const BRAND_KEY = "brandingSettings";
 
@@ -68,18 +57,6 @@ type Branding = {
   chatHideLabelWhenImage?: boolean;
 };
 
-/** Normalize BotSelector values (string | object) -> string id/key */
-function normalizeSelectionToString(v: unknown): string {
-  if (typeof v === "string") return v;
-  if (v && typeof v === "object") {
-    const anyV = v as any;
-    if (typeof anyV.id === "string") return anyV.id;
-    if (typeof anyV.value === "string") return anyV.value;
-    if (typeof anyV.key === "string") return anyV.key;
-  }
-  return "";
-}
-
 function readBranding(): Branding {
   try {
     const raw = localStorage.getItem(BRAND_KEY);
@@ -99,123 +76,140 @@ function readBranding(): Branding {
 }
 
 export default function Embed() {
-  /* Data sources */
-  const [instances, setInstances] = useState<SavedInstance[]>([]);
+  const dispatch = useDispatch();
+
+  const bots = useSelector((state: RootState) => state.bots.list);
+  const instances = useSelector((state: RootState) => state.instances.list);
+
+  const [instId, setInstId] = useState<string>("");
+  const [botId, setBotId] = useState<string>("");
 
   useEffect(() => {
-    try {
-      const list = listInstances?.() ?? [];
-      setInstances(
-        list.map((i: InstanceMeta) => ({
-          id: String(i.id),
-          name: i.name ?? (i as any).title ?? i.id,
-          bot: i.bot,
-          mode: i.mode,
-          createdAt: i.createdAt,
-          position: (i as any).position,
-          size: (i as any).size,
-          color: (i as any).color,
-          image: (i as any).image,
-          shape: (i as any).shape,
-          imageFit: (i as any).imageFit,
-          label: (i as any).label,
-          labelColor: (i as any).labelColor,
-          avatar: (i as any).avatar,
-        }))
-      );
-    } catch {
-      setInstances([]);
+    dispatch(fetchBots());
+    dispatch(fetchInstances());
+  }, [dispatch]);
+
+  useEffect(() => {
+    let b = null;
+    if (instId) {
+      b = instances.find((m) => m._id == instId)?.branding
     }
-  }, []);
+    if (botId) {
+      b = bots.find((b) => b._id == botId)?.branding 
+    }
 
-  /* Selection */
-  const [instId, setInstId] = useState<string>(""); // always store a string
-  const [botKey, setBotKey] = useState<string>("Waitlist");
+    setMode(b?.mode || "popup");
+    setPos(b?.pos || "bottom-left");
+    setSize(b?.size || 56);
+    setBgColor(b?.bgColor || "#7aa8ff");
+    setImg(b?.img || "");
+    setShape(b?.shape || "circle");
+    setImageFit(b?.imageFit || "cover");
+    setLabel(b?.label || "Chat");
+    setLabelColor(b?.labelColor || "#ffffff");
+    setHideLabelWhenImage(b?.hideLabelWhenImage || false);
+    setPanelStyle(b?.panelStyle || "step-by-step");
+    setBorderColor(b?.borderColor || "#000000");
+    setBotAvatar(b?.botAvatar || "");
+  }, [instId, botId]);
 
-  /* Sync with Preview (brandingSettings) */
+  const [mode, setMode] = useState<Mode>("popup");
+  const [pos, setPos] = useState<Pos>("bottom-left");
+  const [size, setSize] = useState<number>(56);
+  const [bgColor, setBgColor] = useState<string>("#7aa8ff");
+  const [img, setImg] = useState<string>("");
+  const [shape, setShape] = useState<Shape>("circle");
+  const [imageFit, setImageFit] = useState<ImageFit>("cover");
+  const [label, setLabel] = useState<string>("Chat");
+  const [labelColor, setLabelColor] = useState<string>("#ffffff");
+  const [hideLabelWhenImage, setHideLabelWhenImage] = useState<boolean>(false);
+  const [panelStyle, setPanelStyle] = useState<PanelStyle>("step-by-step");
+  const [borderColor, setBorderColor] = useState<string>("#000000");
+  const [botAvatar, setBotAvatar] = useState<string>("");
+
   const [syncWithPreview, setSyncWithPreview] = useState(true);
-  const [branding, setBranding] = useState<Branding>(() => readBranding());
 
   // keep in sync if Preview saves
   useEffect(() => {
     if (!syncWithPreview) return;
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === BRAND_KEY) setBranding(readBranding());
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    let b = null;
+    if (instId) {
+      b = instances.find((m) => m._id == instId)?.branding
+    }
+    if (botId) {
+      b = bots.find((b) => b._id == botId)?.branding 
+    }
+    
+    setMode(b?.mode || "popup");
+    setPos(b?.pos || "bottom-left");
+    setSize(b?.size || 56);
+    setBgColor(b?.bgColor || "#7aa8ff");
+    setImg(b?.img || "");
+    setShape(b?.shape || "circle");
+    setImageFit(b?.imageFit || "cover");
+    setLabel(b?.label || "Chat");
+    setLabelColor(b?.labelColor || "#ffffff");
+    setHideLabelWhenImage(b?.hideLabelWhenImage || false);
+    setPanelStyle(b?.panelStyle || "step-by-step");
+    setBorderColor(b?.borderColor || "#000000");
+    setBotAvatar(b?.botAvatar || "");
   }, [syncWithPreview]);
 
-  /* Local overrides (used when syncWithPreview = false) */
-  const [mode, setMode] = useState<Mode>("popup");
-  const [position, setPosition] = useState<Pos>("bottom-right");
-  const [size, setSize] = useState(64);
-  const [color, setColor] = useState("#8b5cf6");
-  const [image, setImage] = useState("");
-  const [shape, setShape] = useState<Shape>("circle");
-  const [imageFit, setImageFit] = useState<Fit>("cover");
-  const [label, setLabel] = useState("Chat");
-  const [labelColor, setLabelColor] = useState("#ffffff");
-  const [avatar, setAvatar] = useState("");
-  const [hideLabelWhenImage, setHideLabelWhenImage] = useState(false);
-
-  // Load instance visuals as a convenience (does not persist)
-  useEffect(() => {
-    if (!instId) return;
-    const found = instances.find((i) => i.id === instId);
-    if (!found) return;
-    if (found.position) setPosition(found.position);
-    if (typeof found.size === "number") setSize(found.size!);
-    if (found.color) setColor(found.color);
-    if (found.image) setImage(found.image);
-    if (found.shape) setShape(found.shape as Shape);
-    if (found.imageFit) setImageFit(found.imageFit);
-    if (found.label) setLabel(found.label);
-    if (found.labelColor) setLabelColor(found.labelColor);
-    if (found.avatar) setAvatar(found.avatar);
-  }, [instId, instances]);
 
   /* Helpers to read the "active" visual state */
   const active = useMemo(() => {
     if (syncWithPreview) {
-      const b = branding;
+      let b = null;
+      if (instId) {
+        b = instances.find((m) => m._id == instId)?.branding
+      }
+      if (botId) {
+        b = bots.find((b) => b._id == botId)?.branding 
+      }
+
       return {
-        position: (b.chatBubblePosition as Pos) ?? "bottom-right",
-        size: b.chatBubbleSize ?? 56,
-        color: b.chatBubbleColor ?? "#7aa8ff",
-        image: b.chatBubbleImage ?? "",
-        shape: (b.chatBubbleShape as Shape) ?? "circle",
-        imageFit: (b.chatBubbleImageFit as Fit) ?? "cover",
-        label: b.chatBubbleLabel ?? "Chat",
-        labelColor: b.chatBubbleLabelColor ?? "#ffffff",
-        avatar: "", // optional; Preview doesn't manage this today
-        hideLabelWhenImage: !!b.chatHideLabelWhenImage, // <<< align with Preview storage key
+        pos: (b?.pos as Pos) ?? "bottom-right",
+        size: b?.size ?? 56,
+        bgColor: b?.bgColor ?? "#7aa8ff",
+        img: b?.img ?? "",
+        shape: (b?.shape as Shape) ?? "circle",
+        imageFit: (b?.imageFit as Fit) ?? "cover",
+        label: b?.label ?? "Chat",
+        labelColor: b?.labelColor ?? "#ffffff",
+        panelStyle: (b?.panelStyle as PanelStyle) || "step-by-step",
+        borderColor: b?.borderColor || "#000000",
+        botAvatar: b?.botAvatar ?? "",
+        hideLabelWhenImage: !!b?.hideLabelWhenImage
       };
     }
     return {
-      position,
+      pos,
       size,
-      color,
-      image,
+      bgColor,
+      img,
       shape,
       imageFit,
       label,
       labelColor,
-      avatar,
+      panelStyle,
+      borderColor,
+      botAvatar,
       hideLabelWhenImage,
     };
   }, [
     syncWithPreview,
-    branding,
-    position,
+    mode,
+    pos,
     size,
-    color,
-    image,
+    bgColor,
+    img,
     shape,
     imageFit,
     label,
     labelColor,
-    avatar,
+    panelStyle,
+    borderColor,
+    botAvatar,
     hideLabelWhenImage,
   ]);
 
@@ -224,36 +218,41 @@ export default function Embed() {
     const f = e.target.files?.[0];
     if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => !syncWithPreview && setImage(String(reader.result || ""));
+    reader.onload = () => !syncWithPreview && setImg(String(reader.result || ""));
     reader.readAsDataURL(f);
   }
+
   function onClearImage() {
-    if (!syncWithPreview) setImage("");
+    if (!syncWithPreview) setImg("");
   }
 
   /* URL for iframe/src */
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const widgetPath = useMemo(() => {
     const qp = new URLSearchParams();
-    const inst = typeof instId === "string" ? instId.trim() : "";
-    if (inst) qp.set("inst", inst);
-    else qp.set("bot", botKey);
+    if (instId) qp.set("inst", instId);
+    else if (botId) qp.set("bot", botId);
+    
+    qp.set("mode", mode);
 
-    qp.set("position", active.position);
+    qp.set("pos", active.pos);
     qp.set("size", String(active.size));
-    if (active.color) qp.set("color", active.color);
-    if (active.image) qp.set("image", active.image);
+    qp.set("shape", active.shape);
+    qp.set("imageFit", active.imageFit);
+    qp.set("panelStyle", active.panelStyle);
+
+    if (active.bgColor) qp.set("bgColor", active.bgColor);
+    if (active.img) qp.set("img", active.img);
     if (active.shape) qp.set("shape", active.shape);
     if (active.imageFit) qp.set("imageFit", active.imageFit);
-    if (!(active.image && active.hideLabelWhenImage)) {
+    if (!(active.img && active.hideLabelWhenImage)) {
       if (active.label) qp.set("label", active.label);
       if (active.labelColor) qp.set("labelColor", active.labelColor);
     }
-    if (active.avatar) qp.set("avatar", active.avatar);
+    if (active.botAvatar.trim()) qp.set("botAvatar", active.botAvatar.trim());
 
-    qp.set("mode", mode);
     return `/widget?${qp.toString()}`;
-  }, [instId, botKey, active, mode]);
+  }, [instId, botId, mode, active]);
 
   const embedUrl = `${origin}${widgetPath}`;
 
@@ -264,7 +263,7 @@ export default function Embed() {
 <iframe
   src="${embedUrl}"
   title="Bot Widget"
-  style="position: fixed; bottom: 24px; ${active.position === "bottom-right" ? "right" : "left"}: 24px;
+  style="position: fixed; bottom: 24px; ${active.pos === "bottom-right" ? "right" : "left"}: 24px;
          width: ${mode === "sidebar" ? "360px" : `${active.size}px`};
          height: ${mode === "sidebar" ? "100vh" : `${active.size}px`};
          border: 0; border-radius: ${mode === "sidebar" ? "0" : active.shape === "circle" ? "50%" : active.shape === "rounded" ? "16px" : active.shape === "square" ? "8px" : "9999px"};
@@ -272,7 +271,7 @@ export default function Embed() {
   loading="lazy"
   allow="clipboard-read; clipboard-write"
 ></iframe>`,
-    [embedUrl, active.position, active.size, active.shape, mode]
+    [embedUrl, active.pos, active.size, active.shape, mode]
   );
 
   const scriptSnippet = useMemo(
@@ -285,7 +284,7 @@ export default function Embed() {
   iframe.title = 'Bot Widget';
   iframe.style.position = 'fixed';
   iframe.style.bottom = '24px';
-  iframe.style.${active.position === "bottom-right" ? "right" : "left"} = '24px';
+  iframe.style.${active.pos === "bottom-right" ? "right" : "left"} = '24px';
   iframe.style.width = '${mode === "sidebar" ? "360px" : `${active.size}px`}';
   iframe.style.height = '${mode === "sidebar" ? "100vh" : `${active.size}px`}';
   iframe.style.border = '0';
@@ -296,7 +295,7 @@ export default function Embed() {
   document.body.appendChild(iframe);
 })();
 </script>`,
-    [embedUrl, active.position, active.size, active.shape, mode]
+    [embedUrl, active.pos, active.size, active.shape, mode]
   );
 
   /* UI helpers - UPDATED WITH BOLD STYLING */
@@ -343,8 +342,9 @@ export default function Embed() {
               <div className="flex-1">
                 <BotSelector
                   scope="instance"
+                  instances={instances}
                   value={instId}
-                  onChange={(v) => setInstId(normalizeSelectionToString(v))}
+                  onChange={(v) => setInstId(v.id)}
                   placeholderOption="— None (use Bot) —"
                 />
               </div>
@@ -364,8 +364,9 @@ export default function Embed() {
             <div className={labelCls}>Bot</div>
             <BotSelector
               scope="template"
-              value={botKey}
-              onChange={(v) => setBotKey(normalizeSelectionToString(v))}
+              templates={bots}
+              value={botId}
+              onChange={(v) => setBotId(v.id)}
               disabled={!!instId}
             />
           </div>
@@ -389,8 +390,8 @@ export default function Embed() {
             <div className={labelCls}>Position</div>
             <select
               className={inputCls}
-              value={active.position}
-              onChange={(e) => setPosition(e.target.value as Pos)}
+              value={active.pos}
+              onChange={(e) => setPos(e.target.value as Pos)}
               disabled={controlsDisabled}
               title={controlsDisabled ? "Controlled by Preview" : ""}
             >
@@ -427,8 +428,8 @@ export default function Embed() {
             <input
               type="color"
               className="h-10 w-full rounded-lg border border-purple-200"
-              value={active.color}
-              onChange={(e) => setColor(e.target.value)}
+              value={active.bgColor}
+              onChange={(e) => setBgColor(e.target.value)}
               disabled={controlsDisabled}
               title={controlsDisabled ? "Controlled by Preview" : ""}
             />
@@ -441,8 +442,8 @@ export default function Embed() {
               <input
                 className={inputCls + " flex-1"}
                 placeholder="https://example.com/icon.png  — or use Upload"
-                value={active.image}
-                onChange={(e) => setImage(e.target.value)}
+                value={active.img}
+                onChange={(e) => setImg(e.target.value)}
                 disabled={controlsDisabled}
               />
               <label
@@ -503,7 +504,7 @@ export default function Embed() {
             <select
               className={inputCls}
               value={active.imageFit}
-              onChange={(e) => setImageFit(e.target.value as Fit)}
+              onChange={(e) => setImageFit(e.target.value as ImageFit)}
               disabled={controlsDisabled}
             >
               <option value="cover">cover (fill bubble)</option>
@@ -520,7 +521,7 @@ export default function Embed() {
               className={inputCls}
               value={active.label}
               onChange={(e) => setLabel(e.target.value)}
-              disabled={controlsDisabled || (!!active.image && active.hideLabelWhenImage)}
+              disabled={controlsDisabled || (!!active.img && active.hideLabelWhenImage)}
               title={controlsDisabled ? "Controlled by Preview" : ""}
             />
           </div>
@@ -532,20 +533,41 @@ export default function Embed() {
               className="h-10 w-full rounded-lg border"
               value={active.labelColor}
               onChange={(e) => setLabelColor(e.target.value)}
-              disabled={controlsDisabled || (!!active.image && active.hideLabelWhenImage)}
+              disabled={controlsDisabled || (!!active.img && active.hideLabelWhenImage)}
               title={controlsDisabled ? "Controlled by Preview" : ""}
             />
           </div>
 
           <div className="md:col-span-2">
-            <div className={labelCls}>Header Avatar (optional)</div>
+            <div className={labelCls}>Bot Avatar (optional)</div>
             <input
               className={inputCls}
               placeholder="https://example.com/avatar.jpg"
-              value={active.avatar}
-              onChange={(e) => setAvatar(e.target.value)}
+              value={active.botAvatar}
+              onChange={(e) => setBotAvatar(e.target.value)}
               disabled={syncWithPreview}
             />
+          </div>
+
+          <div>
+            <label className={labelCls}>Border Color</label>
+            <input
+              type="color"
+              className="h-10 w-full rounded-lg border"
+              value={active.borderColor}
+              onChange={(e) => setBorderColor(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Panel Style</label>
+            <select
+              className={inputCls}
+              value={active.panelStyle}
+              onChange={(e) => setPanelStyle(e.target.value as PanelStyle)}
+            >
+              <option value="step-by-step">Step by Step</option>
+              <option value="conversation">Conversation</option>
+            </select>
           </div>
 
           {/* Preview URL */}

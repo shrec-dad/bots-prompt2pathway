@@ -5,17 +5,12 @@
  * ───────────────────────────────────────────────────────────────────────────*/
 
 export type Recipient = {
-  id: string; // unique ID
+  _id: string; // unique ID
   email: string;
   phone?: string; // optional for SMS
   name?: string;
   company?: string;
-  // Custom fields for personalization
-  customFields?: Record<string, string>;
-  // Status tracking
-  status: "active" | "unsubscribed" | "bounced" | "invalid";
-  // Metadata
-  addedAt: number; // timestamp
+  status: "active" | "inactive";
   tags?: string[]; // for segmentation
 };
 
@@ -218,7 +213,7 @@ export type CSVImportResult = {
   failed: number;
   duplicates: number;
   errors: Array<{ row: number; reason: string }>;
-  imported: Recipient[];
+  imported: Omit<Recipient, "_id">[];
 };
 
 export type RecipientExportFormat = "csv" | "xlsx" | "json";

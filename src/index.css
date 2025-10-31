@@ -135,6 +135,14 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
+
+  .strong-card {
+    @apply rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] bg-card px-5 py-4;
+  }
+
+  .thin-card {
+    @apply rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] bg-card px-4 py-3;
+  }
 }
 /* React Flow visibility tweaks */
 .react-flow__node {

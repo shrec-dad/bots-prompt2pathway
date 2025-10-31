@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getJSON, setJSON } from "@/lib/storage";
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchMetrics } from '@/store/metricsSlice';
+import { RootState } from '@/store';
 
 /** ====== Analytics store (aligns with Analytics page) ====== */
 type Metrics = {
@@ -79,11 +81,22 @@ function KpiCard({ title, value, deltaPct, onClick }: KpiProps) {
 }
 
 export default function Dashboard() {
+  const dispatch = useDispatch();
   const nav = useNavigate();
 
-  const [m, setM] = useState<Metrics>(() =>
-    getJSON<Metrics>(METRICS_KEY, DEFAULT_METRICS)
-  );
+  const metricsFromStore = useSelector((state: RootState) => state.metrics.data);
+
+  useEffect(() => {
+    dispatch(fetchMetrics(''));
+  }, [dispatch]);
+
+  const [m, setM] = useState<Metrics>(DEFAULT_METRICS);
+
+  useEffect(() => {
+    if (metricsFromStore) {
+      setM({ ...m, ...metricsFromStore });
+    }
+  }, [metricsFromStore]);
 
   const fmtInt = (n: number) =>
     Number.isFinite(n) ? Math.max(0, Math.round(n)).toLocaleString() : "0";
@@ -101,11 +114,10 @@ export default function Dashboard() {
       csatPct: 0,
     };
     setM(next);
-    setJSON(METRICS_KEY, next);
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4">
       {/* Header Section */}
       <div className={classNames("p-5", strongCard)}>
         <div className="h-2 rounded-md bg-black mb-4" />

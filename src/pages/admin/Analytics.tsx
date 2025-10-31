@@ -1,19 +1,10 @@
 // src/pages/admin/Analytics.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/store';
+import { fetchInstances } from '@/store/botInstancesSlice';
+import { fetchMetrics, deleteMetrics } from '@/store/metricsSlice';
 import BotSelector from "@/components/BotSelector";
-
-/** ------------------------------------------------------------
- * Local storage helpers (self-contained)
- * ------------------------------------------------------------ */
-const readJSON = <T,>(key: string, fallback: T): T => {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw) as T;
-  } catch {}
-  return fallback;
-};
-const writeJSON = (key: string, value: any) =>
-  localStorage.setItem(key, JSON.stringify(value));
 
 /** ------------------------------------------------------------
  * XLSX (SheetJS) loader — on-demand via CDN (no npm install)
@@ -23,6 +14,7 @@ declare global {
     XLSX: any;
   }
 }
+
 async function ensureXLSX(): Promise<any> {
   if (window.XLSX) return window.XLSX;
   await new Promise<void>((resolve, reject) => {
@@ -35,15 +27,6 @@ async function ensureXLSX(): Promise<any> {
   });
   return window.XLSX;
 }
-
-/** ------------------------------------------------------------
- * Storage keys and metric types
- * ------------------------------------------------------------ */
-const GLOBAL_KEY = "analytics.metrics.v2";
-const INST_KEY = (instId: string) => `analytics.metrics:inst:${instId}`;
-
-/** Optional event log (if Preview.tsx is emitting events) */
-const EVENTS_KEY = "analytics.events.v1";
 
 type Metrics = {
   // core six
@@ -77,110 +60,6 @@ const defaultMetrics: Metrics = {
   peakChatTime: "—",
 };
 
-/** ------------------------------------------------------------
- * Event types (when available) for recomputation fallback
- * ------------------------------------------------------------ */
-type AnyEvent = {
-  type: string;
-  ts: number; // epoch ms
-  scope?: { kind: "global" | "inst"; id?: string };
-  meta?: Record<string, any>;
-};
-
-/** Recompute per-instance metrics from event log if no rollup is present */
-function recomputeInstanceMetrics(instId: string): Metrics {
-  const events = readJSON<AnyEvent[]>(EVENTS_KEY, []);
-  if (!events.length) return { ...defaultMetrics };
-
-  // Filter by scope id (defensive: scope may be undefined)
-  const scoped = events.filter(
-    (e) => e?.scope?.kind === "inst" && e?.scope?.id === instId
-  );
-
-  // Simple heuristic counters; extend as your event schema grows
-  let conversations = 0;
-  let leads = 0;
-  let appointments = 0;
-  let qualifiedLeads = 0;
-  let drops = 0;
-  let handoffs = 0;
-
-  // Response/conversation timing placeholders
-  let responseTimes: number[] = [];
-  let convoDurations: number[] = [];
-
-  // Peak hour histogram
-  const hours: Record<number, number> = {};
-
-  for (const e of scoped) {
-    const hour = new Date(e.ts).getHours();
-    hours[hour] = (hours[hour] || 0) + 1;
-
-    switch (e.type) {
-      case "preview_modal_opened":
-      case "widget.conversation_started":
-        conversations += 1;
-        break;
-      case "widget.lead_captured":
-      case "preview.lead_captured":
-        leads += 1;
-        if (e.meta?.qualified) qualifiedLeads += 1;
-        break;
-      case "widget.appointment_booked":
-        appointments += 1;
-        break;
-      case "widget.handoff_to_human":
-        handoffs += 1;
-        break;
-      case "widget.dropoff":
-        drops += 1;
-        break;
-      case "widget.response_time":
-        if (typeof e.meta?.secs === "number") responseTimes.push(e.meta.secs);
-        break;
-      case "widget.conversation_length":
-        if (typeof e.meta?.secs === "number") convoDurations.push(e.meta.secs);
-        break;
-      default:
-        break;
-    }
-  }
-
-  const avg = (nums: number[]) =>
-    nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10 : 0;
-
-  const totalTouches = conversations || 1; // avoid div by 0
-  const conversionPct = Math.round(((leads || appointments) / totalTouches) * 1000) / 10;
-  const dropoffPct = Math.round((drops / totalTouches) * 1000) / 10;
-  const handoffRatePct = Math.round((handoffs / totalTouches) * 1000) / 10;
-
-  // CSAT placeholder: if you emit csat events, compute true avg; else keep as 0
-  const csatPct = 0;
-
-  // Peak hour -> friendly range like "14–15"
-  let peakChatTime = "—";
-  const topHour = Object.entries(hours).sort((a, b) => b[1] - a[1])[0];
-  if (topHour) {
-    const h = Number(topHour[0]);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    peakChatTime = `${pad(h)}–${pad((h + 1) % 24)}`;
-  }
-
-  return {
-    conversations,
-    leads,
-    appointments,
-    csatPct,
-    avgResponseSecs: avg(responseTimes),
-    conversionPct,
-
-    dropoffPct,
-    qualifiedLeads,
-    avgConversationSecs: avg(convoDurations),
-    handoffRatePct,
-    peakChatTime,
-  };
-}
 
 /** ------------------------------------------------------------
  * Small UI helpers - UPDATED WITH BOLD STYLING
@@ -211,15 +90,6 @@ function timeStamp() {
   );
 }
 
-/** Normalize a possibly-object value from BotSelector into a string id */
-function normalizeInstId(val: unknown): string {
-  if (typeof val === "string") return val;
-  if (val && typeof val === "object" && "id" in (val as any)) {
-    const id = (val as any).id;
-    return typeof id === "string" ? id : String(id ?? "");
-  }
-  return "";
-}
 
 /** Safe text for UI: never render an object by accident */
 function asSafeText(val: unknown): string {
@@ -231,64 +101,42 @@ function asSafeText(val: unknown): string {
  * Component
  * ------------------------------------------------------------ */
 export default function Analytics() {
+  const dispatch = useDispatch();
+
+  const instances = useSelector((state: RootState) => state.instances.list);
+  const metricsFromStore = useSelector((state: RootState) => state.metrics.data);
+  
   // Selection (instance filter)
   const [instId, setInstId] = useState<string>(""); // empty => global
 
-  // Metrics (global or per-instance)
-  const initial = useMemo(() => readJSON<Metrics>(GLOBAL_KEY, defaultMetrics), []);
-  const [m, setM] = useState<Metrics>(initial);
-  const [exporting, setExporting] = useState(false);
+  useEffect(() => {
+    dispatch(fetchInstances());
+  }, [dispatch]);
 
-  /** Load metrics based on current selection */
-  const loadMetrics = (id: string) => {
-    if (!id) {
-      // Global rollup
-      const g = readJSON<Metrics>(GLOBAL_KEY, defaultMetrics);
-      setM(g);
-      return;
-    }
-    // Per-instance: try stored rollup, else recompute from events
-    const stored = readJSON<Metrics>(INST_KEY(id), null as any);
-    if (stored && typeof stored === "object") {
-      setM(stored);
-    } else {
-      const recomputed = recomputeInstanceMetrics(id);
-      setM(recomputed);
-    }
-  };
+  const [m, setM] = useState<Metrics>(defaultMetrics);
 
   useEffect(() => {
-    loadMetrics(instId);
-    // also react to changes saved in other tabs
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key) return;
-      if (e.key === GLOBAL_KEY || e.key === EVENTS_KEY || (instId && e.key === INST_KEY(instId))) {
-        loadMetrics(instId);
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    if (metricsFromStore) {
+      setM({ ...m, ...metricsFromStore });
+    }
+  }, [metricsFromStore]);
+
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    dispatch(fetchMetrics(instId ? `inst:${instId}`: ''));
   }, [instId]);
 
   /** Save current metrics to whichever scope is active */
   const save = () => {
-    if (!instId) {
-      writeJSON(GLOBAL_KEY, m);
-    } else {
-      writeJSON(INST_KEY(instId), m);
-    }
     alert("Analytics saved.");
   };
 
   /** Reset current scope to zeros/placeholders */
   const reset = () => {
     if (!confirm("Reset analytics for the current scope?")) return;
-    if (!instId) {
-      writeJSON(GLOBAL_KEY, { ...defaultMetrics });
-    } else {
-      writeJSON(INST_KEY(instId), { ...defaultMetrics });
-    }
-    setM({ ...defaultMetrics });
+    dispatch(deleteMetrics(instId ? `inst:${instId}` : ''));
+    dispatch(fetchMetrics(instId ? `inst:${instId}`: ''));
   };
 
   /** Export a true .xlsx workbook using SheetJS (loaded on demand) */
@@ -360,12 +208,9 @@ export default function Analytics() {
             <div className="min-w-[260px] flex items-center gap-2">
               <BotSelector
                 scope="instance"
+                instances={instances}
                 value={instId}
-                onChange={(val) => {
-                  // Defensive: BotSelector might pass a string or an object
-                  const normalized = normalizeInstId(val);
-                  setInstId(normalized);
-                }}
+                onChange={(val) => setInstId(val.id)}
                 placeholderOption="All (Global)"
               />
               {/* Clear Instance button */}

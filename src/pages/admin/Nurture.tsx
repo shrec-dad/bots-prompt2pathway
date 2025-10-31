@@ -1,9 +1,13 @@
 // src/pages/admin/Nurture.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/store';
 import { useSearchParams, Link } from "react-router-dom";
-import { listInstances, type InstanceMeta } from "@/lib/instances";
+import { fetchBots } from '@/store/botsSlice';
+import { fetchInstances, updateInstance } from '@/store/botInstancesSlice';
 import RecipientsManager from "@/components/RecipientsManager";
-import type { Recipient, ChannelType, Campaign } from "@/types/nurture-types";
+import { fetchRecipients, addRecipients, deleteRecipients } from "@/store/recipientsSlice";
+import type { ChannelType } from "@/types/nurture-types";
 
 /** ───────────────────────────────────────────────────────────────────────────
  * Storage model (existing + NEW recipient/campaign keys)
@@ -12,11 +16,11 @@ import type { Recipient, ChannelType, Campaign } from "@/types/nurture-types";
 type Day = { enabled: boolean; subject: string; body: string };
 const DAY_COUNT = 14;
 
-type Provider = "sendgrid" | "mailgun" | "ses" | "gmail" | "smtp" | null;
+type Provider = "sendgrid" | "mailgun" | "ses" | "gmail" | "smtp";
 
 type DeliverySettings = {
   provider: Provider;
-  integrationAccountId: string | null;
+  integrationAccountId: string;
   fromName: string;
   fromEmail: string;
   replyTo: string;
@@ -45,22 +49,6 @@ type DayChannel = {
   smsBody?: string; // SMS-specific body (shorter)
 };
 
-const keyForInst = (instId: string) => `nurture:inst:${instId}`;
-const keyLenForInst = (instId: string) => `nurture:length:inst:${instId}`;
-const keyDeliveryForInst = (instId: string) => `nurture:delivery:inst:${instId}`;
-const keyPreviewOptsForInst = (instId: string) => `nurture:previewopts:inst:${instId}`;
-const keyTimesForInst = (instId: string) => `nurture:sendtimes:inst:${instId}`;
-const keyWindowsForInst = (instId: string) => `nurture:sendwindows:inst:${instId}`;
-const keyModeForInst = (instId: string) => `nurture:schedulemode:inst:${instId}`;
-const keyDatesForInst = (instId: string) => `nurture:dates:inst:${instId}`;
-const keyTzForInst = (instId: string) => `nurture:timezone:inst:${instId}`;
-const keyQuietForInst = (instId: string) => `nurture:quiet:inst:${instId}`;
-
-// NEW: Recipients and channels
-const keyRecipientsForInst = (instId: string) => `nurture:recipients:inst:${instId}`;
-const keyChannelsForInst = (instId: string) => `nurture:channels:inst:${instId}`;
-const keyCampaignsForInst = (instId: string) => `nurture:campaigns:inst:${instId}`;
-
 const blankDay = (): Day => ({ enabled: false, subject: "", body: "" });
 
 /** Utils */
@@ -70,210 +58,6 @@ const ensure14 = <T,>(arr: T[], filler: () => T) =>
 const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 const defaultTime = "09:00";
 const defaultWindow: WindowRange = { start: "08:00", end: "20:00" };
-
-function loadDays(instId: string): Day[] {
-  try {
-    const raw = localStorage.getItem(keyForInst(instId));
-    if (!raw) return Array.from({ length: DAY_COUNT }, blankDay);
-    return ensure14(JSON.parse(raw) as Day[], blankDay);
-  } catch {
-    return Array.from({ length: DAY_COUNT }, blankDay);
-  }
-}
-function saveDays(instId: string, days: Day[]) {
-  localStorage.setItem(keyForInst(instId), JSON.stringify(ensure14(days, blankDay)));
-}
-
-function loadDelivery(instId: string, fallbackName: string, fallbackTag: string): DeliverySettings {
-  try {
-    const raw = localStorage.getItem(keyDeliveryForInst(instId));
-    if (raw) return JSON.parse(raw) as DeliverySettings;
-  } catch {}
-  return {
-    provider: null,
-    integrationAccountId: null,
-    fromName: fallbackName || "Sender",
-    fromEmail: "",
-    replyTo: "",
-    tagPrefix: fallbackTag || "campaign",
-    defaultTime,
-  };
-}
-function saveDelivery(instId: string, d: DeliverySettings) {
-  localStorage.setItem(keyDeliveryForInst(instId), JSON.stringify(d));
-}
-
-function loadPreviewOpts(instId: string): PreviewOptions {
-  try {
-    const raw = localStorage.getItem(keyPreviewOptsForInst(instId));
-    if (raw) return JSON.parse(raw) as PreviewOptions;
-  } catch {}
-  return { addUnsubscribeFooter: false, addTrackingPixelHint: false };
-}
-function savePreviewOpts(instId: string, p: PreviewOptions) {
-  localStorage.setItem(keyPreviewOptsForInst(instId), JSON.stringify(p));
-}
-
-function loadTimes(instId: string): string[] {
-  try {
-    const raw = localStorage.getItem(keyTimesForInst(instId));
-    if (raw) return ensure14(JSON.parse(raw) as string[], () => defaultTime);
-  } catch {}
-  return Array.from({ length: DAY_COUNT }, () => defaultTime);
-}
-function saveTimes(instId: string, times: string[]) {
-  localStorage.setItem(keyTimesForInst(instId), JSON.stringify(ensure14(times, () => defaultTime)));
-}
-
-function loadWindows(instId: string): (WindowRange | null)[] {
-  try {
-    const raw = localStorage.getItem(keyWindowsForInst(instId));
-    if (raw) {
-      const arr = JSON.parse(raw) as (WindowRange | null)[];
-      return ensure14(arr, () => null);
-    }
-  } catch {}
-  return Array.from({ length: DAY_COUNT }, () => null);
-}
-function saveWindows(instId: string, wins: (WindowRange | null)[]) {
-  localStorage.setItem(keyWindowsForInst(instId), JSON.stringify(ensure14(wins, () => null)));
-}
-
-function loadMode(instId: string): ScheduleMode {
-  try {
-    const raw = localStorage.getItem(keyModeForInst(instId)) as ScheduleMode | null;
-    if (raw === "relative" || raw === "calendar") return raw;
-  } catch {}
-  return "relative";
-}
-function saveMode(instId: string, mode: ScheduleMode) {
-  localStorage.setItem(keyModeForInst(instId), mode);
-}
-
-function loadDates(instId: string): string[] {
-  try {
-    const raw = localStorage.getItem(keyDatesForInst(instId));
-    if (raw) return ensure14(JSON.parse(raw) as string[], () => "");
-  } catch {}
-  return Array.from({ length: DAY_COUNT }, () => "");
-}
-function saveDates(instId: string, dates: string[]) {
-  localStorage.setItem(keyDatesForInst(instId), JSON.stringify(ensure14(dates, () => "")));
-}
-
-function loadTimezone(instId: string): string {
-  try {
-    const raw = localStorage.getItem(keyTzForInst(instId));
-    if (raw) return raw;
-  } catch {}
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
-  } catch {
-    return "America/New_York";
-  }
-}
-function saveTimezone(instId: string, tz: string) {
-  localStorage.setItem(keyTzForInst(instId), tz);
-}
-
-function loadQuietHours(instId: string): QuietHours {
-  try {
-    const raw = localStorage.getItem(keyQuietForInst(instId));
-    if (raw) return JSON.parse(raw) as QuietHours;
-  } catch {}
-  return { enabled: false, start: defaultWindow.start, end: defaultWindow.end };
-}
-function saveQuietHours(instId: string, q: QuietHours) {
-  localStorage.setItem(keyQuietForInst(instId), JSON.stringify(q));
-}
-
-// NEW: Recipients
-function loadRecipients(instId: string): Recipient[] {
-  try {
-    const raw = localStorage.getItem(keyRecipientsForInst(instId));
-    if (raw) return JSON.parse(raw) as Recipient[];
-  } catch {}
-  return [];
-}
-function saveRecipients(instId: string, recipients: Recipient[]) {
-  localStorage.setItem(keyRecipientsForInst(instId), JSON.stringify(recipients));
-}
-
-// NEW: Channels (per-day)
-function loadChannels(instId: string): DayChannel[] {
-  try {
-    const raw = localStorage.getItem(keyChannelsForInst(instId));
-    if (raw) return ensure14(JSON.parse(raw) as DayChannel[], () => ({ channel: "email" }));
-  } catch {}
-  return Array.from({ length: DAY_COUNT }, () => ({ channel: "email" as ChannelType }));
-}
-function saveChannels(instId: string, channels: DayChannel[]) {
-  localStorage.setItem(
-    keyChannelsForInst(instId),
-    JSON.stringify(ensure14(channels, () => ({ channel: "email" })))
-  );
-}
-
-// NEW: Campaigns
-function loadCampaigns(instId: string): Campaign[] {
-  try {
-    const raw = localStorage.getItem(keyCampaignsForInst(instId));
-    if (raw) return JSON.parse(raw) as Campaign[];
-  } catch {}
-  return [];
-}
-function saveCampaigns(instId: string, campaigns: Campaign[]) {
-  localStorage.setItem(keyCampaignsForInst(instId), JSON.stringify(campaigns));
-}
-
-/** ───────────────────────────────────────────────────────────────────────────
- * Starter sequences (unchanged)
- * ───────────────────────────────────────────────────────────────────────────*/
-
-function seqLeadQualifier(): Day[] {
-  return [
-    { enabled: true, subject: "👋 Quick hello from {{company}} — next steps inside", body: `Hi {{name}},\n\nThanks for reaching out to {{company}}! 🎉\nBased on your inquiry, I put together the next steps so you can see value quickly.\n\n**What to expect**\n• 20–30 min call to align on goals\n• A sample plan tailored to your use case\n• Clear pricing + timeline\n\nReady to grab a time? 👉 {{booking_link}}\n\nIf you prefer email, just reply here or reach us at {{contact_email}}.\n\n— {{inst_name}} Team` },
-    { enabled: true, subject: "✅ Your goals from our intake (quick recap)", body: `Hi {{name}},\n\nFrom your notes, it sounds like you're aiming to:\n1) Solve {{painpoint or key goal}}\n2) Stay within a budget range that makes sense\n3) Move quickly without surprises\n\nWe do this often for teams like yours at {{company}}. Want me to pencil in a time? ✍️\nBook here → {{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "📅 2 slots left this week — want one?", body: `Hi {{name}},\n\nHeads up: we have **two** open slots left this week for quick consults.\n• Wed 11:00 AM\n• Thu 2:30 PM\n\nIf either works, lock it in here → {{booking_link}}\n\nPrefer another time? Reply with a few windows. We'll accommodate.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "💡 Example outcome we recently delivered", body: `Hi {{name}},\n\nSharing a quick example:\n> "Within 14 days we increased qualified leads by 36% and cut response time by 58%."\n\nWe'd love to map this to {{company}}. Even 20 minutes helps clarify ROI.\nGrab a slot → {{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "✨ 3 reasons teams pick us (short list)", body: `Hi {{name}},\n\n1) Speed — time-to-value in days, not months\n2) Clarity — simple pricing, no surprises\n3) Results — measurable outcomes you can show your team\n\nIf that's what you're after, let's connect:\n{{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "🧭 Roadmap preview (so you know what happens)", body: `Hi {{name}},\n\nOur typical flow:\n• Discovery (20–30 mins)\n• Quick plan + estimate\n• Build + iterate (fast feedback)\n• Launch + measure 📈\n\nIf that works, I'll send a calendar invite. Here's my calendar:\n{{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "Still interested? Here's a 1-page overview 📄", body: `Hi {{name}},\n\nAttaching our simple 1-pager (what we do and how we help teams like {{company}}).\n[Paste your 1-pager link or keep as is]\n\nIf you'd like a walkthrough, pick any time here:\n{{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "⚡ Quick win ideas for {{company}}", body: `Hi {{name}},\n\nHere are 3 quick win ideas we've seen work for similar teams:\n1) [Idea #1]\n2) [Idea #2]\n3) [Idea #3]\n\nWant me to tailor these to {{company}}? 15 mins is enough.\n{{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "Heads-up: pricing window this month 🗓️", body: `Hi {{name}},\n\nWe're keeping current pricing through the end of this month. If you want to lock it in, I recommend a quick call.\n\nSave a spot → {{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "✨ Realistic timeline & milestone plan (sample)", body: `Hi {{name}},\n\nTypical milestone flow looks like:\n• Week 1: Setup + alignment\n• Week 2: First wins\n• Week 3–4: Iterate + expand\n\nIf you're on board, I'll tailor a plan for {{company}}.\nBook here → {{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "Common questions (quick answers inside) ❓", body: `Hi {{name}},\n\n**Q: How long does onboarding take?**\nA: Usually under a week to first results.\n\n**Q: Is this locked-in?**\nA: No — simple, transparent terms.\n\n**Q: Can we start small?**\nA: Absolutely. We prefer phased rollouts.\n\nNext step if you're curious:\n{{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "Friendly nudge: want me to keep a slot for you?", body: `Hi {{name}},\n\nNo rush — happy to keep a slot this week if helpful.\nGrab it here: {{booking_link}}\n\nIf email is easier, reply with a couple of windows and I'll send an invite.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "Last call this round — should I pause follow-ups? ⏸️", body: `Hi {{name}},\n\nIf now isn't the right time, I can pause follow-ups for a month. Just say the word.\n\nIf you do want to chat, here's the fastest way:\n{{booking_link}}\n\n— {{inst_name}}` },
-    { enabled: true, subject: "Thanks for considering us 🙏 (keep this handy)", body: `Hi {{name}},\n\nAppreciate you considering {{company}}.\nKeeping this here for when timing fits:\n• Book: {{booking_link}}\n• Email: {{contact_email}}\n• Phone: {{phone}}\n\nI'm around if/when you're ready.\n\n— {{inst_name}}` },
-  ];
-}
-
-function seqWaitlist(): Day[] {
-  return [
-    { enabled: true, subject: "🎉 You're on the waitlist! What happens next…", body: `Hi {{name}},\n\nYou're officially on the list for **{{product}}** — love having you here! 🙌\n\n**What to expect**\n• Early updates + previews\n• Priority access when spots open\n• Sweet launch perks for early supporters\n\nYou can reply to this email anytime with questions.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "👀 Sneak peek of {{product}}", body: `Hi {{name}},\n\nHere's a quick look at what we're building:\n• Core idea: [1-line value]\n• Who it's for: [persona]\n• Why it's different: [edge]\n\nGot feedback? Hit reply — we're listening.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "💌 Tell us your top use case", body: `Hi {{name}},\n\nWhat would make {{product}} a **must-have** for you?\nReply with 1–2 lines. The best insights often come from real workflows.\n\n(We reply to every note.)\n\n— {{inst_name}}` },
-    { enabled: true, subject: "🤫 Early mockups (rough, but real)", body: `Hi {{name}},\n\nSharing a few early mockups. Nothing fancy yet — just honest progress.\n[Link or remove]\n\nIf you want to be part of private beta, reply **BETA** and we'll prioritize you.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "🧭 Roadmap: what's shipping soon", body: `Hi {{name}},\n\nUpcoming milestones for {{product}}:\n• v0.1: Core feature working end-to-end\n• v0.2: Onboarding + basic analytics\n• v0.3: Integrations & polish\n\nWant early access? Reply with **EARLY**.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "📣 We're adding a few early testers", body: `Hi {{name}},\n\nWe're inviting a *limited* group for early testing this month.\nIf interested, reply with your main goal and we'll slot you in if there's a fit.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "📋 Quick survey (1 minute, promise)", body: `Hi {{name}},\n\nMind sharing a bit about your workflow? It helps us ship the right thing.\n[Link to a short form] or just hit reply with your top 2 must-haves.\n\nThank you!\n— {{inst_name}}` },
-    { enabled: true, subject: "⚡ Mini update: progress + what's next", body: `Hi {{name}},\n\nProgress this week:\n• Finished [X]\n• Testing [Y]\n• Next: [Z]\n\nWe're getting closer. Thanks for being here!\n\n— {{inst_name}}` },
-    { enabled: true, subject: "🎁 Early supporter perks (because you're awesome)", body: `Hi {{name}},\n\nWe're planning perks for early supporters:\n• Founding member pricing\n• Access to private roadmap\n• Vote on upcoming features\n\nInterested? Reply **PERKS**.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "⏱️ Timeline check", body: `Hi {{name}},\n\nQuick update: we're tracking well and still aiming for early access soon.\nWant me to put you on the first-invite list? Reply **FIRST**.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "👋 Want a personal walkthrough when ready?", body: `Hi {{name}},\n\nWhen {{product}} is ready, would a 10-minute walkthrough help?\nIf yes, reply **WALKTHROUGH** and we'll set you up on launch week.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "⭐ Feature spotlight: something you'll love", body: `Hi {{name}},\n\nWe're polishing a feature we think you'll love:\n[Feature summary]\n\nIf this solves a headache for you, reply and tell us how you do it today.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "🧪 Final checks before invites go out", body: `Hi {{name}},\n\nWe're in the final checks stage.\nWant to be in the first wave of invites? Reply **INVITE ME**.\n\n— {{inst_name}}` },
-    { enabled: true, subject: "🎉 You're on our first-invite list", body: `Hi {{name}},\n\nThanks for sticking with us on this journey.\nYou're on our first-invite list. Keep an eye on your inbox — it's nearly time.\n\nP.S. If you ever need anything, write us at {{contact_email}}.\n\n— {{inst_name}}` },
-  ];
-}
-function getStarterSequenceFor(botKey?: string | null): Day[] | null {
-  switch (botKey) {
-    case "LeadQualifier": return seqLeadQualifier();
-    case "Waitlist":      return seqWaitlist();
-    default:              return null;
-  }
-}
 
 /** ───────────────────────────────────────────────────────────────────────────
  * UI helpers
@@ -528,26 +312,30 @@ export default function Nurture() {
   const [search, setSearch] = useSearchParams();
   const instFromUrl = search.get("inst") || "";
 
-  // list of bot instances
-  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key) return;
-      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
-        setInstances(listInstances());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
+  const dispatch = useDispatch();
+  
   // selected instance
   const [instId, setInstId] = useState<string>(instFromUrl);
+  const bots = useSelector((state: RootState) => state.bots.list);
+  const instances = useSelector((state: RootState) => state.instances.list);
+  const recipientsFromStore = useSelector((state: RootState) => state.recipients.list);
 
-  // schedule model (14 in storage)
-  const [days, setDays] = useState<Day[]>(
-    instFromUrl ? loadDays(instFromUrl) : Array.from({ length: DAY_COUNT }, blankDay)
-  );
+  useEffect(() => {
+    dispatch(fetchBots());
+    dispatch(fetchInstances());
+  }, [dispatch]);
+
+  const handleUpdateInstance = async (id, data) => {
+    try {
+      await dispatch(updateInstance({id, data})).unwrap();
+      dispatch(fetchInstances()); 
+    } catch (err: any) {
+
+    }
+  }
+
+  // schedule model
+  const [days, setDays] = useState<Day[]>(Array.from({ length: DAY_COUNT }, blankDay));
 
   // length (UI view)
   const [lengthSetting, setLengthSetting] = useState<"7" | "14">("14");
@@ -556,34 +344,19 @@ export default function Nurture() {
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("relative");
 
   // times/windows/dates/timezone
-  const [times, setTimes] = useState<string[]>(() =>
-    instFromUrl ? loadTimes(instFromUrl) : Array.from({ length: DAY_COUNT }, () => defaultTime)
-  );
-  const [windows, setWindows] = useState<(WindowRange | null)[]>(() =>
-    instFromUrl ? loadWindows(instFromUrl) : Array.from({ length: DAY_COUNT }, () => null)
-  );
-  const [dates, setDates] = useState<string[]>(() =>
-    instFromUrl ? loadDates(instFromUrl) : Array.from({ length: DAY_COUNT }, () => "")
-  );
-  const [timezone, setTimezone] = useState<string>(() =>
-    instFromUrl ? loadTimezone(instFromUrl) : loadTimezone("default")
-  );
+  const [times, setTimes] = useState<string[]>(Array.from({ length: DAY_COUNT }, () => defaultTime));
+
+  const [windows, setWindows] = useState<(WindowRange | null)[]>(Array.from({ length: DAY_COUNT }, () => null));
+
+  const [dates, setDates] = useState<string[]>(Array.from({ length: DAY_COUNT }, () => ""));
+
+  const [timezone, setTimezone] = useState<string>(Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York");
 
   // quiet hours
-  const [quiet, setQuiet] = useState<QuietHours>(() =>
-    instFromUrl ? loadQuietHours(instFromUrl) : { enabled: false, start: defaultWindow.start, end: defaultWindow.end }
-  );
+  const [quiet, setQuiet] = useState<QuietHours>({ enabled: false, start: defaultWindow.start, end: defaultWindow.end });
 
-  // NEW: Recipients and channels
-  const [recipients, setRecipients] = useState<Recipient[]>(() =>
-    instFromUrl ? loadRecipients(instFromUrl) : []
-  );
-  const [channels, setChannels] = useState<DayChannel[]>(() =>
-    instFromUrl ? loadChannels(instFromUrl) : Array.from({ length: DAY_COUNT }, () => ({ channel: "email" }))
-  );
-  const [campaigns, setCampaigns] = useState<Campaign[]>(() =>
-    instFromUrl ? loadCampaigns(instFromUrl) : []
-  );
+  // NEW: Recipients and channels - recipients now from Redux
+  const [channels, setChannels] = useState<DayChannel[]>(Array.from({ length: DAY_COUNT }, () => ({ channel: "email" })));
 
   // UI state
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
@@ -598,72 +371,82 @@ export default function Nurture() {
   });
 
   const [showDelivery, setShowDelivery] = useState<boolean>(false);
-  const [delivery, setDelivery] = useState<DeliverySettings>(() =>
-    loadDelivery(instFromUrl, "Sender", instFromUrl || "campaign")
-  );
-  const [previewOpts, setPreviewOpts] = useState<PreviewOptions>(() => loadPreviewOpts(instFromUrl));
+  const [delivery, setDelivery] = useState<DeliverySettings>({
+    provider: "smtp",
+    integrationAccountId: "",
+    fromName: "Sender",
+    fromEmail: "",
+    replyTo: "",
+    tagPrefix: "campaign",
+    defaultTime,
+  });
+
+  const [previewOpts, setPreviewOpts] = useState<PreviewOptions>({ addUnsubscribeFooter: false, addTrackingPixelHint: false });
   const [showWindowFields, setShowWindowFields] = useState<boolean>(false);
 
   // NEW: Recipients manager modal
   const [showRecipientsManager, setShowRecipientsManager] = useState(false);
 
+  const selectedInst = useMemo(() => instances.find((m) => m._id === instId), [instances, instId]);
+  
   // reload when instance changes
   useEffect(() => {
-    if (!instId) return;
-    setDays(loadDays(instId));
-    setTimes(loadTimes(instId));
-    setWindows(loadWindows(instId));
-    setDates(loadDates(instId));
-    setTimezone(loadTimezone(instId));
-    setQuiet(loadQuietHours(instId));
-    setRecipients(loadRecipients(instId));
-    setChannels(loadChannels(instId));
-    setCampaigns(loadCampaigns(instId));
+    if (!selectedInst) return;
 
-    const savedLen = (localStorage.getItem(keyLenForInst(instId)) as "7" | "14") || "14";
-    setLengthSetting(savedLen);
+    setDays(selectedInst.days ? ensure14(selectedInst.days, blankDay) : Array.from({ length: DAY_COUNT }, blankDay));
+    setTimes(selectedInst.times ? ensure14(selectedInst.times, () => defaultTime) : Array.from({ length: DAY_COUNT }, () => defaultTime));
+    setWindows(selectedInst.windows ? ensure14(selectedInst.windows as (WindowRange | null)[], () => null) : Array.from({ length: DAY_COUNT }, () => null));
+    setDates(selectedInst.dates ? ensure14(selectedInst.dates as string[], () => "") : Array.from({ length: DAY_COUNT }, () => ""));
+    setTimezone(selectedInst.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York");
+    setQuiet(selectedInst.quiet || { enabled: false, start: defaultWindow.start, end: defaultWindow.end });
+    setChannels(selectedInst.channels ? ensure14(selectedInst.channels as DayChannel[], () => ({ channel: "email" })) : Array.from({ length: DAY_COUNT }, () => ({ channel: "email" as ChannelType })));
+    setLengthSetting(selectedInst.daysCount as "7" | "14" || "14");
+    setScheduleMode(selectedInst.scheduleMode as ScheduleMode || "relative");
 
-    const savedMode = loadMode(instId);
-    setScheduleMode(savedMode);
-
+    // Fetch recipients from API when instance changes
+    dispatch(fetchRecipients(instId));
+    
     setSearch((prev) => {
       const next = new URLSearchParams(prev);
       next.set("inst", instId);
       return next;
     });
 
-    const instMeta = instances.find((x) => x.id === instId);
+    const instMeta = instances.find((x) => x._id === instId);
     setPreviewCtx((prev) => ({
       ...prev,
-      inst_name: instMeta?.bot || instId,
+      inst_name: instMeta?.botKey || instId,
       company: instMeta?.name || prev.company,
     }));
 
-    setDelivery(loadDelivery(instId, instMeta?.name || "Sender", instId || "campaign"));
-    setPreviewOpts(loadPreviewOpts(instId));
+    setDelivery(selectedInst.delivery || {
+      provider: "smtp",
+      integrationAccountId: "",
+      fromName: "Sender",
+      fromEmail: "",
+      replyTo: "",
+      tagPrefix: "campaign",
+      defaultTime
+    });
+
+    setPreviewOpts(selectedInst.previewOpts as PreviewOptions ||{ addUnsubscribeFooter: false, addTrackingPixelHint: false });
     setFocusedIndex(0);
   }, [instId, setSearch, instances]);
-
-  // persistors
-  useEffect(() => { if (instId) localStorage.setItem(keyLenForInst(instId), lengthSetting); }, [instId, lengthSetting]);
-  useEffect(() => { if (instId) saveDelivery(instId, delivery); }, [instId, delivery]);
-  useEffect(() => { if (instId) savePreviewOpts(instId, previewOpts); }, [instId, previewOpts]);
-  useEffect(() => { if (instId) saveTimes(instId, times); }, [instId, times]);
-  useEffect(() => { if (instId) saveWindows(instId, windows); }, [instId, windows]);
-  useEffect(() => { if (instId) saveDates(instId, dates); }, [instId, dates]);
-  useEffect(() => { if (instId) saveTimezone(instId, timezone); }, [instId, timezone]);
-  useEffect(() => { if (instId) saveQuietHours(instId, quiet); }, [instId, quiet]);
-  useEffect(() => { if (instId) saveMode(instId, scheduleMode); }, [instId, scheduleMode]);
-  useEffect(() => { if (instId) saveRecipients(instId, recipients); }, [instId, recipients]);
-  useEffect(() => { if (instId) saveChannels(instId, channels); }, [instId, channels]);
-  useEffect(() => { if (instId) saveCampaigns(instId, campaigns); }, [instId, campaigns]);
-
-  const selectedInst = useMemo(() => instances.find((m) => m.id === instId), [instances, instId]);
 
   /** Actions */
   function saveSchedule() {
     if (!instId) return alert("Pick a Client Bot (instance) first.");
-    saveDays(instId, days);
+    handleUpdateInstance(instId, { 
+      days,
+      daysCount: lengthSetting,
+      delivery,
+      previewOpts,
+      times,
+      windows,
+      scheduleMode,
+      channels
+    });
+
     alert("Nurture schedule saved for this instance.");
   }
 
@@ -675,21 +458,21 @@ export default function Nurture() {
     }
     const targetId = prompt(
       `Paste the INSTANCE ID to copy this schedule to.\n\nAvailable:\n` +
-        instances.map((x) => `• ${x.name || x.id}  —  ${x.id}`).join("\n")
+        instances.map((x) => `• ${x.name || x._id}  —  ${x._id}`).join("\n")
     );
     if (!targetId) return;
-    saveDays(targetId, days);
-    localStorage.setItem(keyLenForInst(targetId), lengthSetting);
-    localStorage.setItem(keyDeliveryForInst(targetId), JSON.stringify(delivery));
-    localStorage.setItem(keyPreviewOptsForInst(targetId), JSON.stringify(previewOpts));
-    localStorage.setItem(keyTimesForInst(targetId), JSON.stringify(times));
-    localStorage.setItem(keyWindowsForInst(targetId), JSON.stringify(windows));
-    localStorage.setItem(keyModeForInst(targetId), scheduleMode);
-    localStorage.setItem(keyDatesForInst(targetId), JSON.stringify(dates));
-    localStorage.setItem(keyTzForInst(targetId), timezone);
-    localStorage.setItem(keyQuietForInst(targetId), JSON.stringify(quiet));
-    localStorage.setItem(keyRecipientsForInst(targetId), JSON.stringify(recipients));
-    localStorage.setItem(keyChannelsForInst(targetId), JSON.stringify(channels));
+
+    handleUpdateInstance(targetId, {
+      days,
+      daysCount: lengthSetting,
+      deliverySettings: delivery,
+      previewOpts,
+      times,
+      windows,
+      scheduleMode,
+      channels
+    });
+   
     window.location.href = `/admin/nurture?inst=${encodeURIComponent(targetId)}`;
   }
 
@@ -727,28 +510,27 @@ export default function Nurture() {
 
   function loadStarter() {
     if (!instId) return alert("Pick a Client Bot (instance) first.");
-    const botKey = selectedInst?.bot || null;
-    const seq = getStarterSequenceFor(botKey);
+    const botKey = selectedInst?.botKey || null;
+    const seq = bots.find(b => b.key == botKey)?.starterSeq;
     if (!seq) {
       alert(`No starter sequence for this bot type.\nSupported: LeadQualifier, Waitlist.\nSelected: ${botKey || "(unknown)"}`);
       return;
     }
     const ok = confirm("Load the 14-day starter sequence? This will replace current messages.");
     if (!ok) return;
+    
     setDays(seq);
-    saveDays(instId, seq);
     setLengthSetting("14");
-    localStorage.setItem(keyLenForInst(instId), "14");
+    
     const t = Array.from({ length: DAY_COUNT }, () => delivery.defaultTime || defaultTime);
     setTimes(t);
-    saveTimes(instId, t);
+    
     alert("Starter sequence loaded and saved.");
   }
 
   function setLen(newLen: "7" | "14") {
     if (!instId) return alert("Pick a Client Bot (instance) first.");
     setLengthSetting(newLen);
-    localStorage.setItem(keyLenForInst(instId), newLen);
   }
 
   function exportJSON() {
@@ -786,7 +568,7 @@ export default function Nurture() {
       dates: ensure14(dates, () => ""),
       timezone,
       channels: ensure14(channels, () => ({ channel: "email" })),
-      recipients: recipients.map(r => ({
+      recipients: recipientsFromStore.map(r => ({
         id: r.id,
         email: r.email,
         phone: r.phone,
@@ -826,10 +608,14 @@ export default function Nurture() {
       const incoming: Day[] = parsed.schedule.slice(0, 14);
       const next = ensure14(incoming, blankDay);
       setDays(next);
-      saveDays(instId, next);
+
       const newLen: "7" | "14" = incoming.length <= 7 ? "7" : "14";
       setLengthSetting(newLen);
-      localStorage.setItem(keyLenForInst(instId), newLen);
+
+      handleUpdateInstance(instId, {
+        days: next,
+        daysCount: newLen
+      })
       alert("Imported schedule applied and saved.");
     } catch {
       alert("Could not read JSON file.");
@@ -876,7 +662,7 @@ export default function Nurture() {
   // NEW: Launch campaign (placeholder for backend)
   function launchCampaign() {
     if (!instId) return alert("Pick a Client Bot (instance) first.");
-    if (recipients.length === 0) {
+    if (recipientsFromStore.length === 0) {
       alert("Add recipients first using the Recipients Manager.");
       return;
     }
@@ -889,7 +675,7 @@ export default function Nurture() {
 
     const ok = confirm(
       `Launch nurture campaign?\n\n` +
-      `• Recipients: ${recipients.filter(r => r.status === "active").length} active\n` +
+      `• Recipients: ${recipientsFromStore.filter(r => r.status === "active").length} active\n` +
       `• Days: ${enabled.length}\n` +
       `• Mode: ${scheduleMode}\n\n` +
       `This will queue emails to send via your ESP.`
@@ -918,10 +704,10 @@ export default function Nurture() {
     currentBody += "\n" + applyPlaceholders(footer, { ...previewCtx, unsubscribe_link: "https://example.com/unsubscribe" } as any);
   }
 
-  const activeRecipients = recipients.filter(r => r.status === "active").length;
+  const activeRecipients = recipientsFromStore.filter(r => r.status === "active").length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-5">
       {/* Header */}
       <div className="rounded-2xl border bg-white shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
@@ -944,7 +730,7 @@ export default function Nurture() {
               >
                 <option value="" disabled>Pick a client bot instance…</option>
                 {instances.slice().sort((a, b) => b.updatedAt - a.updatedAt).map((m) => (
-                  <option key={m.id} value={m.id}>{(m.name || `${m.bot} Instance`) + " • " + m.mode}</option>
+                  <option key={m._id} value={m._id}>{m.name + " • " + m.plan}</option>
                 ))}
               </select>
             </div>
@@ -1040,7 +826,7 @@ export default function Nurture() {
               <span className="text-2xl font-black">{activeRecipients}</span>
             </div>
             <div className="text-sm text-foreground/70 mb-3">
-              {recipients.length} total ({recipients.length - activeRecipients} inactive)
+              {recipientsFromStore.length} total ({recipientsFromStore.length - activeRecipients} inactive)
             </div>
             <button
               onClick={() => {
@@ -1281,8 +1067,19 @@ export default function Nurture() {
       {/* Recipients Manager Modal */}
       {showRecipientsManager && (
         <RecipientsManager
-          recipients={recipients}
-          onRecipientsChange={setRecipients}
+          recipients={recipientsFromStore}
+          onAddRecipients = {async (recipients) => {
+            if (!instId) return;
+            await dispatch(addRecipients({ instId, recipients })).unwrap();
+            dispatch(fetchRecipients(instId));
+          }}
+          onDeleteRecipients={async (ids) => {
+            // Delete recipients via Redux API
+            if (!instId) return;
+            await dispatch(deleteRecipients(ids)).unwrap();
+            // Re-fetch to ensure consistency
+            dispatch(fetchRecipients(instId));
+          }}
           onClose={() => setShowRecipientsManager(false)}
         />
       )}
@@ -1440,14 +1237,16 @@ export default function Nurture() {
                   <button
                     className="rounded-lg px-3 py-2 font-bold ring-1 ring-black bg-white"
                     onClick={() => {
-                      saveDelivery(instId, delivery);
-                      savePreviewOpts(instId, previewOpts);
-                      saveTimes(instId, times);
-                      saveWindows(instId, windows);
-                      saveDates(instId, dates);
-                      saveTimezone(instId, timezone);
-                      saveQuietHours(instId, quiet);
-                      saveMode(instId, scheduleMode);
+                      handleUpdateInstance(instId, {
+                        delivery,
+                        previewOpts,
+                        times,
+                        windows,
+                        dates,
+                        timezone,
+                        quiet,
+                        scheduleMode
+                      });
                       alert("Delivery & scheduling settings saved.");
                     }}
                   >

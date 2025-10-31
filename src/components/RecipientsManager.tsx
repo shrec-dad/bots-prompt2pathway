@@ -8,17 +8,14 @@ import type { Recipient, CSVImportResult } from "@/types/nurture-types";
 
 type Props = {
   recipients: Recipient[];
-  onRecipientsChange: (recipients: Recipient[]) => void;
+  onAddRecipients: (recipients: Omit<Recipient, "_id">[]) => void;
+  onDeleteRecipients: (ids: string[]) => void;
   onClose: () => void;
 };
 
 /** ───────────────────────────────────────────────────────────────────────────
  * Helpers
  * ───────────────────────────────────────────────────────────────────────────*/
-
-function newRecipientId() {
-  return `rcpt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 function validateEmail(email: string): boolean {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -55,7 +52,7 @@ function parseCSV(text: string): CSVImportResult {
     };
   }
 
-  const imported: Recipient[] = [];
+  const imported: Omit<Recipient, "_id">[] = [];
   const errors: Array<{ row: number; reason: string }> = [];
   const seen = new Set<string>();
   let duplicates = 0;
@@ -90,13 +87,11 @@ function parseCSV(text: string): CSVImportResult {
     }
 
     imported.push({
-      id: newRecipientId(),
       email,
       name: name || undefined,
       company: company || undefined,
       phone: phone || undefined,
-      status: "active",
-      addedAt: Date.now(),
+      status: "active"
     });
   }
 
@@ -113,7 +108,7 @@ function parseCSV(text: string): CSVImportResult {
  * Component
  * ───────────────────────────────────────────────────────────────────────────*/
 
-export default function RecipientsManager({ recipients, onRecipientsChange, onClose }: Props) {
+export default function RecipientsManager({ recipients, onAddRecipients, onDeleteRecipients, onClose }: Props) {
   const [view, setView] = useState<"list" | "add" | "import">("list");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -161,17 +156,15 @@ export default function RecipientsManager({ recipients, onRecipientsChange, onCl
       return;
     }
 
-    const newRecipient: Recipient = {
-      id: newRecipientId(),
+    const newRecipient: Omit<Recipient, "_id"> = {
       email: addEmail.trim(),
       name: addName.trim() || undefined,
       company: addCompany.trim() || undefined,
       phone: addPhone.trim() || undefined,
-      status: "active",
-      addedAt: Date.now(),
+      status: "active"
     };
 
-    onRecipientsChange([...recipients, newRecipient]);
+    onAddRecipients([newRecipient]);
     setAddEmail("");
     setAddName("");
     setAddCompany("");
@@ -198,7 +191,7 @@ export default function RecipientsManager({ recipients, onRecipientsChange, onCl
         );
         const duplicatesWithExisting = result.imported.length - newRecipients.length;
 
-        onRecipientsChange([...recipients, ...newRecipients]);
+        onAddRecipients(newRecipients);
         alert(
           `Imported ${newRecipients.length} recipients.\n` +
             (duplicatesWithExisting > 0
@@ -226,21 +219,19 @@ export default function RecipientsManager({ recipients, onRecipientsChange, onCl
     }
     if (!confirm(`Delete ${selected.size} recipients?`)) return;
 
-    const updated = recipients.filter((r) => !selected.has(r.id));
-    onRecipientsChange(updated);
+    onDeleteRecipients(Array.from(selected));
+    
     setSelected(new Set());
     alert("Recipients deleted.");
   };
 
   /** Export as CSV */
   const handleExportCSV = () => {
-    const header = "email,name,company,phone,status,addedAt\n";
+    const header = "email,name,company,phone,status\n";
     const rows = recipients
       .map(
         (r) =>
-          `${r.email},${r.name || ""},${r.company || ""},${r.phone || ""},${r.status},${new Date(
-            r.addedAt
-          ).toISOString()}`
+          `${r.email},${r.name || ""},${r.company || ""},${r.phone || ""},${r.status}`
       )
       .join("\n");
 
@@ -266,7 +257,7 @@ export default function RecipientsManager({ recipients, onRecipientsChange, onCl
     if (selected.size === filtered.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(filtered.map((r) => r.id)));
+      setSelected(new Set(filtered.map((r) => r._id)));
     }
   };
 
@@ -378,12 +369,12 @@ export default function RecipientsManager({ recipients, onRecipientsChange, onCl
                     </thead>
                     <tbody>
                       {filtered.map((r) => (
-                        <tr key={r.id} className="border-b hover:bg-gray-50">
+                        <tr key={r._id} className="border-b hover:bg-gray-50">
                           <td className="p-3">
                             <input
                               type="checkbox"
-                              checked={selected.has(r.id)}
-                              onChange={() => toggleSelect(r.id)}
+                              checked={selected.has(r._id)}
+                              onChange={() => toggleSelect(r._id)}
                             />
                           </td>
                           <td className="p-3 font-semibold">{r.email}</td>
@@ -395,7 +386,7 @@ export default function RecipientsManager({ recipients, onRecipientsChange, onCl
                               className={`px-2 py-1 rounded text-xs font-bold ${
                                 r.status === "active"
                                   ? "bg-green-100 text-green-900"
-                                  : r.status === "unsubscribed"
+                                  : r.status === "inactive"
                                   ? "bg-gray-100 text-gray-900"
                                   : "bg-rose-100 text-rose-900"
                               }`}

@@ -1,53 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useAdminStore } from "@/lib/AdminStore";
-import { BotKey } from "@/lib/botSettings";
-import { listInstances, type InstanceMeta } from "@/lib/instances";
+import React, { useEffect, useRef, useState } from "react";
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchDocs, addDoc, deleteDoc } from '@/store/docsSlice';
+import { fetchBots } from '@/store/botsSlice';
+import { fetchInstances } from '@/store/botInstancesSlice';
+import { RootState } from '@/store';
 import BotSelector from "@/components/BotSelector";
-
-/** -----------------------------------------------------------------------
- *  Types & Config
- *  ---------------------------------------------------------------------*/
-type DocFile = {
-  id: string;
-  name: string;
-  size: number; // bytes
-  type: string;
-  dataUrl: string; // for preview/download (simple local prototype)
-  uploadedAt: number;
-};
 
 const ACCEPT =
   ".pdf,.doc,.docx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain";
-
-/** -----------------------------------------------------------------------
- *  Storage helpers
- *  ---------------------------------------------------------------------*/
-type Scope = { kind: "bot"; bot: BotKey } | { kind: "inst"; id: string };
-
-const keyForScope = (s: Scope) =>
-  s.kind === "bot" ? `knowledge:bot:${s.bot}` : `knowledge:inst:${s.id}`;
-
-function loadDocs(scope: Scope): DocFile[] {
-  try {
-    const raw = localStorage.getItem(keyForScope(scope));
-    return raw ? (JSON.parse(raw) as DocFile[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveDocs(scope: Scope, docs: DocFile[]) {
-  localStorage.setItem(keyForScope(scope), JSON.stringify(docs));
-}
-
-function readFileAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result || ""));
-    fr.onerror = reject;
-    fr.readAsDataURL(file);
-  });
-}
 
 function formatSize(bytes: number) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -55,65 +15,32 @@ function formatSize(bytes: number) {
   return `${bytes} B`;
 }
 
-function instanceLabel(m: InstanceMeta) {
-  return `${m.name || `${m.bot} Instance`} • ${m.mode}`;
-}
-
 /** -----------------------------------------------------------------------
  *  Page
  *  ---------------------------------------------------------------------*/
 export default function Knowledge() {
+  const dispatch = useDispatch();
+  const docs = useSelector((state: RootState) => state.docs.list);
+  const bots = useSelector((state: RootState) => state.bots.list);
+  const instances = useSelector((state: RootState) => state.instances.list);
+
+  useEffect(() => {
+    dispatch(fetchBots());
+    dispatch(fetchInstances());
+  }, [dispatch]);
+
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Pull currentBot from your admin store; also allow switching here
-  const { currentBot, setCurrentBot } = useAdminStore() as {
-    currentBot: BotKey;
-    setCurrentBot?: (key: BotKey) => void;
-  };
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [kind, setKind] = useState<string>("bot");
 
-  // Instances for label helper (purely for UX text); live-sync via storage
-  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key) return;
-      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
-        setInstances(listInstances());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+    if (selectedId) dispatch(fetchDocs(selectedId));
+  }, [selectedId]);
 
-  // ---------- Scope state ----------
-  const initialBot = useMemo<BotKey>(() => currentBot || ("Waitlist" as BotKey), [currentBot]);
-
-  const [lastInstId, setLastInstId] = useState<string>(() => {
-    const first = listInstances()[0];
-    return first ? first.id : "";
-  });
-
-  const [scope, setScope] = useState<Scope>({ kind: "bot", bot: initialBot });
-
-  // Docs list for the current scope
-  const [docs, setDocs] = useState<DocFile[]>(() => loadDocs(scope));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Keep store and local docs in sync when scope changes
-  useEffect(() => {
-    if (scope.kind === "bot" && scope.bot !== currentBot && setCurrentBot) {
-      setCurrentBot(scope.bot);
-    }
-    setDocs(loadDocs(scope));
-  }, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // If the store changes externally, refresh only when in bot mode
-  useEffect(() => {
-    if (scope.kind === "bot" && currentBot && currentBot !== scope.bot) {
-      setScope({ kind: "bot", bot: currentBot });
-      setDocs(loadDocs({ kind: "bot", bot: currentBot }));
-    }
-  }, [currentBot]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- Upload handlers ----------
   function triggerUpload() {
@@ -125,33 +52,28 @@ export default function Knowledge() {
     setError(null);
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+    if (!selectedId) return;
 
     try {
       setBusy(true);
-      const additions: DocFile[] = [];
-      for (const f of files) {
-        // Simple 10 MB guard to avoid blowing up localStorage
-        if (f.size > 10 * 1024 * 1024) {
-          setError(`"${f.name}" is larger than 10 MB. Please upload a smaller file.`);
-          continue;
-        }
-        const dataUrl = await readFileAsDataURL(f);
-        additions.push({
-          id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
-          name: f.name,
-          size: f.size,
-          type: f.type || "application/octet-stream",
-          dataUrl,
-          uploadedAt: Date.now(),
-        });
+      const file = files[0];
+  
+      if (file.size > 10 * 1024 * 1024) {
+        setError(`"${file.name}" is larger than 10 MB. Please upload a smaller file.`);
+        return;
       }
 
-      if (additions.length) {
-        const next = [...docs, ...additions];
-        setDocs(next);
-        saveDocs(scope, next);
-      }
-    } catch {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("botId", selectedId || "");
+      formData.append("botModelType", kind === "bot" ? "Bot" : "BotInstance");
+      formData.append("name", file.name);
+      formData.append("size", file.size.toString());
+
+      await dispatch(addDoc(formData)).unwrap();
+
+      dispatch(fetchDocs(selectedId));
+    } catch (err: any) {
       setError("Upload failed. Please try again.");
     } finally {
       setBusy(false);
@@ -159,34 +81,46 @@ export default function Knowledge() {
     }
   }
 
-  function removeDoc(id: string) {
-    const next = docs.filter((d) => d.id !== id);
-    setDocs(next);
-    saveDocs(scope, next);
+  async function removeDoc(id: string) {
+    try {
+      await dispatch(deleteDoc(id)).unwrap();
+      dispatch(fetchDocs(selectedId));
+    } catch (err: any) {
+      setError("Delete file failed.");
+    }
   }
 
   // ---------- UI helpers ----------
-  const selectedInst =
-    scope.kind === "inst" ? instances.find((m) => m.id === scope.id) : undefined;
-
   const scopeLabel =
-    scope.kind === "bot"
-      ? scope.bot
-      : selectedInst?.name || "(deleted instance)";
-
-  const instanceOptions = instances
-    .slice()
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+    kind === "bot"
+      ? bots.find((m) => m._id === selectedId)?.name
+      : instances.find((m) => m._id === selectedId)?.name || "(deleted instance)";
 
   const selectedInstLabel =
-    scope.kind === "inst"
-      ? instanceOptions.find((m) => m.id === scope.id)
-        ? instanceLabel(instanceOptions.find((m) => m.id) as InstanceMeta)
-        : "Select an instance"
+    kind === "inst"
+      ? instances.find((m) => m._id === selectedId)?.name || "Select an instance"
       : "";
+      
+  const downloadFromCloudinary = async (fileUrl, fileName) => {
+    try {
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+  
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName || "download";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+    }
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header / Pickers */}
       <div className="rounded-2xl border-[3px] border-black/80 bg-white shadow-[0_6px_0_rgba(0,0,0,0.8)]">
         {/* header stripe */}
@@ -207,26 +141,25 @@ export default function Knowledge() {
                 <label className="inline-flex items-center gap-2 text-sm font-semibold">
                   <input
                     type="radio"
-                    name="scope"
-                    checked={scope.kind === "bot"}
-                    onChange={() =>
-                      setScope({
-                        kind: "bot",
-                        bot: scope.kind === "bot" ? scope.bot : (currentBot || "Waitlist"),
-                      })
-                    }
+                    name="kind"
+                    checked={kind === "bot"}
+                    onChange={() => {
+                      const first = bots[0];
+                      setKind("bot")
+                      setSelectedId(first ? first._id : "");
+                    }}
                   />
                   Bot Template
                 </label>
                 <label className="inline-flex items-center gap-2 text-sm font-semibold">
                   <input
                     type="radio"
-                    name="scope"
-                    checked={scope.kind === "inst"}
+                    name="kind"
+                    checked={kind === "inst"}
                     onChange={() => {
                       const first = instances[0];
-                      const nextId = lastInstId || (first ? first.id : "");
-                      setScope({ kind: "inst", id: nextId });
+                      setKind("inst");
+                      setSelectedId(first ? first._id : "");
                     }}
                   />
                   Client Bot (instance)
@@ -235,15 +168,17 @@ export default function Knowledge() {
             </div>
 
             {/* Bot template picker (BotSelector) */}
-            {scope.kind === "bot" && (
+            {kind === "bot" && (
               <div className="flex items-center gap-3">
                 <label className="text-xs font-bold uppercase text-foreground/70">Bot</label>
                 <BotSelector
                   scope="template"
-                  value={scope.bot}
+                  templates={bots}
+                  instances={instances}
+                  value={selectedId}
                   onChange={(v) => {
                     if (!v || v.kind !== "template") return;
-                    setScope({ kind: "bot", bot: v.key as BotKey });
+                    setSelectedId(v.id);
                   }}
                   ariaLabel="Choose bot template"
                 />
@@ -251,7 +186,7 @@ export default function Knowledge() {
             )}
 
             {/* Instance picker (with wrapped label UI preserved) */}
-            {scope.kind === "inst" && (
+            {kind === "inst" && (
               <div className="flex items-center gap-3">
                 <label className="text-xs font-bold uppercase text-foreground/70">My Bot</label>
                 <div className="relative w-full md:w-[380px]">
@@ -274,12 +209,14 @@ export default function Knowledge() {
                   {/* Real select via BotSelector (instance scope) */}
                   <BotSelector
                     scope="instance"
-                    value={scope.kind === "inst" ? scope.id : ""}
+                    templates={bots}
+                    instances={instances}
+                    value={selectedId}
                     onChange={(v) => {
+                      console.log(v);
                       if (!v) return;
                       if (v.kind === "instance") {
-                        setLastInstId(v.id);
-                        setScope({ kind: "inst", id: v.id });
+                        setSelectedId(v.id);
                       }
                     }}
                     className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
@@ -313,7 +250,7 @@ export default function Knowledge() {
               <button
                 className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/15 to-emerald-500/15 hover:from-indigo-500/25 hover:to-emerald-500/25 disabled:opacity-60"
                 onClick={triggerUpload}
-                disabled={busy || (scope.kind === "inst" && !scope.id)}
+                disabled={busy || !selectedId}
               >
                 + Upload
               </button>
@@ -348,13 +285,12 @@ export default function Knowledge() {
             <ul className="space-y-3">
               {docs.map((d) => (
                 <li
-                  key={d.id}
+                  key={d._id}
                   className="flex items-center justify-between gap-3 rounded-xl border-[3px] border-black/20 px-4 py-3 bg-white hover:bg-muted/20"
                 >
                   <a
-                    className="min-w-0 flex-1 truncate font-semibold hover:underline"
-                    href={d.dataUrl}
-                    download={d.name}
+                    className="min-w-0 flex-1 truncate font-semibold hover:underline cursor-pointer"
+                    onClick={() => downloadFromCloudinary(d.url, d.name)}
                     title="Click to download"
                   >
                     {d.name}
@@ -365,7 +301,7 @@ export default function Knowledge() {
 
                   <button
                     className="rounded-lg px-3 py-1.5 font-bold ring-1 ring-border hover:bg-muted/40"
-                    onClick={() => removeDoc(d.id)}
+                    onClick={() => removeDoc(d._id)}
                     aria-label={`Remove ${d.name}`}
                   >
                     Remove

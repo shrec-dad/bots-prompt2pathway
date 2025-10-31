@@ -1,4 +1,4 @@
-// src/pages/admin/Builder.tsx - SOCIAL MEDIA REMOVED
+// src/pages/admin/Builder.tsx
 import React, {
   useMemo,
   useState,
@@ -6,6 +6,8 @@ import React, {
   useEffect,
   useRef,
 } from "react";
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/store';
 import {
   ReactFlow,
   Background,
@@ -24,52 +26,9 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { useSearchParams } from "react-router-dom";
-import { useAdminStore } from "@/lib/AdminStore";
-import { getTemplate, listTemplateDefs, type BotKey } from "@/lib/templates";
-import { getBotSettings, setBotSettings } from "@/lib/botSettings";
-import { listInstances, type InstanceMeta } from "@/lib/instances";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-
-/* =========================================================================
-   0)  Instance support (duplicated bots)
-   ========================================================================= */
-
-type InstMeta = { baseKey: string; mode: "basic" | "custom" } | null;
-
-function readInstMeta(instId: string): InstMeta {
-  try {
-    const raw = localStorage.getItem(`botSettingsInst:${instId}`);
-    if (raw) return JSON.parse(raw) as InstMeta;
-  } catch {}
-  return null;
-}
-
-function readInstOverrides(instId: string, mode: "basic" | "custom") {
-  try {
-    const raw = localStorage.getItem(`botOverridesInst:${instId}_${mode}`);
-    if (raw) return JSON.parse(raw) as Record<string, any>;
-  } catch {}
-  return {};
-}
-
-function writeInstOverrides(
-  instId: string,
-  mode: "basic" | "custom",
-  ov: Record<string, any>
-) {
-  localStorage.setItem(
-    `botOverridesInst:${instId}_${mode}`,
-    JSON.stringify(ov || {})
-  );
-}
-
-function writeInstMeta(instId: string, meta: InstMeta) {
-  localStorage.setItem(`botSettingsInst:${instId}`, JSON.stringify(meta ?? {}));
-}
-
-/* =========================================================================
-   1)  Custom Node components (INCLUDING PHONE & CALENDAR NODES)
-   ========================================================================= */
+import { fetchBots, updateBot } from '@/store/botsSlice';
+import { fetchInstances, updateInstance } from '@/store/botInstancesSlice';
 
 const MessageNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-white border-2 border-stone-400">
@@ -150,10 +109,6 @@ const nodeTypes = {
   calendar: CalendarNode,
 };
 
-/* =========================================================================
-   2)  Helpers: per-bot+mode (or instance+mode) overrides in localStorage
-   ========================================================================= */
-
 type RFNode = Node & {
   type?:
     | "default"
@@ -168,196 +123,332 @@ type RFNode = Node & {
   data?: any;
 };
 
-const OV_KEY = (bot: string, mode: "basic" | "custom") =>
-  `botOverrides:${bot}_${mode}`;
-
-function getOverrides(
-  bot: string,
-  mode: "basic" | "custom",
-  instId?: string
-) {
-  if (instId) return readInstOverrides(instId, mode);
-  try {
-    const raw = localStorage.getItem(OV_KEY(bot, mode));
-    if (raw) return JSON.parse(raw) as Record<string, any>;
-  } catch {}
-  return {};
-}
-
-function saveOverrides(
-  bot: string,
-  mode: "basic" | "custom",
-  ov: Record<string, any>,
-  instId?: string
-) {
-  if (instId) {
-    writeInstOverrides(instId, mode, ov);
-    return;
-  }
-  localStorage.setItem(OV_KEY(bot, mode), JSON.stringify(ov));
-}
-
-/* =========================================================================
-   3)  Utility functions
-   ========================================================================= */
-
-function classNames(...xs: (string | false | undefined)[]) {
-  return xs.filter(Boolean).join(" ");
-}
-
-const Grad =
-  "bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55";
-const strongCard =
-  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
-
-/* =========================================================================
-   4)  The actual Builder body (inside ReactFlowProvider)
-   ========================================================================= */
-
-type Source =
-  | { kind: "tpl"; bot: string }
-  | { kind: "inst"; id: string; meta: InstMeta };
+type Source = { 
+  kind: string; 
+  id: string; 
+  mode: string 
+};
 
 const sourceToValue = (s: Source) =>
-  s.kind === "tpl" ? `tpl:${s.bot}` : `inst:${s.id}`;
+  s?.kind === "bot" ? `bot:${s?.id}` : `inst:${s?.id}`;
+
+
+/* Editor with Phone and Calendar support */
+function Editor({ selected, editorValues, updateEditorValue}) {
+  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+    <div className="text-xs font-bold uppercase text-foreground/80 mb-1">
+      {children}
+    </div>
+  );
+  const inputClass = "w-full rounded-lg border px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400";
+
+
+  if (!selected)
+    return (
+      <div className="text-sm text-foreground/80">
+        Select a node above to edit its text and labels.
+      </div>
+    );
+
+  if (selected.type === "phone") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Label</FieldLabel>
+          <input
+            className={inputClass}
+            value={editorValues.label || ""}
+            onChange={(e) => updateEditorValue("label", e.target.value)}
+            placeholder="Phone Handler"
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <FieldLabel>Phone Action</FieldLabel>
+          <select
+            className={inputClass}
+            value={editorValues.phoneAction || "answer"}
+            onChange={(e) => updateEditorValue("phoneAction", e.target.value)}
+          >
+            <option value="answer">Answer Call</option>
+            <option value="transfer">Transfer to Human</option>
+            <option value="voicemail">Take Voicemail</option>
+            <option value="collect-info">Collect Information</option>
+          </select>
+        </div>
+      </div>
+    );
+  }
+
+  if (selected.type === "calendar") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Label</FieldLabel>
+          <input
+            className={inputClass}
+            value={editorValues.label || ""}
+            onChange={(e) => updateEditorValue("label", e.target.value)}
+            placeholder="Calendar Action"
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <FieldLabel>Calendar Action</FieldLabel>
+          <select
+            className={inputClass}
+            value={editorValues.calendarAction || "check-availability"}
+            onChange={(e) =>
+              updateEditorValue("calendarAction", e.target.value)
+            }
+          >
+            <option value="check-availability">Check Availability</option>
+            <option value="book">Book Appointment</option>
+            <option value="cancel">Cancel Appointment</option>
+            <option value="reschedule">Reschedule Appointment</option>
+          </select>
+        </div>
+      </div>
+    );
+  }
+
+  if (selected.type === "input") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Label</FieldLabel>
+          <input
+            className={inputClass}
+            value={editorValues.label || ""}
+            onChange={(e) => updateEditorValue("label", e.target.value)}
+            placeholder="Enter label…"
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <FieldLabel>Placeholder</FieldLabel>
+          <input
+            className={inputClass}
+            value={editorValues.placeholder || ""}
+            onChange={(e) => updateEditorValue("placeholder", e.target.value)}
+            placeholder="Enter placeholder…"
+            autoComplete="off"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (selected.type === "choice") {
+    const options: string[] = editorValues.options || [];
+    return (
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Label</FieldLabel>
+          <input
+            className={inputClass}
+            value={editorValues.label || ""}
+            onChange={(e) => updateEditorValue("label", e.target.value)}
+            placeholder="Enter label…"
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <FieldLabel>Options (one per line)</FieldLabel>
+          <textarea
+            className={inputClass}
+            rows={5}
+            value={options.join("\n")}
+            onChange={(e) =>
+              updateEditorValue(
+                "options",
+                e.target.value
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+              )
+            }
+            placeholder={"Option 1\nOption 2\nOption 3"}
+            autoComplete="off"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (selected.type === "action") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Label</FieldLabel>
+          <input
+            className={inputClass}
+            value={editorValues.label || ""}
+            onChange={(e) => updateEditorValue("label", e.target.value)}
+            placeholder="Enter label…"
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <FieldLabel>Email / Target</FieldLabel>
+          <input
+            className={inputClass}
+            value={editorValues.to || ""}
+            onChange={(e) => updateEditorValue("to", e.target.value)}
+            placeholder="email@example.com"
+            autoComplete="off"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <FieldLabel>Title</FieldLabel>
+        <input
+          className={inputClass}
+          value={editorValues.title || ""}
+          onChange={(e) => updateEditorValue("title", e.target.value)}
+          placeholder="Enter title…"
+          autoComplete="off"
+        />
+      </div>
+      <div>
+        <FieldLabel>Text</FieldLabel>
+        <textarea
+          className={inputClass}
+          rows={4}
+          value={editorValues.text || ""}
+          onChange={(e) => updateEditorValue("text", e.target.value)}
+          placeholder="Enter message text…"
+          autoComplete="off"
+        />
+      </div>
+    </div>
+  );
+};
 
 function BuilderInner() {
+  const dispatch = useDispatch();
+  const instances = useSelector((state: RootState) => state.instances.list);
+  const bots = useSelector((state: RootState) => state.bots.list);
   const [search, setSearch] = useSearchParams();
 
   const queryInst = search.get("inst") || undefined;
   const queryBot = (search.get("bot") as string | null) || null;
 
-  const [defs, setDefs] = useState(() => listTemplateDefs());
+  const handleUpdateBot = async (id, data) => {
+    try {
+      await dispatch(updateBot({id, data})).unwrap();
+      dispatch(fetchBots());
+    } catch (err: any) {
+  
+    }
+  }
+
+  const handleUpdateInstance = async (id, data) => {
+    try {
+      await dispatch(updateInstance({id, data})).unwrap();
+      dispatch(fetchInstances());
+    } catch (err: any) {
+  
+    }
+  }
+
+  const handleSaveNodes = async (nextNodes) => {
+    if (source?.kind == "bot") {
+      const bot = bots.find(b => b._id === source?.id);
+      if (!bot) return;
+
+      const updatedNodes = {
+        ...bot.nodes,
+        [source?.mode]: nextNodes,
+      };
+
+      handleUpdateBot(source?.id, { nodes: updatedNodes });
+    } else {
+      const inst = instances.find(b => b._id === source?.id);
+      if (!inst) return;
+
+      const updatedNodes = {
+        ...inst.nodes,
+        [source?.mode]: nextNodes,
+      };
+
+      handleUpdateInstance(source?.id, { nodes: updatedNodes });
+    }
+  }
+
+  const handleSaveEdges = async (nextEdges) => {
+    if (source?.kind == "bot") {
+      const bot = bots.find(b => b._id === source?.id);
+      if (!bot) return;
+
+      const updatedEdges = {
+        ...bot.edges,
+        [source?.mode]: nextEdges,
+      };
+
+      handleUpdateBot(source?.id, { edges: updatedEdges });
+    } else {
+      const inst = instances.find(b => b._id === source?.id);
+      if (!inst) return;
+
+      const updatedEdges = {
+        ...inst.edges,
+        [source?.mode]: nextEdges,
+      };
+
+      handleUpdateInstance(source?.id, { edges: updatedEdges });
+    }
+  }
+
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key) return;
-      if (e.key === "botTemplates:index") {
-        setDefs(listTemplateDefs());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+    dispatch(fetchInstances());
+    dispatch(fetchBots());
+  }, [dispatch]);
 
-  // BUILTIN_KEYS updated - SOCIAL MEDIA REMOVED
-  const BUILTIN_KEYS = new Set<BotKey>([
-    "LeadQualifier",
-    "AppointmentBooking",
-    "CustomerSupport",
-    "Waitlist",
-    "Receptionist",
-  ] as BotKey[]);
-
-  const { currentBot, setCurrentBot } = useAdminStore() as {
-    currentBot: any;
-    setCurrentBot?: (key: any) => void;
-  };
-
-  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
-    listInstances()
-  );
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key) return;
-      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
-        setInstances(listInstances());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+    if (bots.length === 0 && instances.length === 0) return;
 
-  const initialSource: Source = useMemo(() => {
     if (queryInst) {
-      return { kind: "inst", id: queryInst, meta: readInstMeta(queryInst) };
+      const inst = instances.find(b => b._id == queryInst);
+      setSource({ kind: "inst", id: queryInst, mode: (inst ? inst.plan : 'basic') });
     }
-    const defaultKey = queryBot || defs[0]?.key || "LeadQualifier";
-    return { kind: "tpl", bot: defaultKey };
-  }, [queryInst, queryBot, defs]);
+    else {
+      const botId = queryBot || bots[0]?._id;
+      const bot = bots.find(b => b._id == botId);
+      setSource({ kind: "bot", id: botId, mode: bot?.plan || 'basic' });
+    }
+  }, [queryInst, queryBot, bots, instances])
 
-  const [source, setSource] = useState<Source>(initialSource);
+  const [source, setSource] = useState<Source | null>(null);
 
-  const initialBot: string =
-    source.kind === "tpl"
-      ? source.bot
-      : (source.meta?.baseKey as string) || defs[0]?.key || "LeadQualifier";
-
-  const [bot, setBot] = useState<string>(initialBot);
-
-  const initialMode: "basic" | "custom" =
-    source.kind === "inst"
-      ? (source.meta?.mode as "basic" | "custom") || "custom"
-      : (getBotSettings(initialBot as any).mode as "basic" | "custom") ||
-        "custom";
-
-  const [mode, setMode] = useState<"basic" | "custom">(initialMode);
+  const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   useEffect(() => {
-    if (source.kind === "tpl" && BUILTIN_KEYS.has(bot as BotKey)) {
-      if (setCurrentBot && bot !== currentBot) setCurrentBot(bot);
-    }
-  }, [bot, source.kind]);
+    if (!source) return;
 
-  useEffect(() => {
-    if (
-      source.kind === "tpl" &&
-      BUILTIN_KEYS.has(currentBot as BotKey) &&
-      currentBot &&
-      currentBot !== bot
-    ) {
-      setBot(currentBot);
-      setMode(
-        (getBotSettings(currentBot as any).mode as "basic" | "custom") ||
-          "custom"
-      );
-    }
-  }, [currentBot]);
-
-  const activeInstId = source.kind === "inst" ? source.id : undefined;
-
-  const [overrides, setOv] = useState<Record<string, any>>(() =>
-    getOverrides(bot, mode, activeInstId)
-  );
-
-  const mergeOverrides = useCallback(
-    (src: RFNode[], ov: Record<string, any>) =>
-      src.map((n) =>
-        ov[n.id]?.data
-          ? { ...n, data: { ...(n.data || {}), ...ov[n.id].data } }
-          : n
-      ),
-    []
-  );
-
-  const base = useMemo(() => getTemplate(bot, mode), [bot, mode]);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState<RFNode[]>(
-    base ? (mergeOverrides((base as any).nodes, overrides) as RFNode[]) : []
-  );
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>(
-    base ? (base as any).edges : []
-  );
-
-  useEffect(() => {
-    const found = getTemplate(bot, mode);
-    const nextOv = getOverrides(bot, mode, activeInstId);
-    setOv(nextOv);
+    const found = source?.kind == "bot" ? bots.find(b => b._id == source?.id) : instances.find(b => b._id == source?.id);
 
     if (found) {
-      setNodes(mergeOverrides((found as any).nodes, nextOv) as Node[]);
-      setEdges((found as any).edges as Edge[]);
+      setNodes(found.nodes[source?.mode] as RFNode[]);
+      setEdges(found.edges[source?.mode] as Edge[]);
     } else {
       setNodes([]);
       setEdges([]);
     }
-  }, [bot, mode, activeInstId, setNodes, setEdges, mergeOverrides]);
+  }, [source, bots, instances]);
 
-  function onModeChange(next: "basic" | "custom") {
-    setMode(next);
-    if (source.kind === "inst") {
-      writeInstMeta(source.id, { baseKey: bot, mode: next });
+  const onModeChange = async (next: "basic" | "custom") => {
+    setSource({ ...source, mode: next });
+    if (source?.kind === "inst") {
+      handleUpdateInstance(source?.id, {plan: next});
     } else {
-      setBotSettings(bot as any, { mode: next });
+      handleUpdateBot(source?.id, {plan: next});
     }
   }
 
@@ -368,7 +459,7 @@ function BuilderInner() {
     if (!selectedId) return setEditorValues({});
     const n = nodes.find((x) => x.id === selectedId);
     setEditorValues(n?.data || {});
-  }, [selectedId, nodes]);
+  }, [selectedId]);
 
   const onNodeClick = useCallback(
     (_: any, n: Node) => setSelectedId(n?.id || null),
@@ -380,23 +471,24 @@ function BuilderInner() {
     [setEdges]
   );
 
-  const updateEditorValue = (k: string, v: any) =>
+  // const updateEditorValue = (k: string, v: any) =>
+  //   setEditorValues((p: any) => ({ ...p, [k]: v }));
+
+  const updateEditorValue = useCallback((k: string, v: any) => {
     setEditorValues((p: any) => ({ ...p, [k]: v }));
+  }, []);
+    
 
   const saveChanges = useCallback(() => {
     if (!selectedId) return;
-    setNodes((prev) =>
-      prev.map((n) =>
+    setNodes((prev) => {
+      const nextNodes = prev.map((n) =>
         n.id === selectedId ? { ...n, data: { ...editorValues } } : n
       )
-    );
-    const nextOv = {
-      ...overrides,
-      [selectedId]: { data: { ...editorValues } },
-    };
-    setOv(nextOv);
-    saveOverrides(bot, mode, nextOv, activeInstId);
-  }, [selectedId, editorValues, overrides, setNodes, bot, mode, activeInstId]);
+      handleSaveNodes(nextNodes);
+      return nextNodes;
+    });
+  }, [selectedId, editorValues]);
 
   const rf = useReactFlow<RFNode, Edge>();
   const [pendingType, setPendingType] = useState<
@@ -455,23 +547,27 @@ function BuilderInner() {
         data,
       };
 
-      setNodes((prev) => [...prev, newNode]);
+      setNodes((prev) => {
+        const nextNodes = [...prev, newNode];
+        handleSaveNodes(nextNodes);
+        return nextNodes;
+      });
 
       if (selectedId) {
-        setEdges((prev) => [
-          ...prev,
-          {
-            id: `e_${selectedId}_${id}`,
-            source: selectedId,
-            target: id,
-            type: "smoothstep",
-          },
-        ]);
+        setEdges((prev) => {
+          const nextEdges = [
+            ...prev,
+            {
+              id: `e_${selectedId}_${id}`,
+              source: selectedId,
+              target: id,
+              type: "smoothstep",
+            },
+          ];
+          handleSaveEdges(nextEdges);
+          return nextEdges;
+        });
       }
-
-      const nextOv = { ...overrides, [id]: { data } };
-      setOv(nextOv);
-      saveOverrides(bot, mode, nextOv, activeInstId);
 
       setSelectedId(id);
       setPendingType(null);
@@ -481,10 +577,6 @@ function BuilderInner() {
       pendingType,
       rf,
       selectedId,
-      overrides,
-      bot,
-      mode,
-      activeInstId,
       setEdges,
       setNodes,
     ]
@@ -493,15 +585,17 @@ function BuilderInner() {
   const deleteSelected = () => {
     if (!selectedId) return;
 
-    setNodes((prev) => prev.filter((n) => n.id !== selectedId));
-    setEdges((prev) =>
-      prev.filter((e) => e.source !== selectedId && e.target !== selectedId)
-    );
+    setNodes((prev) => {
+      const nextNodes = prev.filter((n) => n.id !== selectedId);
+      handleSaveNodes(nextNodes);
+      return nextNodes;
+    });
 
-    const nextOv = { ...overrides };
-    delete nextOv[selectedId];
-    setOv(nextOv);
-    saveOverrides(bot, mode, nextOv, activeInstId);
+    setEdges((prev) => {
+      const nextEdges = prev.filter((e) => e.source !== selectedId && e.target !== selectedId);
+      handleSaveEdges(nextEdges);
+      return nextEdges;
+    });
 
     setSelectedId(null);
   };
@@ -536,14 +630,10 @@ function BuilderInner() {
 
     if (v.startsWith("inst:")) {
       const id = v.slice(5);
-      const meta = readInstMeta(id);
-      const baseKey =
-        (meta?.baseKey as string | undefined) || defs[0]?.key || "LeadQualifier";
-      const m = (meta?.mode as "basic" | "custom") || "custom";
+      const inst = instances.find(b => b._id == id);
+      const mode = (inst?.plan as "basic" | "custom") || "custom";
 
-      setSource({ kind: "inst", id, meta });
-      setBot(baseKey);
-      setMode(m);
+      setSource({ kind: "inst", id, mode });
 
       setSearch((s) => {
         s.set("inst", id);
@@ -553,17 +643,15 @@ function BuilderInner() {
       return;
     }
 
-    if (v.startsWith("tpl:")) {
-      const key = v.slice(4);
-      const m =
-        (getBotSettings(key as any).mode as "basic" | "custom") || "custom";
+    if (v.startsWith("bot:")) {
+      const id = v.slice(4);
+      const bot = bots.find(b => b._id == id);
+      const mode = (bot?.plan as "basic" | "custom") || "custom";
 
-      setSource({ kind: "tpl", bot: key });
-      setBot(key);
-      setMode(m);
+      setSource({ kind: "bot", id, mode });
 
       setSearch((s) => {
-        s.set("bot", key);
+        s.set("bot", id);
         s.delete("inst");
         return s;
       });
@@ -571,215 +659,18 @@ function BuilderInner() {
     }
   }
 
-  const inputClass =
-    "w-full rounded-lg border px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400";
-  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="text-xs font-bold uppercase text-foreground/80 mb-1">
-      {children}
-    </div>
-  );
-
-  /* Editor with Phone and Calendar support */
-  const Editor = () => {
-    if (!selected)
-      return (
-        <div className="text-sm text-foreground/80">
-          Select a node above to edit its text and labels.
-        </div>
-      );
-
-    if (selected.type === "phone") {
-      return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Label</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.label || ""}
-              onChange={(e) => updateEditorValue("label", e.target.value)}
-              placeholder="Phone Handler"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <FieldLabel>Phone Action</FieldLabel>
-            <select
-              className={inputClass}
-              value={editorValues.phoneAction || "answer"}
-              onChange={(e) => updateEditorValue("phoneAction", e.target.value)}
-            >
-              <option value="answer">Answer Call</option>
-              <option value="transfer">Transfer to Human</option>
-              <option value="voicemail">Take Voicemail</option>
-              <option value="collect-info">Collect Information</option>
-            </select>
-          </div>
-        </div>
-      );
-    }
-
-    if (selected.type === "calendar") {
-      return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Label</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.label || ""}
-              onChange={(e) => updateEditorValue("label", e.target.value)}
-              placeholder="Calendar Action"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <FieldLabel>Calendar Action</FieldLabel>
-            <select
-              className={inputClass}
-              value={editorValues.calendarAction || "check-availability"}
-              onChange={(e) =>
-                updateEditorValue("calendarAction", e.target.value)
-              }
-            >
-              <option value="check-availability">Check Availability</option>
-              <option value="book">Book Appointment</option>
-              <option value="cancel">Cancel Appointment</option>
-              <option value="reschedule">Reschedule Appointment</option>
-            </select>
-          </div>
-        </div>
-      );
-    }
-
-    if (selected.type === "input") {
-      return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Label</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.label || ""}
-              onChange={(e) => updateEditorValue("label", e.target.value)}
-              placeholder="Enter label…"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <FieldLabel>Placeholder</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.placeholder || ""}
-              onChange={(e) => updateEditorValue("placeholder", e.target.value)}
-              placeholder="Enter placeholder…"
-              autoComplete="off"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    if (selected.type === "choice") {
-      const options: string[] = editorValues.options || [];
-      return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Label</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.label || ""}
-              onChange={(e) => updateEditorValue("label", e.target.value)}
-              placeholder="Enter label…"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <FieldLabel>Options (one per line)</FieldLabel>
-            <textarea
-              className={inputClass}
-              rows={5}
-              value={options.join("\n")}
-              onChange={(e) =>
-                updateEditorValue(
-                  "options",
-                  e.target.value
-                    .split("\n")
-                    .map((s) => s.trim())
-                    .filter(Boolean)
-                )
-              }
-              placeholder={"Option 1\nOption 2\nOption 3"}
-              autoComplete="off"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    if (selected.type === "action") {
-      return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Label</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.label || ""}
-              onChange={(e) => updateEditorValue("label", e.target.value)}
-              placeholder="Enter label…"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <FieldLabel>Email / Target</FieldLabel>
-            <input
-              className={inputClass}
-              value={editorValues.to || ""}
-              onChange={(e) => updateEditorValue("to", e.target.value)}
-              placeholder="email@example.com"
-              autoComplete="off"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-3">
-        <div>
-          <FieldLabel>Title</FieldLabel>
-          <input
-            className={inputClass}
-            value={editorValues.title || ""}
-            onChange={(e) => updateEditorValue("title", e.target.value)}
-            placeholder="Enter title…"
-            autoComplete="off"
-          />
-        </div>
-        <div>
-          <FieldLabel>Text</FieldLabel>
-          <textarea
-            className={inputClass}
-            rows={4}
-            value={editorValues.text || ""}
-            onChange={(e) => updateEditorValue("text", e.target.value)}
-            placeholder="Enter message text…"
-            autoComplete="off"
-          />
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="w-full h-full grid grid-rows-[auto_1fr_auto] gap-4 p-6">
       {/* ===== Header ===== */}
-      <div className={classNames(strongCard)}>
+      <div className="strong-card">
         <div className="h-2 rounded-md bg-black mb-4" />
-        <div className="p-5 space-y-3">
+        <div className="p-2 space-y-2">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-extrabold">Builder</h1>
               <p className="text-foreground/80 text-sm mt-1">
                 Drag-and-drop flow editor.{" "}
-                {source.kind === "inst"
+                {source?.kind === "inst"
                   ? "Editing a duplicated bot instance."
                   : "Pick a bot and edit the copy of each node."}
               </p>
@@ -797,7 +688,7 @@ function BuilderInner() {
                   title="Choose a Template Bot or a Client Bot (instance)"
                 >
                   <optgroup label="Client Bots (instances)">
-                    {instances.length === 0 ? (
+                    {bots.length === 0 ? (
                       <option value="inst:" disabled>
                         No client bots yet — duplicate or create one first
                       </option>
@@ -805,18 +696,18 @@ function BuilderInner() {
                       instances
                         .slice()
                         .sort((a, b) => b.updatedAt - a.updatedAt)
-                        .map((m) => (
-                          <option key={m.id} value={`inst:${m.id}`}>
-                            {(m.name || `${m.bot} Instance`).toString()} • {m.mode}
+                        .map((b) => (
+                          <option key={b._id} value={`inst:${b._id}`}>
+                            {b.name} • {b.plan}
                           </option>
                         ))
                     )}
                   </optgroup>
 
                   <optgroup label="Templates">
-                    {defs.map((d) => (
-                      <option key={d.key} value={`tpl:${d.key}`}>
-                        {d.name}
+                    {bots.map((b) => (
+                      <option key={b._id} value={`bot:${b._id}`}>
+                        {b.name}
                       </option>
                     ))}
                   </optgroup>
@@ -831,7 +722,7 @@ function BuilderInner() {
                 <div className="flex items-center gap-2">
                   <button
                     className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                      mode === "basic"
+                      source?.mode === "basic"
                         ? "bg-indigo-100"
                         : "hover:bg-muted/40 bg-white"
                     }`}
@@ -841,7 +732,7 @@ function BuilderInner() {
                   </button>
                   <button
                     className={`rounded-md px-2 py-1 text-xs font-bold ring-1 ring-border ${
-                      mode === "custom"
+                      source?.mode === "custom"
                         ? "bg-indigo-100"
                         : "hover:bg-muted/40 bg-white"
                     }`}
@@ -895,8 +786,7 @@ function BuilderInner() {
       </div>
 
       {/* ===== Canvas ===== */}
-      <div className={classNames(strongCard, Grad)}>
-        <div className="h-2 rounded-md bg-black mb-4" />
+      <div className="strong-card bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55">
         <div
           className="rounded-xl overflow-hidden"
           style={{
@@ -932,9 +822,9 @@ function BuilderInner() {
           </ReactFlow>
         </div>
 
-        {!base && (
+        {!source?.id && (
           <div className="px-4 py-3 text-sm text-foreground/80">
-            No template found for <b>{bot}</b> in mode <b>{mode}</b>. Make sure your
+            No template found for <b>{source?.id}</b> in mode <b>{source?.mode}</b>. Make sure your
             <code className="mx-1 px-1 rounded bg-muted/50">templates</code>{" "}
             storage includes a graph for this key+mode.
           </div>
@@ -956,14 +846,13 @@ function BuilderInner() {
       {/* ===== Editor ===== */}
       <div
         ref={editorRef}
-        className={classNames(strongCard, Grad)}
+        className="strong-card bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55"
       >
-        <div className="h-2 rounded-md bg-black mb-4" />
         <div className="p-5 space-y-4">
           <div className="text-sm font-extrabold text-foreground">
             Edit Text <span className="font-normal text-foreground/70">(per node)</span>
           </div>
-          <Editor />
+          <Editor selected={selected} editorValues={editorValues} updateEditorValue={updateEditorValue}/>
           {selected && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

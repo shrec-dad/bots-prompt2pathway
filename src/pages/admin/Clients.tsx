@@ -1,6 +1,8 @@
 // src/pages/admin/Clients.tsx
-import React, { useMemo, useState } from "react";
-import { getJSON, setJSON } from "@/lib/storage";
+import React, { useState, useEffect } from "react";
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchClients, addClient, updateClient, deleteClient } from '@/store/clientsSlice';
+import { RootState } from '@/store';
 import { BotKey } from "@/lib/botSettings";
 import { listInstances } from "@/lib/instances";
 
@@ -9,7 +11,6 @@ import { listInstances } from "@/lib/instances";
    ========================= */
 
 type Client = {
-  id: string;
   companyName: string;
   name: string;
   email: string;
@@ -22,12 +23,6 @@ type Client = {
   notes?: string;
   assignedBots?: string[]; // instance IDs
 };
-
-const KEY = "clients:list";
-
-function uid() {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 /* =========================
    XLSX loader (on-demand)
@@ -57,12 +52,6 @@ const ts = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
    Style helpers
    ========================= */
 
-const strongCard =
-  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
-const headerCard =
-  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] bg-white mb-6 px-5 py-4";
-const statCard = 
-  "rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] bg-card px-4 py-3 flex items-center gap-3";
 const badge =
   "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-border";
 const actionBtn =
@@ -75,8 +64,13 @@ const input =
    ========================= */
 
 export default function Clients() {
-  const initial = useMemo<Client[]>(() => getJSON<Client[]>(KEY, []), []);
-  const [clients, setClients] = useState<Client[]>(initial);
+  const dispatch = useDispatch();
+  const clients = useSelector((state: RootState) => state.clients.list);
+  const [loading, setLoading] = React.useState(false);
+
+  useEffect(() => {
+    dispatch(fetchClients());
+  }, [dispatch]);
 
   // Add modal
   const [openAdd, setOpenAdd] = useState(false);
@@ -107,11 +101,6 @@ export default function Clients() {
     0
   );
   const totalLeads = clients.reduce((a, c) => a + c.leads, 0);
-
-  function saveList(next: Client[]) {
-    setClients(next);
-    setJSON(KEY, next);
-  }
 
   /* ---------- Excel (.xlsx) Download ---------- */
   async function downloadXlsx() {
@@ -181,13 +170,12 @@ export default function Clients() {
   }
 
   /* ---------- Add ---------- */
-  function addClient() {
+  async function handleAddClient() {
     if (!companyName.trim()) return alert("Please enter a company name.");
     if (!name.trim()) return alert("Please enter a contact name.");
     if (!email.trim()) return alert("Please enter a contact email.");
 
     const newClient: Client = {
-      id: uid(),
       companyName: companyName.trim(),
       name: name.trim(),
       email: email.trim(),
@@ -200,20 +188,29 @@ export default function Clients() {
       assignedBots: [], // initialize for a consistent UI/export
     };
 
-    saveList([newClient, ...clients]);
+    setLoading(true);
+    try {
+      await dispatch(addClient(newClient)).unwrap();
+      // Refresh clients list
+      dispatch(fetchClients());
 
-    // reset form
-    setCompanyName("");
-    setName("");
-    setEmail("");
-    setPlan("Starter");
-    setDefaultBot("Waitlist");
-    setOpenAdd(false);
+      // reset form
+      setCompanyName("");
+      setName("");
+      setEmail("");
+      setPlan("Starter");
+      setDefaultBot("Waitlist");
+      setOpenAdd(false);
+    } catch (err: any) {
+     
+    } finally {
+      setLoading(false);
+    }
   }
 
   /* ---------- Edit ---------- */
-  function openEditModal(c: Client) {
-    setEditId(c.id);
+  function openEditModal(c) {
+    setEditId(c._id);
     setECompanyName(c.companyName);
     setEName(c.name);
     setEEmail(c.email);
@@ -226,17 +223,18 @@ export default function Clients() {
     setOpenEdit(true);
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (!editId) return;
 
-    const next = clients.map((c) =>
-      c.id !== editId
-        ? c
-        : {
-            ...c,
-            companyName: eCompanyName.trim() || c.companyName,
-            name: eName.trim() || c.name,
-            email: eEmail.trim() || c.email,
+    setLoading(true);
+    try {
+      await dispatch(
+        updateClient({
+          id: editId,
+          data: {
+            companyName: eCompanyName.trim(),
+            name: eName.trim(),
+            email: eEmail.trim(),
             plan: ePlan.trim(),
             status: eStatus,
             bots: eBots,
@@ -245,16 +243,29 @@ export default function Clients() {
             notes: eNotes,
             lastActivity: "updated now",
           }
-    );
+        })
+      ).unwrap();
 
-    saveList(next);
+      dispatch(fetchClients()); // refresh clients list
+      setOpenEdit(false);
+    } catch (err: any) {
+
+    } finally {
+      setLoading(false);
+    }
+
     setOpenEdit(false);
     setEditId(null);
   }
 
-  function removeClient(id: string) {
+  async function removeClient(id: string) {
     if (!confirm("Delete this client? This only affects local data.")) return;
-    saveList(clients.filter((c) => c.id !== id));
+
+    try {
+      await dispatch(deleteClient(id)).unwrap();
+    } catch (err: any) {
+
+    }
   }
 
   // Resolve instance IDs -> names for the card display
@@ -268,9 +279,9 @@ export default function Clients() {
   }
 
   return (
-    <div className="w-full">
+    <div className="p-5 md:p-6 space-y-6">
       {/* Header */}
-      <div className={headerCard}>
+      <div className="strong-card">
         <div className="h-2 rounded-md bg-black mb-4" />
         <div className="flex items-center justify-between">
           <div>
@@ -297,7 +308,7 @@ export default function Clients() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className={statCard}>
+        <div className="thin-card flex items-center gap-3">
           <div className="h-10 w-10 grid place-items-center rounded-xl bg-purple-100 ring-1 ring-border font-bold">
             👥
           </div>
@@ -308,7 +319,7 @@ export default function Clients() {
             <div className="text-xl font-extrabold">{totalClients}</div>
           </div>
         </div>
-        <div className={statCard}>
+        <div className="thin-card flex items-center gap-3">
           <div className="h-10 w-10 grid place-items-center rounded-xl bg-emerald-100 ring-1 ring-border font-bold">
             📈
           </div>
@@ -319,7 +330,7 @@ export default function Clients() {
             <div className="text-xl font-extrabold">{activeClients}</div>
           </div>
         </div>
-        <div className={statCard}>
+        <div className="thin-card flex items-center gap-3">
           <div className="h-10 w-10 grid place-items-center rounded-xl bg-sky-100 ring-1 ring-border font-bold">
             🤖
           </div>
@@ -330,7 +341,7 @@ export default function Clients() {
             <div className="text-xl font-extrabold">{totalBots}</div>
           </div>
         </div>
-        <div className={statCard}>
+        <div className="thin-card flex items-center gap-3">
           <div className="h-10 w-10 grid place-items-center rounded-xl bg-rose-100 ring-1 ring-border font-bold">
             🚀
           </div>
@@ -344,7 +355,7 @@ export default function Clients() {
       </div>
 
       {/* List */}
-      <div className={strongCard + " bg-card p-5"}>
+      <div className="strong-card bg-card p-5">
         <div className="text-xl font-extrabold mb-2">All Clients</div>
         <div className="text-sm font-semibold text-foreground/80 mb-4">
           Overview of all your clients and their activity
@@ -371,7 +382,7 @@ export default function Clients() {
                     </div>
                     <div>
                       <div className="text-lg font-extrabold tracking-tight">
-                        {c.companyName}
+                        {c.company}
                       </div>
                       <div className="text-sm font-semibold text-foreground/80">
                         {c.name} • {c.email}
@@ -441,7 +452,7 @@ export default function Clients() {
                       </button>
                       <button
                         className="rounded-xl px-3 py-1.5 font-bold ring-1 ring-border bg-white hover:bg-rose-50"
-                        onClick={() => removeClient(c.id)}
+                        onClick={() => removeClient(c._id)}
                       >
                         Remove
                       </button>
@@ -546,7 +557,7 @@ export default function Clients() {
                 </button>
                 <button
                   className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                  onClick={addClient}
+                  onClick={handleAddClient}
                 >
                   Save Client
                 </button>

@@ -1,8 +1,9 @@
 // src/pages/admin/Integrations.tsx
-import React, { useEffect, useMemo, useState } from "react";
-import { useAdminStore } from "@/lib/AdminStore";
-import { getJSON, setJSON } from "@/lib/storage";
-import { listInstances, type InstanceMeta } from "@/lib/instances";
+import { useEffect, useState } from "react";
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/store';
+import { fetchBots, updateBot } from '@/store/botsSlice';
+import { fetchInstances, updateInstance } from '@/store/botInstancesSlice';
 import BotSelector from "@/components/BotSelector";
 
 type UniversalCfg = {
@@ -19,60 +20,15 @@ type UniversalCfg = {
   crmAuthToken?: string;
 };
 
-// Persist under a chosen key (admin id, instance id, or template key)
-const KEY = (botId: string) => `integrations:${botId}`;
-
-/** Map Template Keys to AdminStore ids for backward-compatibility */
-function adminIdForTemplateKey(botKey: string): string | null {
-  switch (botKey) {
-    case "LeadQualifier":
-      return "lead-qualifier";
-    case "AppointmentBooking":
-      return "appointment";
-    case "CustomerSupport":
-      return "customer-support";
-    case "Waitlist":
-      return "waitlist-bot";
-    case "SocialMedia":
-      return "social-media";
-    case "Receptionist":
-      return "receptionist-bot";
-    default:
-      return null; // custom templates won't have an AdminStore id
-  }
+const DEFAULT_CFG: UniversalCfg = {
+  emailWebhook: "",
+  emailApiKey: "",
+  calendarWebhook: "",
+  calendarSecret: "",
+  crmWebhook: "",
+  crmAuthToken: ""
 }
 
-/** Safely resolve a storage key for a selection value (instance id OR template key OR object) */
-function resolveStorageKey(selection: unknown): string {
-  // If we already have a string, normalize it
-  if (typeof selection === "string") {
-    if (selection.startsWith("inst_")) return selection; // instance id
-    // template: prefer legacy admin id if available
-    return adminIdForTemplateKey(selection) || selection;
-  }
-
-  // Some UIs may pass an object; try to glean id/key safely
-  if (selection && typeof selection === "object") {
-    const anySel = selection as any;
-    // Instance objects often have an id like "inst_..."
-    if (typeof anySel.id === "string") {
-      if (anySel.id.startsWith("inst_")) return anySel.id;
-      // If it's an admin id (e.g., "waitlist-bot"), use it as-is
-      return anySel.id;
-    }
-    // Template objects may expose a `key`
-    if (typeof anySel.key === "string") {
-      return adminIdForTemplateKey(anySel.key) || anySel.key;
-    }
-    // Or a generic value field
-    if (typeof anySel.value === "string") {
-      return resolveStorageKey(anySel.value);
-    }
-  }
-
-  // Fallback: empty string means "no selection"
-  return "";
-}
 
 function classNames(...xs: (string | false | undefined)[]) {
   return xs.filter(Boolean).join(" ");
@@ -84,56 +40,53 @@ const strongCard =
   "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
 
 export default function Integrations() {
-  const { bots } = useAdminStore();
-
-  // ===== Client bots (instances) =====
-  const [instances, setInstances] = useState<InstanceMeta[]>(() => listInstances());
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key) return;
-      if (e.key === "botInstances:index" || e.key.startsWith("botInstances:")) {
-        setInstances(listInstances());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  // selection value can be template key OR instance id OR an object from BotSelector
-  const [appliesTo, setAppliesTo] = useState<string>(() => {
-    const firstAdminId = typeof bots?.[0]?.id === "string" ? bots[0].id : "";
-    return firstAdminId || "";
-  });
-
-  // Load config for selected key.
-  const cfg = useMemo<UniversalCfg>(() => {
-    const key = resolveStorageKey(appliesTo);
-    return getJSON<UniversalCfg>(KEY(key), {});
-  }, [appliesTo]);
-
-  const [form, setForm] = useState<UniversalCfg>(cfg);
+  const dispatch = useDispatch();
+  const bots = useSelector((state: RootState) => state.bots.list);
+  const instances = useSelector((state: RootState) => state.instances.list);
 
   useEffect(() => {
-    const key = resolveStorageKey(appliesTo);
-    setForm(getJSON<UniversalCfg>(KEY(key), {}));
-  }, [appliesTo]);
+    dispatch(fetchBots());
+    dispatch(fetchInstances());
+  }, [dispatch]);
 
-  const save = () => {
-    const key = resolveStorageKey(appliesTo);
-    if (!key) {
+  // selection value can be bot id OR instance id
+  const [instId, setInstId] = useState<string>("");
+  const [kind, setKind] = useState<string>("");
+
+
+  const [form, setForm] = useState<UniversalCfg>(DEFAULT_CFG);
+
+  useEffect(() => {
+    if (instId) {
+      setForm((kind == "template" ? bots.find(b => b._id == instId)?.integrations : instances.find(b => b._id == instId)?.integrations) || DEFAULT_CFG);
+    }
+  }, [instId]);
+
+  const save = async () => {
+    if (!instId) {
       alert("Pick a target (template or instance) first.");
       return;
     }
-    setJSON(KEY(key), form);
-    alert("Integrations saved for this target.");
+
+    try {
+      await dispatch(kind == "template" ? updateBot({ id: instId, data: { integrations: form }}) : updateInstance({ id: instId, data: { integrations: form }})).unwrap();
+      alert("Integrations saved for this target.");
+    } catch (err: any) {
+      alert("Failed to save changes. Please try again.")
+    }
   };
 
-  const reset = () => {
-    const key = resolveStorageKey(appliesTo);
-    if (!key) return;
+  const reset = async () => {
+    if (!instId) return;
     if (!confirm("Clear all integration fields for this target?")) return;
-    setForm({});
-    setJSON(KEY(key), {});
+    
+    setForm(DEFAULT_CFG);
+
+    try {
+      await dispatch(kind == "template" ? updateBot({ id: instId, data: { integrations: DEFAULT_CFG }}) : updateInstance({ id: instId, data: { integrations: DEFAULT_CFG }})).unwrap();
+    } catch (err: any) {
+      alert("Failed to clear all fields. Please try again.")
+    }
   };
 
   const input =
@@ -142,7 +95,7 @@ export default function Integrations() {
 
   // Little hint message when editing an instance
   const instanceHint =
-    typeof appliesTo === "string" && appliesTo.startsWith("inst_") ? (
+    typeof instId === "string" && instId.startsWith("inst_") ? (
       <div className="text-xs font-semibold text-black/70">
         Editing <span className="font-extrabold">client bot instance</span>. Blank fields effectively started as inherited from its base template when this form loaded. Any values you save here are stored only for this instance.
       </div>
@@ -173,10 +126,12 @@ export default function Integrations() {
               <div className={label}>Target</div>
               <BotSelector
                 scope="both"
-                value={appliesTo}
+                templates={bots}
+                instances={instances}
+                value={instId}
                 onChange={(v) => {
-                  const next = resolveStorageKey(v);
-                  setAppliesTo(next);
+                  setKind(v.kind);
+                  setInstId(v.id);
                 }}
                 placeholderOption="— Select a Template or an Instance —"
                 showGroups

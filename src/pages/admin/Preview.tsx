@@ -1,10 +1,13 @@
 // src/pages/admin/Preview.tsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/store';
 import ChatWidget from "@/widgets/ChatWidget";
-import { listInstances, type InstanceMeta } from "@/lib/instances";
 import BotSelector from "@/components/BotSelector";
-import { trackEvent } from "@/lib/analytics";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { fetchBots, updateBot } from '@/store/botsSlice';
+import { fetchInstances, updateInstance } from '@/store/botInstancesSlice';
+import { trackEvent } from "@/store/metricsSlice";
 
 type Mode = "popup" | "inline" | "sidebar";
 type Pos = "bottom-right" | "bottom-left";
@@ -18,277 +21,190 @@ type Shape =
   | "speech"
   | "speech-rounded";
 type ImageFit = "cover" | "contain" | "center";
+type PanelStyle = "step-by-step" | "conversation";
 
-/* ---------- Small helpers ---------- */
-
-const BOT_TITLES: Record<string, string> = {
-  LeadQualifier: "Lead Qualifier",
-  AppointmentBooking: "Appointment Booking",
-  CustomerSupport: "Customer Support",
-  Waitlist: "Waitlist",
-  SocialMedia: "Social Media",
-  Receptionist: "Receptionist",
-};
-
-function titleCaseSlug(s: unknown) {
-  if (typeof s === "string") {
-    return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-  return "";
-}
-
-function toId(val: unknown): string {
-  if (typeof val === "string") return val;
-  if (val && typeof val === "object") {
-    const anyVal = val as any;
-    if (typeof anyVal.id === "string") return anyVal.id;
-    if (typeof anyVal.key === "string") return anyVal.key;
-    if (typeof anyVal.value === "string") return anyVal.value;
-  }
-  return "";
-}
-
-/* ---------- Branding storage ---------- */
-
-const BRAND_KEY = "brandingSettings";
-
-type Branding = {
-  logoDataUrl?: string;
-  primaryColor: string;
-  secondaryColor: string;
-  fontFamily: string;
-  chatBubbleImage?: string;
-  chatBubbleColor: string;
-  chatBubbleSize: number;
-  chatBubblePosition: Pos;
-  chatBubbleShape?: Shape;
-  chatBubbleLabel?: string;
-  chatBubbleLabelColor?: string;
-  chatBubbleImageFit?: ImageFit;
-  chatHideLabelWhenImage?: boolean;
-};
-
-function getBranding(): Branding {
-  try {
-    const raw = localStorage.getItem(BRAND_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return {
-    primaryColor: "#7aa8ff",
-    secondaryColor: "#76c19a",
-    fontFamily: "Inter, system-ui, Arial, sans-serif",
-    chatBubbleColor: "#7aa8ff",
-    chatBubbleSize: 56,
-    chatBubblePosition: "bottom-left",
-    chatBubbleShape: "circle",
-    chatBubbleLabel: "Chat",
-    chatBubbleLabelColor: "#ffffff",
-    chatBubbleImageFit: "cover",
-    chatHideLabelWhenImage: false,
-  };
-}
-
-function setBranding(next: Partial<Branding>) {
-  const prev = getBranding();
-  const merged = { ...prev, ...next };
-  localStorage.setItem(BRAND_KEY, JSON.stringify(merged));
-  return merged as Branding;
-}
-
-function classNames(...xs: (string | false | undefined)[]) {
-  return xs.filter(Boolean).join(" ");
-}
-
-const Grad =
-  "bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55";
-const strongCard =
-  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
 
 export default function Preview() {
-  /* ---------- sources (instances) ---------- */
-  const [instances, setInstances] = useState<InstanceMeta[]>(() =>
-    listInstances()
-  );
+  const dispatch = useDispatch();
+  const bots = useSelector((state: RootState) => state.bots.list);
+  const instances = useSelector((state: RootState) => state.instances.list);
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key) return;
-      if (e.key.startsWith("botInstances:") || e.key === "botInstances:index") {
-        setInstances(listInstances());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+    dispatch(fetchBots());
+    dispatch(fetchInstances());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (bots.length) setBotId(bots[0]._id);
+  }, [bots])
 
   /* ---------- selection state ---------- */
   const [instId, setInstId] = useState<string>("");
-  const [botKey, setBotKey] = useState<string>("Waitlist");
+  const [botId, setBotId] = useState<string>("");
 
-  const onInstanceChange = (val: unknown) => {
-    const id = toId(val);
-    setInstId(id);
-    trackEvent(
-      "preview_select_instance",
-      id ? { kind: "inst", id } : { kind: "bot", key: botKey }
-    );
+  const onInstanceChange = (val) => {
+    if (!val || val.kind !== "instance") return;
+    setInstId(val.id);
+    dispatch(trackEvent({
+      type: "preview_select_instance",
+      key: `inst:${instId}`,
+      ts: Date.now()
+    }));
   };
-  const onBotChange = (val: unknown) => {
-    const key = toId(val) || "Waitlist";
-    setBotKey(key);
-    trackEvent("preview_select_bot", { kind: "bot", key });
+
+  const onBotChange = (val) => {
+    if (!val || val.kind !== "template") return;
+    setBotId(val.id);
+    dispatch(trackEvent({
+      type: "preview_select_bot",
+      key: `bot:${botId}`,
+      ts: Date.now()
+    }));
   };
+
   const clearInstance = () => {
     if (!instId) return;
-    trackEvent("preview_clear_instance", { kind: "inst", id: instId });
+    dispatch(trackEvent({
+      type: "preview_clear_instance",
+      key: `inst:${instId}`,
+      ts: Date.now()
+    }));
     setInstId("");
   };
 
-  const activeInst = useMemo(
-    () =>
-      typeof instId === "string" && instId
-        ? instances.find((m) => m.id === instId)
-        : undefined,
-    [instances, instId]
-  );
+  useEffect(() => {
+    let b = null;
+    if (instId) {
+      b = instances.find((m) => m._id == instId)?.branding
+    }
+    if (botId) {
+      b = bots.find((b) => b._id == botId)?.branding 
+    }
 
-  const activeBotKey = activeInst?.bot || botKey;
+    setMode(b?.mode || "popup");
+    setPos(b?.pos || "bottom-left");
+    setSize(b?.size || 56);
+    setBgColor(b?.bgColor || "#7aa8ff");
+    setImg(b?.img || "");
+    setShape(b?.shape || "circle");
+    setImageFit(b?.imageFit || "cover");
+    setLabel(b?.label || "Chat");
+    setLabelColor(b?.labelColor || "#ffffff");
+    setHideLabelWhenImage(b?.hideLabelWhenImage || false);
+    setPanelStyle(b?.panelStyle || "step-by-step");
+    setBorderColor(b?.borderColor || "#000000");
+    setBotAvatar(b?.botAvatar || "");
+  }, [instId, botId])
 
-  /* ---------- widget look state ---------- */
-  const b = useMemo(getBranding, []);
   const [mode, setMode] = useState<Mode>("popup");
-  const [pos, setPos] = useState<Pos>(b.chatBubblePosition ?? "bottom-left");
-  const [size, setSize] = useState<number>(b.chatBubbleSize ?? 56);
-  const [color, setColor] = useState<string>(b.chatBubbleColor ?? "#7aa8ff");
-  const [img, setImg] = useState<string>(b.chatBubbleImage ?? "");
-  const [shape, setShape] = useState<Shape>(b.chatBubbleShape ?? "circle");
-  const [imageFit, setImageFit] = useState<ImageFit>(
-    b.chatBubbleImageFit ?? "cover"
-  );
-  const [label, setLabel] = useState<string>(b.chatBubbleLabel ?? "Chat");
-  const [labelColor, setLabelColor] = useState<string>(
-    b.chatBubbleLabelColor ?? "#ffffff"
-  );
-  const [hideLabelWhenImage, setHideLabelWhenImage] = useState<boolean>(
-    !!b.chatHideLabelWhenImage
-  );
+  const [pos, setPos] = useState<Pos>("bottom-left");
+  const [size, setSize] = useState<number>(56);
+  const [bgColor, setBgColor] = useState<string>("#7aa8ff");
+  const [img, setImg] = useState<string>("");
+  const [shape, setShape] = useState<Shape>("circle");
+  const [imageFit, setImageFit] = useState<ImageFit>("cover");
+  const [label, setLabel] = useState<string>("Chat");
+  const [labelColor, setLabelColor] = useState<string>("#ffffff");
+  const [hideLabelWhenImage, setHideLabelWhenImage] = useState<boolean>(false);
+  const [panelStyle, setPanelStyle] = useState<PanelStyle>("step-by-step");
+  const [borderColor, setBorderColor] = useState<string>("#000000");
+  const [botAvatar, setBotAvatar] = useState<string>("");
 
-  /* ---------- modal demo state ---------- */
-  const [openModal, setOpenModal] = useState(false);
-  const [step, setStep] = useState(0);
-
-  const next = () => {
-    const scope = activeInst
-      ? ({ kind: "inst", id: activeInst.id } as const)
-      : ({ kind: "bot", key: activeBotKey } as const);
-    trackEvent("step_next", scope, { step });
-    setStep((s) => Math.min(s + 1, 3));
-  };
-
-  const back = () => {
-    const scope = activeInst
-      ? ({ kind: "inst", id: activeInst.id } as const)
-      : ({ kind: "bot", key: activeBotKey } as const);
-    trackEvent("step_back", scope, { step });
-    setStep((s) => Math.max(s - 1, 0));
-  };
-
-  const headline = activeInst
-    ? `Welcome to ${activeInst.name}`
-    : `Welcome to ${BOT_TITLES[activeBotKey] ?? titleCaseSlug(activeBotKey)}`;
-
-  const subtext = (() => {
-    if (step === 0)
-      return "I'll ask a few quick questions to help our team help you.";
-    if (step === 1) return "What's the best email to reach you?";
-    if (step === 2) return "Choose your interest level.";
-    return "Thanks! You're on the list — we'll be in touch.";
-  })();
+  const [openPanel, setOpenPanel] = useState(false);
 
   const widgetSrc = useMemo(() => {
     const qp = new URLSearchParams();
-    if (activeInst) qp.set("inst", activeInst.id);
-    else qp.set("bot", activeBotKey);
+    if (instId) qp.set("inst", instId);
+    else if (botId) qp.set("bot", botId);
 
+    qp.set("mode", mode);
     qp.set("position", pos);
     qp.set("size", String(size));
     qp.set("shape", shape);
     qp.set("imageFit", imageFit);
+    qp.set("panelStyle", panelStyle);
+
     if (label.trim()) qp.set("label", label.trim());
     if (labelColor.trim()) qp.set("labelColor", labelColor.trim());
-    if (color.trim()) qp.set("color", color.trim());
-    if (img.trim()) qp.set("image", img.trim());
+    if (bgColor.trim()) qp.set("bgColor", bgColor.trim());
+    if (img.trim()) qp.set("img", img.trim());
+    if (borderColor.trim()) qp.set("borderColor", borderColor.trim());
+    if (botAvatar.trim()) qp.set("botAvatar", botAvatar.trim());
 
     return `/widget?${qp.toString()}`;
   }, [
-    activeInst,
-    activeBotKey,
+    instId,
+    botId,
     pos,
     size,
     shape,
     imageFit,
     label,
     labelColor,
-    color,
+    bgColor,
     img,
+    borderColor,
+    botAvatar,
+    panelStyle
   ]);
 
   const embedIframe = `<iframe
-  src="${widgetSrc}"
-  style="border:0;width:100%;height:560px"
-  loading="lazy"
-  referrerpolicy="no-referrer-when-downgrade"
-></iframe>`;
+      src="${widgetSrc}"
+      style="border:0;width:100%;height:560px"
+      loading="lazy"
+      referrerpolicy="no-referrer-when-downgrade"
+    ></iframe>`;
 
   /* ---------- save/reset ---------- */
   const [savedNote, setSavedNote] = useState<null | string>(null);
-  useEffect(() => {
-    if (!savedNote) return;
-    const t = setTimeout(() => setSavedNote(null), 1200);
-    return () => clearTimeout(t);
-  }, [savedNote]);
 
-  const onSave = () => {
-    setBranding({
-      chatBubblePosition: pos,
-      chatBubbleSize: size,
-      chatBubbleColor: color,
-      chatBubbleImage: img || undefined,
-      chatBubbleShape: shape,
-      chatBubbleImageFit: imageFit,
-      chatBubbleLabel: label,
-      chatBubbleLabelColor: labelColor,
-      chatHideLabelWhenImage: hideLabelWhenImage,
-    });
-    setSavedNote("Saved!");
+  const onSave = async () => {
+    const branding = {
+      mode,
+      pos,
+      shape,
+      size,
+      label,
+      labelColor,
+      bgColor,
+      img,
+      imageFit,
+      hideLabelWhenImage,
+      panelStyle,
+      borderColor,
+      botAvatar
+    }
+
+    try {
+      const updateAction = instId 
+        ? updateInstance({ id: instId, data: { branding } })
+        : botId 
+          ? updateBot({ id: botId, data: { branding } })
+          : null;
+
+      if (!updateAction) return;
+      await dispatch(updateAction).unwrap();
+      setSavedNote("Saved successfully!");
+    } catch (err: any) {
+      setSavedNote("Failed to save changes. Please try again.")
+    }
   };
 
   const onReset = () => {
-    const d = {
-      primaryColor: "#7aa8ff",
-      secondaryColor: "#76c19a",
-      fontFamily: "Inter, system-ui, Arial, sans-serif",
-      chatBubbleColor: "#7aa8ff",
-      chatBubbleSize: 56,
-      chatBubblePosition: "bottom-left" as Pos,
-      chatBubbleShape: "circle" as Shape,
-      chatBubbleLabel: "Chat",
-      chatBubbleLabelColor: "#ffffff",
-      chatBubbleImageFit: "cover" as ImageFit,
-      chatBubbleImage: "",
-      chatHideLabelWhenImage: false,
-    };
-    setBranding(d);
-    setPos(d.chatBubblePosition);
-    setSize(d.chatBubbleSize);
-    setColor(d.chatBubbleColor);
-    setImg(d.chatBubbleImage || "");
-    setShape(d.chatBubbleShape);
-    setImageFit(d.chatBubbleImageFit);
-    setLabel(d.chatBubbleLabel);
-    setLabelColor(d.chatBubbleLabelColor);
-    setHideLabelWhenImage(!!d.chatHideLabelWhenImage);
+    setMode("popup");
+    setPos("bottom-left" as Pos);
+    setSize(56);
+    setBgColor("#7aa8ff");
+    setImg("");
+    setShape("circle" as Shape);
+    setImageFit("cover" as ImageFit);
+    setLabel("Chat");
+    setLabelColor("#ffffff");
+    setHideLabelWhenImage(false);
     setSavedNote("Reset");
+    setPanelStyle("step-by-step");
+    setBorderColor("#000000");
+    setBotAvatar("");
   };
 
   async function onPickBubbleImage(e: React.ChangeEvent<HTMLInputElement>) {
@@ -300,11 +216,21 @@ export default function Preview() {
     e.currentTarget.value = "";
   }
 
+
+  async function onPickBotAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => setBotAvatar(String(reader.result || ""));
+    reader.readAsDataURL(f);
+    e.currentTarget.value = "";
+  }
+
   return (
     <ErrorBoundary>
       <div className="space-y-6 p-6">
         {/* Header Section */}
-        <div className={classNames("p-5", strongCard)}>
+        <div className="p-5 strong-card">
           <div className="h-2 rounded-md bg-black mb-4" />
           <div className="flex items-center justify-between">
             <div>
@@ -334,7 +260,7 @@ export default function Preview() {
         </div>
 
         {/* Controls Card */}
-        <div className={classNames(strongCard, Grad)}>
+        <div className="strong-card bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55">
           <div className="h-2 rounded-md bg-black mb-0" />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5">
@@ -355,6 +281,8 @@ export default function Preview() {
               </div>
               <BotSelector
                 scope="instance"
+                templates={bots}
+                instances={instances}
                 value={instId}
                 onChange={onInstanceChange}
                 placeholderOption="— none —"
@@ -369,9 +297,11 @@ export default function Preview() {
               <label className="text-sm font-semibold">Bot</label>
               <BotSelector
                 scope="template"
-                value={botKey}
+                templates={bots}
+                instances={instances}
+                value={botId}
                 onChange={onBotChange}
-                disabled={!!activeInst}
+                disabled={!!instId}
               />
             </div>
 
@@ -468,7 +398,33 @@ export default function Preview() {
                 <label htmlFor="hideLabel">Hide label when an image is used</label>
               </div>
             </div>
-
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-semibold">Bot Avatar (optional)</label>
+              <div className="flex items-center gap-3">
+                <input
+                  className="w-full rounded-lg border px-3 py-2"
+                  placeholder="https://example.com/avatar.png  — or use Upload"
+                  value={botAvatar}
+                  onChange={(e) => setBotAvatar(e.target.value)}
+                />
+                <label className="rounded-lg border px-3 py-2 font-semibold cursor-pointer bg-white">
+                  Upload
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={onPickBotAvatar}
+                  />
+                </label>
+                <button
+                  className="rounded-lg border px-3 py-2 font-semibold bg-white"
+                  onClick={() => setBotAvatar("")}
+                  title="Clear bot avatar"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold">Image Fit</label>
               <select
@@ -498,8 +454,8 @@ export default function Preview() {
               <input
                 type="color"
                 className="h-10 w-full rounded-lg border"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
+                value={bgColor}
+                onChange={(e) => setBgColor(e.target.value)}
               />
             </div>
 
@@ -512,18 +468,39 @@ export default function Preview() {
                 onChange={(e) => setLabelColor(e.target.value)}
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Border Color</label>
+              <input
+                type="color"
+                className="h-10 w-full rounded-lg border"
+                value={borderColor}
+                onChange={(e) => setBorderColor(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Panel Style</label>
+              <select
+                className="w-full rounded-lg border px-3 py-2"
+                value={panelStyle}
+                onChange={(e) => setPanelStyle(e.target.value as PanelStyle)}
+              >
+                <option value="step-by-step">Step by Step</option>
+                <option value="conversation">Conversation</option>
+              </select>
+            </div>
 
             {/* Open modal + embed url (copy) */}
             <div className="md:col-span-2 flex items-center gap-3">
               <button
                 className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-teal-500/20 hover:from-purple-500/30 hover:to-teal-500/30"
-                onClick={() => {
-                  const scope = activeInst
-                    ? ({ kind: "inst", id: activeInst.id } as const)
-                    : ({ kind: "bot", key: activeBotKey } as const);
-                  trackEvent("bubble_open", scope, { from: "preview_button" });
-                  setStep(0);
-                  setOpenModal(true);
+                onClick={() => { 
+                  dispatch(trackEvent({
+                    type: "open_widget",
+                    key: (instId ? `inst:${instId}` : `bot:${botId}`),
+                    meta: { from: "preview_button" },
+                    ts: Date.now()
+                  }));
+                  setOpenPanel(true);
                 }}
               >
                 Open Preview Modal
@@ -554,168 +531,27 @@ export default function Preview() {
             </div>
           </div>
         </div>
-
-        {/* Live area: bubble + modal */}
-        <div className={classNames(
-          "relative min-h-[70vh] rounded-2xl p-6 overflow-visible",
-          strongCard,
-          Grad
-        )}>
-          <div className="h-2 rounded-md bg-black mb-4" />
-          
-          {mode === "popup" && (
-            <ChatWidget
-              mode="popup"
-              botId={activeBotKey}
-              position={pos}
-              size={size}
-              color={color || undefined}
-              image={img || undefined}
-              shape={shape as any}
-              imageFit={imageFit}
-              label={label}
-              labelColor={labelColor}
-              hideLabelWhenImage={hideLabelWhenImage}
-              onBubbleClick={() => {
-                const scope = activeInst
-                  ? ({ kind: "inst", id: activeInst.id } as const)
-                  : ({ kind: "bot", key: activeBotKey } as const);
-                trackEvent("bubble_open", scope, { from: "preview_bubble" });
-                setStep(0);
-                setOpenModal(true);
-              }}
-            />
-          )}
-
-          {openModal && (
-            <div
-              className="absolute inset-0 grid place-items-center"
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  const scope = activeInst
-                    ? ({ kind: "inst", id: activeInst.id } as const)
-                    : ({ kind: "bot", key: activeBotKey } as const);
-                  trackEvent("close_widget", scope, { step });
-                  setOpenModal(false);
-                }
-              }}
-            >
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-label="Widget Preview"
-                className="w-[480px] max-w-[94vw] rounded-2xl border-[3px] border-black/80 bg-white shadow-2xl outline-none"
-                tabIndex={-1}
-              >
-                {/* top strip */}
-                <div
-                  className="rounded-t-2xl p-4 h-2 bg-black"
-                  aria-hidden="true"
-                />
-
-                {/* body – vertical layout; scroll-safe on short screens */}
-                <div className="p-6 flex flex-col gap-6 max-h-[70vh] overflow-y-auto">
-                  {/* Close button (top-right) */}
-                  <div className="flex">
-                    <button
-                      className="ml-auto rounded-xl px-3 py-1.5 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
-                      onClick={() => {
-                        const scope = activeInst
-                          ? ({ kind: "inst", id: activeInst.id } as const)
-                          : ({ kind: "bot", key: activeBotKey } as const);
-                        trackEvent("close_widget", scope, { step });
-                        setOpenModal(false);
-                      }}
-                      autoFocus
-                      aria-label="Close preview"
-                    >
-                      Close
-                    </button>
-                  </div>
-
-                  {/* emoji + text */}
-                  <div className="grid place-items-center text-6xl">👋</div>
-
-                  <div className="text-center space-y-3">
-                    <h2 className="text-2xl md:text-3xl font-extrabold">
-                      {headline}
-                    </h2>
-                    <p className="text-muted-foreground">{subtext}</p>
-
-                    {step === 1 && (
-                      <div className="mt-4">
-                        <input
-                          className="w-full rounded-lg border px-3 py-2"
-                          placeholder="you@domain.com"
-                        />
-                      </div>
-                    )}
-
-                    {step === 2 && (
-                      <div className="mt-4 grid gap-2">
-                        {["Curious", "Very interested", "VIP"].map((o) => (
-                          <button
-                            key={o}
-                            className="rounded-lg border px-3 py-2 hover:bg-muted/50"
-                          >
-                            {o}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* CTA zone – vertical buttons */}
-                  <div className="flex flex-col gap-3">
-                    {step > 0 && step < 3 && (
-                      <button
-                        className="rounded-xl w-full px-4 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
-                        onClick={() => {
-                          const scope = activeInst
-                            ? ({ kind: "inst", id: activeInst.id } as const)
-                            : ({ kind: "bot", key: activeBotKey } as const);
-                          trackEvent("step_back", scope, { step });
-                          setStep((s) => Math.max(s - 1, 0));
-                        }}
-                      >
-                        Back
-                      </button>
-                    )}
-
-                    {step < 3 ? (
-                      <button
-                        className="rounded-xl w-full px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                        onClick={() => {
-                          const scope = activeInst
-                            ? ({ kind: "inst", id: activeInst.id } as const)
-                            : ({ kind: "bot", key: activeBotKey } as const);
-                          trackEvent("step_next", scope, { step });
-                          setStep((s) => Math.min(s + 1, 3));
-                        }}
-                      >
-                        Continue
-                      </button>
-                    ) : (
-                      <button
-                        className="rounded-xl w-full px-5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                        onClick={() => {
-                          const scope = activeInst
-                            ? ({ kind: "inst", id: activeInst.id } as const)
-                            : ({ kind: "bot", key: activeBotKey } as const);
-                          trackEvent("lead_submit", scope, {
-                            method: "preview-demo",
-                          });
-                          setOpenModal(false);
-                        }}
-                      >
-                        Done
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+        
+        <div className="relative">
+          <ChatWidget
+            mode={mode}
+            openPanel={openPanel}
+            onOpenChange={setOpenPanel}
+            botId={instId || botId}
+            kind={instId ? "inst" : "bot"}
+            position={pos}
+            size={size}
+            color={bgColor || undefined}
+            image={img || undefined}
+            shape={shape as any}
+            imageFit={imageFit as any}
+            label={label}
+            labelColor={labelColor}
+            hideLabelWhenImage={hideLabelWhenImage}
+            panelStyle={panelStyle}
+            botAvatarUrl={botAvatar}
+            borderColor={borderColor}
+          />
         </div>
       </div>
     </ErrorBoundary>

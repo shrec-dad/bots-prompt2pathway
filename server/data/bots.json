@@ -1,0 +1,925 @@
+[
+  {
+    "key": "lead_qualifier",
+    "name": "Lead Qualifier",
+    "emoji": "🎯",
+    "description": "Qualify leads with scoring, validation and routing. Best for sales intake.",
+    "nodes": {
+      "basic": [
+        {
+          "id": "welcome_1",
+          "type": "message",
+          "data": { "title": "Welcome", "text": "Hi! Let's see if we're a fit. Ready to begin?" },
+          "position": { "x": 60, "y": 40 }
+        },
+        {
+          "id": "email_2",
+          "type": "input",
+          "data": { "label": "Your email", "placeholder": "name@example.com", "required": true },
+          "position": { "x": 60, "y": 190 }
+        },
+        {
+          "id": "phone_3",
+          "type": "input",
+          "data": { "label": "Phone (optional)", "placeholder": "(555) 555-5555" },
+          "position": { "x": 320, "y": 190 }
+        },
+        {
+          "id": "company_4",
+          "type": "input",
+          "data": { "label": "Company / Business", "placeholder": "Acme Co." },
+          "position": { "x": 580, "y": 190 }
+        },
+        {
+          "id": "budget_5",
+          "type": "choice",
+          "data": { "label": "Budget range?", "options": ["< $1k", "$1k–$3k", "$3k–$10k", "$10k+"] },
+          "position": { "x": 60, "y": 340 }
+        },
+        {
+          "id": "timeline_6",
+          "type": "choice",
+          "data": { "label": "Timeline?", "options": ["Urgent", "1–3 months", "3–6 months", "Flexible"] },
+          "position": { "x": 320, "y": 340 }
+        },
+        {
+          "id": "pain_7",
+          "type": "input",
+          "data": { "label": "Main pain point", "placeholder": "Briefly describe your challenge…", "multiline": true },
+          "position": { "x": 580, "y": 340 }
+        },
+        {
+          "id": "tagLeadQ_71",
+          "type": "action",
+          "data": { "label": "Tag", "to": "system:tags", "tags": ["lead-qualifier", "basic"] },
+          "position": { "x": 320, "y": 450 }
+        },
+        {
+          "id": "submitEmail_8",
+          "type": "action",
+          "data": {
+            "label": "Email lead to team",
+            "to": "mailto:{{settings.teamEmail}}",
+            "subject": "New Lead ({{company}})",
+            "body": "name: {{email}}\nPhone: {{phone}}\nCompany: {{company}}\nBudget: {{budget}}\nTimeline: {{timeline}}\nNotes: {{pain}}"
+          },
+          "position": { "x": 320, "y": 510 }
+        },
+        {
+          "id": "thanks_9",
+          "type": "message",
+          "data": { "title": "Thanks!", "text": "We'll review and follow up with next steps." },
+          "position": { "x": 580, "y": 510 }
+        }
+      ],
+      "custom": [
+        {
+          "id": "welcome_1",
+          "type": "message",
+          "data": { "title": "Welcome", "text": "Hi! Let's see if we're a fit. Ready to begin?" },
+          "position": { "x": 60, "y": 40 }
+        },
+        {
+          "id": "email_2",
+          "type": "input",
+          "data": { "label": "Your email", "placeholder": "name@example.com", "required": true },
+          "position": { "x": 60, "y": 190 }
+        },
+        {
+          "id": "phone_3",
+          "type": "input",
+          "data": { "label": "Phone (optional)", "placeholder": "(555) 555-5555" },
+          "position": { "x": 320, "y": 190 }
+        },
+        {
+          "id": "company_4",
+          "type": "input",
+          "data": { "label": "Company / Business", "placeholder": "Acme Co." },
+          "position": { "x": 580, "y": 190 }
+        },
+        {
+          "id": "budget_5",
+          "type": "choice",
+          "data": { "label": "Budget range?", "options": ["< $1k", "$1k–$3k", "$3k–$10k", "$10k+"] },
+          "position": { "x": 60, "y": 340 }
+        },
+        {
+          "id": "timeline_6",
+          "type": "choice",
+          "data": { "label": "Timeline?", "options": ["Urgent", "1–3 months", "3–6 months", "Flexible"] },
+          "position": { "x": 320, "y": 340 }
+        },
+        {
+          "id": "pain_7",
+          "type": "input",
+          "data": { "label": "Main pain point", "placeholder": "Briefly describe your challenge…", "multiline": true },
+          "position": { "x": 580, "y": 340 }
+        },
+        {
+          "id": "tagLeadQ_71",
+          "type": "action",
+          "data": { "label": "Tag", "to": "system:tags", "tags": ["lead-qualifier", "basic"] },
+          "position": { "x": 320, "y": 450 }
+        },
+        {
+          "id": "submitEmail_8",
+          "type": "action",
+          "data": {
+            "label": "Email lead to team",
+            "to": "mailto:{{settings.teamEmail}}",
+            "subject": "New Lead ({{company}})",
+            "body":
+              "name: {{email}}\nPhone: {{phone}}\nCompany: {{company}}\nBudget: {{budget}}\nTimeline: {{timeline}}\nNotes: {{pain}}"
+          },
+          "position": { "x": 320, "y": 510 }
+        },
+        {
+          "id": "thanks_9",
+          "type": "message",
+          "data": { "title": "Thanks!", "text": "We'll review and follow up with next steps." },
+          "position": { "x": 580, "y": 510 }
+        },
+        {
+          "id": "score_10",
+          "type": "action",
+          "data": { "label": "Advanced Lead Scoring", "to": "system:lead_score_v2" },
+          "position": { "x": 60, "y": 510 }
+        },
+        {
+          "id": "tags_11",
+          "type": "action",
+          "data": { "label": "Tag & Categorize", "to": "system:tags", "tags": ["lead-qualifier", "custom", "scored"] },
+          "position": { "x": 200, "y": 650 }
+        },
+        {
+          "id": "crm_12",
+          "type": "action",
+          "data": {
+            "label": "CRM Webhook",
+            "to": "webhook://crm/universal",
+            "retryOnFail": true,
+            "onErrorNext": "submitEmail_8",
+            "payload": {
+              "type": "lead.create",
+              "source": "lead-qualifier",
+              "lead": {
+                "email": "{{email}}",
+                "phone": "{{phone}}",
+                "company": "{{company}}",
+                "budget": "{{budget}}",
+                "timeline": "{{timeline}}",
+                "note": "{{pain}}"
+              },
+              "instanceId": "{{inst_id}}"
+            }
+          },
+          "position": { "x": 420, "y": 650 }
+        },
+        {
+          "id": "abtest_13",
+          "type": "action",
+          "data": { "label": "A/B Test Bucket", "to": "system:ab_bucket" },
+          "position": { "x": 640, "y": 650 }
+        },
+        {
+          "id": "dupcheck_14",
+          "type": "action",
+          "data": { "label": "Duplicate Detection", "to": "system:dedupe" },
+          "position": { "x": 860, "y": 650 }
+        }
+      ]
+    },
+    "edges": {
+      "basic": [
+        { "id": "e1-2", "source": "welcome_1", "target": "email_2", "type": "smoothstep" },
+        { "id": "e2-3", "source": "email_2", "target": "phone_3", "type": "smoothstep" },
+        { "id": "e3-4", "source": "phone_3", "target": "company_4", "type": "smoothstep" },
+        { "id": "e4-5", "source": "company_4", "target": "budget_5", "type": "smoothstep" },
+        { "id": "e5-6", "source": "budget_5", "target": "timeline_6", "type": "smoothstep" },
+        { "id": "e6-7", "source": "timeline_6", "target": "pain_7", "type": "smoothstep" },
+        { "id": "e7-71", "source": "pain_7", "target": "tagLeadQ_71", "type": "smoothstep" },
+        { "id": "e71-8", "source": "tagLeadQ_71", "target": "submitEmail_8", "type": "smoothstep" },
+        { "id": "e8-9", "source": "submitEmail_8", "target": "thanks_9", "type": "smoothstep" }
+      ],
+      "custom": [
+        { "id": "e1-2", "source": "welcome_1", "target": "email_2", "type": "smoothstep" },
+        { "id": "e2-3", "source": "email_2", "target": "phone_3", "type": "smoothstep" },
+        { "id": "e3-4", "source": "phone_3", "target": "company_4", "type": "smoothstep" },
+        { "id": "e4-5", "source": "company_4", "target": "budget_5", "type": "smoothstep" },
+        { "id": "e5-6", "source": "budget_5", "target": "timeline_6", "type": "smoothstep" },
+        { "id": "e6-7", "source": "timeline_6", "target": "pain_7", "type": "smoothstep" },
+        { "id": "e7-71", "source": "pain_7", "target": "tagLeadQ_71", "type": "smoothstep" },
+        { "id": "e71-8", "source": "tagLeadQ_71", "target": "submitEmail_8", "type": "smoothstep" },
+        { "id": "e8-9", "source": "submitEmail_8", "target": "thanks_9", "type": "smoothstep" },
+        { "id": "e7-10", "source": "pain_7", "target": "score_10", "type": "smoothstep" },
+        { "id": "e10-11", "source": "score_10", "target": "tags_11", "type": "smoothstep" },
+        { "id": "e11-12", "source": "tags_11", "target": "crm_12", "type": "smoothstep" },
+        { "id": "e12-13", "source": "crm_12", "target": "abtest_13", "type": "smoothstep" },
+        { "id": "e13-14", "source": "abtest_13", "target": "dupcheck_14", "type": "smoothstep" },
+        { "id": "e14-8", "source": "dupcheck_14", "target": "submitEmail_8", "type": "smoothstep" },
+        { "id": "e8-9", "source": "submitEmail_8", "target": "thanks_9", "type": "smoothstep" }
+      ]
+    },
+    "starterSeq": [
+      { "enabled": true, "subject": "👋 Quick hello from {{company}} — next steps inside", "body": "Hi {{name}},\n\nThanks for reaching out to {{company}}! 🎉\nBased on your inquiry, I put together the next steps so you can see value quickly.\n\n**What to expect**\n• 20–30 min call to align on goals\n• A sample plan tailored to your use case\n• Clear pricing + timeline\n\nReady to grab a time? 👉 {{booking_link}}\n\nIf you prefer email, just reply here or reach us at {{contact_email}}.\n\n— {{inst_name}} Team" },
+      { "enabled": true, "subject": "✅ Your goals from our intake (quick recap)", "body": "Hi {{name}},\n\nFrom your notes, it sounds like you're aiming to:\n1) Solve {{painpoint or key goal}}\n2) Stay within a budget range that makes sense\n3) Move quickly without surprises\n\nWe do this often for teams like yours at {{company}}. Want me to pencil in a time? ✍️\nBook here → {{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "📅 2 slots left this week — want one?", "body": "Hi {{name}},\n\nHeads up: we have **two** open slots left this week for quick consults.\n• Wed 11:00 AM\n• Thu 2:30 PM\n\nIf either works, lock it in here → {{booking_link}}\n\nPrefer another time? Reply with a few windows. We'll accommodate.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "💡 Example outcome we recently delivered", "body": "Hi {{name}},\n\nSharing a quick example:\n> \"Within 14 days we increased qualified leads by 36% and cut response time by 58%.\"\n\nWe'd love to map this to {{company}}. Even 20 minutes helps clarify ROI.\nGrab a slot → {{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "✨ 3 reasons teams pick us (short list)", "body": "Hi {{name}},\n\n1) Speed — time-to-value in days, not months\n2) Clarity — simple pricing, no surprises\n3) Results — measurable outcomes you can show your team\n\nIf that's what you're after, let's connect:\n{{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "🧭 Roadmap preview (so you know what happens)", "body": "Hi {{name}},\n\nOur typical flow:\n• Discovery (20–30 mins)\n• Quick plan + estimate\n• Build + iterate (fast feedback)\n• Launch + measure 📈\n\nIf that works, I'll send a calendar invite. Here's my calendar:\n{{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "Still interested? Here's a 1-page overview 📄", "body": "Hi {{name}},\n\nAttaching our simple 1-pager (what we do and how we help teams like {{company}}).\n[Paste your 1-pager link or keep as is]\n\nIf you'd like a walkthrough, pick any time here:\n{{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "⚡ Quick win ideas for {{company}}", "body": "Hi {{name}},\n\nHere are 3 quick win ideas we've seen work for similar teams:\n1) [Idea #1]\n2) [Idea #2]\n3) [Idea #3]\n\nWant me to tailor these to {{company}}? 15 mins is enough.\n{{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "Heads-up: pricing window this month 🗓️", "body": "Hi {{name}},\n\nWe're keeping current pricing through the end of this month. If you want to lock it in, I recommend a quick call.\n\nSave a spot → {{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "✨ Realistic timeline & milestone plan (sample)", "body": "Hi {{name}},\n\nTypical milestone flow looks like:\n• Week 1: Setup + alignment\n• Week 2: First wins\n• Week 3–4: Iterate + expand\n\nIf you're on board, I'll tailor a plan for {{company}}.\nBook here → {{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "Common questions (quick answers inside) ❓", "body": "Hi {{name}},\n\n**Q: How long does onboarding take?**\nA: Usually under a week to first results.\n\n**Q: Is this locked-in?**\nA: No — simple, transparent terms.\n\n**Q: Can we start small?**\nA: Absolutely. We prefer phased rollouts.\n\nNext step if you're curious:\n{{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "Friendly nudge: want me to keep a slot for you?", "body": "Hi {{name}},\n\nNo rush — happy to keep a slot this week if helpful.\nGrab it here: {{booking_link}}\n\nIf email is easier, reply with a couple of windows and I'll send an invite.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "Last call this round — should I pause follow-ups? ⏸️", "body": "Hi {{name}},\n\nIf now isn't the right time, I can pause follow-ups for a month. Just say the word.\n\nIf you do want to chat, here's the fastest way:\n{{booking_link}}\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "Thanks for considering us 🙏 (keep this handy)", "body": "Hi {{name}},\n\nAppreciate you considering {{company}}.\nKeeping this here for when timing fits:\n• Book: {{booking_link}}\n• Email: {{contact_email}}\n• Phone: {{phone}}\n\nI'm around if/when you're ready.\n\n— {{inst_name}}"}
+    ]
+  },
+  {
+    "key": "appointment_booking",
+    "name": "Appointment Booking",
+    "emoji": "📅",
+    "description": "Offer services, show availability, confirm and remind automatically.",
+    "nodes": {
+      "basic": [
+        {
+          "id": "welcome_1",
+          "type": "message",
+          "data": { "title": "Book Appointment", "text": "Pick a service to get started." },
+          "position": { "x": 60, "y": 40 }
+        },
+        {
+          "id": "service_2",
+          "type": "choice",
+          "data": { "label": "Service", "options": ["Consultation", "Demo", "Support"] },
+          "position": { "x": 60, "y": 190 }
+        },
+        {
+          "id": "date_3",
+          "type": "input",
+          "data": { "label": "Date", "placeholder": "MM/DD/YYYY" },
+          "position": { "x": 320, "y": 190 }
+        },
+        {
+          "id": "time_4",
+          "type": "input",
+          "data": { "label": "Time", "placeholder": "HH:MM" },
+          "position": { "x": 580, "y": 190 }
+        },
+        {
+          "id": "contact_5",
+          "type": "input",
+          "data": { "label": "Your email", "placeholder": "name@example.com", "required": true },
+          "position": { "x": 60, "y": 340 }
+        },
+        {
+          "id": "confirm_6",
+          "type": "message",
+          "data": { "title": "Confirmation", "text": "We've booked it and sent a calendar invite." },
+          "position": { "x": 320, "y": 340 }
+        },
+        {
+          "id": "ics_7",
+          "type": "action",
+          "data": { "label": "Generate .ics", "to": "system:calendar_ics" },
+          "position": { "x": 580, "y": 340 }
+        }
+      ],
+      "custom": [
+        {
+          "id": "welcome_1",
+          "type": "message",
+          "data": { "title": "Book Appointment", "text": "Pick a service to get started." },
+          "position": { "x": 60, "y": 40 }
+        },
+        {
+          "id": "service_2",
+          "type": "choice",
+          "data": { "label": "Service", "options": ["Consultation", "Demo", "Support"] },
+          "position": { "x": 60, "y": 190 }
+        },
+        {
+          "id": "date_3",
+          "type": "input",
+          "data": { "label": "Date", "placeholder": "MM/DD/YYYY" },
+          "position": { "x": 320, "y": 190 }
+        },
+        {
+          "id": "time_4",
+          "type": "input",
+          "data": { "label": "Time", "placeholder": "HH:MM" },
+          "position": { "x": 580, "y": 190 }
+        },
+        {
+          "id": "contact_5",
+          "type": "input",
+          "data": { "label": "Your email", "placeholder": "name@example.com", "required": true },
+          "position": { "x": 60, "y": 340 }
+        },
+        {
+          "id": "confirm_6",
+          "type": "message",
+          "data": { "title": "Confirmation", "text": "We've booked it and sent a calendar invite." },
+          "position": { "x": 320, "y": 340 }
+        },
+        {
+          "id": "ics_7",
+          "type": "action",
+          "data": { "label": "Generate .ics", "to": "system:calendar_ics" },
+          "position": { "x": 580, "y": 340 }
+        },
+        {
+          "id": "staff_8",
+          "type": "choice",
+          "data": { "label": "Preferred staff?", "options": ["Any", "Alex", "Jordan", "Taylor"] },
+          "position": { "x": 840, "y": 190 }
+        },
+        {
+          "id": "payment_9",
+          "type": "action",
+          "data": { "label": "Payment / Deposit", "to": "webhook://payments/checkout" },
+          "position": { "x": 840, "y": 340 }
+        },
+        {
+          "id": "calendarAPI_10",
+          "type": "action",
+          "data": { "label": "Calendar API", "to": "webhook://calendar/universal" },
+          "position": { "x": 1060, "y": 340 }
+        },
+        {
+          "id": "rules_11",
+          "type": "action",
+          "data": { "label": "Custom Booking Rules", "to": "system:booking_rules" },
+          "position": { "x": 1280, "y": 340 }
+        }
+      ]
+    },
+    "edges": {
+      "basic": [
+        { "id": "e1-2", "source": "welcome_1", "target": "service_2", "type": "smoothstep" },
+        { "id": "e2-3", "source": "service_2", "target": "date_3", "type": "smoothstep" },
+        { "id": "e3-4", "source": "date_3", "target": "time_4", "type": "smoothstep" },
+        { "id": "e4-5", "source": "time_4", "target": "contact_5", "type": "smoothstep" },
+        { "id": "e5-6", "source": "contact_5", "target": "confirm_6", "type": "smoothstep" },
+        { "id": "e6-7", "source": "confirm_6", "target": "ics_7", "type": "smoothstep" }
+      ],
+      "custom": [
+        { "id": "e1-2", "source": "welcome_1", "target": "service_2", "type": "smoothstep" },
+        { "id": "e2-3", "source": "service_2", "target": "date_3", "type": "smoothstep" },
+        { "id": "e3-4", "source": "date_3", "target": "time_4", "type": "smoothstep" },
+        { "id": "e4-5", "source": "time_4", "target": "contact_5", "type": "smoothstep" },
+        { "id": "e5-6", "source": "contact_5", "target": "confirm_6", "type": "smoothstep" },
+        { "id": "e6-7", "source": "confirm_6", "target": "ics_7", "type": "smoothstep" },
+        { "id": "e4-8", "source": "time_4", "target": "staff_8", "type": "smoothstep" },
+        { "id": "e7-9", "source": "ics_7", "target": "payment_9", "type": "smoothstep" },
+        { "id": "e9-10", "source": "payment_9", "target": "calendarAPI_10", "type": "smoothstep" },
+        { "id": "e10-11", "source": "calendarAPI_10", "target": "rules_11", "type": "smoothstep" }
+      ]
+    }
+  },
+  {
+    "key": "customer_support",
+    "name": "Customer Support",
+    "emoji": "🛟",
+    "description": "Answer FAQs, create tickets, route priority issues and hand off to humans.",
+    "nodes": {
+      "basic": [
+        {
+          "id": "welcome_1",
+          "type": "message",
+          "data": { "title": "Support", "text": "How can we help? Pick a category." },
+          "position": { "x": 60, "y": 40 }
+        },
+        {
+          "id": "category_2",
+          "type": "choice",
+          "data": { "label": "Category", "options": ["Orders", "Billing", "Returns", "Technical"] },
+          "position": { "x": 60, "y": 190 }
+        },
+        {
+          "id": "ref_3",
+          "type": "input",
+          "data": { "label": "Order / Ref # (optional)", "placeholder": "ABC123…" },
+          "position": { "x": 320, "y": 190 }
+        },
+        {
+          "id": "desc_4",
+          "type": "input",
+          "data": { "label": "Describe the problem", "placeholder": "What happened?", "multiline": true },
+          "position": { "x": 580, "y": 190 }
+        },
+        {
+          "id": "hours_5",
+          "type": "message",
+          "data": { "title": "Business Hours", "text": "Mon–Fri 9am–6pm. We'll reply ASAP." },
+          "position": { "x": 60, "y": 340 }
+        },
+        {
+          "id": "ticket_6",
+          "type": "action",
+          "data": { "label": "Create Ticket", "to": "system:create_ticket" },
+          "position": { "x": 320, "y": 340 }
+        },
+        {
+          "id": "notify_7",
+          "type": "action",
+          "data": {
+            "label": "Email Notification",
+            "to": "mailto:{{settings.teamEmail}}",
+            "subject": "Support Request ({{category}})",
+            "body": "ref: {{ref}}\nIssue: {{desc}}"
+          },
+          "position": { "x": 580, "y": 340 }
+        }
+      ],
+      "custom": [
+        {
+          "id": "welcome_1",
+          "type": "message",
+          "data": { "title": "Support", "text": "How can we help? Pick a category." },
+          "position": { "x": 60, "y": 40 }
+        },
+        {
+          "id": "category_2",
+          "type": "choice",
+          "data": { "label": "Category", "options": ["Orders", "Billing", "Returns", "Technical"] },
+          "position": { "x": 60, "y": 190 }
+        },
+        {
+          "id": "ref_3",
+          "type": "input",
+          "data": { "label": "Order / Ref # (optional)", "placeholder": "ABC123…" },
+          "position": { "x": 320, "y": 190 }
+        },
+        {
+          "id": "desc_4",
+          "type": "input",
+          "data": { "label": "Describe the problem", "placeholder": "What happened?", "multiline": true },
+          "position": { "x": 580, "y": 190 }
+        },
+        {
+          "id": "hours_5",
+          "type": "message",
+          "data": { "title": "Business Hours", "text": "Mon–Fri 9am–6pm. We'll reply ASAP." },
+          "position": { "x": 60, "y": 340 }
+        },
+        {
+          "id": "ticket_6",
+          "type": "action",
+          "data": { "label": "Create Ticket", "to": "system:create_ticket" },
+          "position": { "x": 320, "y": 340 }
+        },
+        {
+          "id": "notify_7",
+          "type": "action",
+          "data": {
+            "label": "Email Notification",
+            "to": "mailto:{{settings.teamEmail}}",
+            "subject": "Support Request ({{category}})",
+            "body": "ref: {{ref}}\nIssue: {{desc}}"
+          },
+          "position": { "x": 580, "y": 340 }
+        },
+        {
+          "id": "ai_8",
+          "type": "action",
+          "data": { "label": "AI Response (Knowledge)", "to": "system:gpt_suggest" },
+          "position": { "x": 840, "y": 190 }
+        },
+        {
+          "id": "lang_9",
+          "type": "choice",
+          "data": { "label": "Language", "options": ["English", "Spanish", "French", "German"] },
+          "position": { "x": 840, "y": 340 }
+        },
+        {
+          "id": "priority_10",
+          "type": "action",
+          "data": { "label": "Sentiment / Priority", "to": "system:sentiment_route" },
+          "position": { "x": 1060, "y": 340 }
+        },
+        {
+          "id": "crm_11",
+          "type": "action",
+          "data": {
+            "label": "Create CRM Ticket",
+            "to": "webhook://crm/ticket",
+            "payload": {
+              "type": "ticket.create",
+              "source": "customer-support",
+              "ticket": { "ref": "{{ref}}", "desc": "{{desc}}", "category": "{{category}}", "lang": "{{lang}}" }
+            }
+          },
+          "position": { "x": 1280, "y": 340 }
+        }
+      ]
+    },
+    "edges": {
+      "basic": [
+        { "id": "e1-2", "source": "welcome_1", "target": "category_2", "type": "smoothstep" },
+        { "id": "e2-3", "source": "category_2", "target": "ref_3", "type": "smoothstep" },
+        { "id": "e3-4", "source": "ref_3", "target": "desc_4", "type": "smoothstep" },
+        { "id": "e4-5", "source": "desc_4", "target": "hours_5", "type": "smoothstep" },
+        { "id": "e5-6", "source": "hours_5", "target": "ticket_6", "type": "smoothstep" },
+        { "id": "e6-7", "source": "ticket_6", "target": "notify_7", "type": "smoothstep" }
+      ],
+      "custom": [
+        { "id": "e1-2", "source": "welcome_1", "target": "category_2", "type": "smoothstep" },
+        { "id": "e2-3", "source": "category_2", "target": "ref_3", "type": "smoothstep" },
+        { "id": "e3-4", "source": "ref_3", "target": "desc_4", "type": "smoothstep" },
+        { "id": "e4-5", "source": "desc_4", "target": "hours_5", "type": "smoothstep" },
+        { "id": "e5-6", "source": "hours_5", "target": "ticket_6", "type": "smoothstep" },
+        { "id": "e6-7", "source": "ticket_6", "target": "notify_7", "type": "smoothstep" },
+        { "id": "e4-8", "source": "desc_4", "target": "ai_8", "type": "smoothstep" },
+        { "id": "e8-9", "source": "ai_8", "target": "lang_9", "type": "smoothstep" },
+        { "id": "e9-10", "source": "lang_9", "target": "priority_10", "type": "smoothstep" },
+        { "id": "e10-11", "source": "priority_10", "target": "crm_11", "type": "smoothstep" }
+      ]
+    }
+  },
+  {
+    "key": "waitlist",
+    "name": "Waitlist",
+    "emoji": "⏳",
+    "description": "Collect interest, show queue status and notify customers.",
+    "nodes": {
+      "basic": [
+        {
+          "id": "welcome_1",
+          "type": "message",
+          "data": { "title": "Join Waitlist", "text": "Add your info and we'll save your place in line." },
+          "position": { "x": 60, "y": 40 }
+        },
+        {
+          "id": "email_2",
+          "type": "input",
+          "data": { "label": "Email", "placeholder": "name@example.com", "required": true },
+          "position": { "x": 60, "y": 190 }
+        },
+        {
+          "id": "phone_3",
+          "type": "input",
+          "data": { "label": "Phone (optional)", "placeholder": "(555) 555-5555" },
+          "position": { "x": 320, "y": 190 }
+        },
+        {
+          "id": "interest_4",
+          "type": "choice",
+          "data": { "label": "Interest level", "options": ["Curious", "Very interested", "VIP"] },
+          "position": { "x": 580, "y": 190 }
+        },
+        {
+          "id": "referral_5",
+          "type": "input",
+          "data": { "label": "Referral code (optional)", "placeholder": "FRIEND123…" },
+          "position": { "x": 60, "y": 340 }
+        },
+        {
+          "id": "queue_6",
+          "type": "message",
+          "data": { "title": "You're In!", "text": "We'll email your position & updates." },
+          "position": { "x": 320, "y": 340 }
+        },
+        {
+          "id": "export_7",
+          "type": "action",
+          "data": { "label": "Export to Sheet", "to": "system:export_csv" },
+          "position": { "x": 580, "y": 340 }
+        }
+      ],
+      "custom": [
+        {
+          "id": "welcome_1",
+          "type": "message",
+          "data": { "title": "Join Waitlist", "text": "Add your info and we'll save your place in line." },
+          "position": { "x": 60, "y": 40 }
+        },
+        {
+          "id": "email_2",
+          "type": "input",
+          "data": { "label": "Email", "placeholder": "name@example.com", "required": true },
+          "position": { "x": 60, "y": 190 }
+        },
+        {
+          "id": "phone_3",
+          "type": "input",
+          "data": { "label": "Phone (optional)", "placeholder": "(555) 555-5555" },
+          "position": { "x": 320, "y": 190 }
+        },
+        {
+          "id": "interest_4",
+          "type": "choice",
+          "data": { "label": "Interest level", "options": ["Curious", "Very interested", "VIP"] },
+          "position": { "x": 580, "y": 190 }
+        },
+        {
+          "id": "referral_5",
+          "type": "input",
+          "data": { "label": "Referral code (optional)", "placeholder": "FRIEND123…" },
+          "position": { "x": 60, "y": 340 }
+        },
+        {
+          "id": "queue_6",
+          "type": "message",
+          "data": { "title": "You're In!", "text": "We'll email your position & updates." },
+          "position": { "x": 320, "y": 340 }
+        },
+        {
+          "id": "export_7",
+          "type": "action",
+          "data": { "label": "Export to Sheet", "to": "system:export_csv" },
+          "position": { "x": 580, "y": 340 }
+        },
+        {
+          "id": "vip_8",
+          "type": "choice",
+          "data": { "label": "VIP Fast-Track?", "options": ["No", "Yes"] },
+          "position": { "x": 840, "y": 190 }
+        },
+        {
+          "id": "deposit_9",
+          "type": "action",
+          "data": { "label": "Deposit / Pre-pay", "to": "webhook://payments/deposit" },
+          "position": { "x": 840, "y": 340 }
+        },
+        {
+          "id": "updates_10",
+          "type": "action",
+          "data": { "label": "Automated Updates", "to": "system:automated_updates" },
+          "position": { "x": 1060, "y": 340 }
+        },
+        {
+          "id": "rewards_11",
+          "type": "action",
+          "data": { "label": "Referral Rewards", "to": "system:referral_rewards" },
+          "position": { "x": 1280, "y": 340 }
+        }
+      ]
+    },
+    "edges": {
+      "basic": [
+        { "id": "e1-2", "source": "welcome_1", "target": "email_2", "type": "smoothstep" },
+        { "id": "e2-3", "source": "email_2", "target": "phone_3", "type": "smoothstep" },
+        { "id": "e3-4", "source": "phone_3", "target": "interest_4", "type": "smoothstep" },
+        { "id": "e4-5", "source": "interest_4", "target": "referral_5", "type": "smoothstep" },
+        { "id": "e5-6", "source": "referral_5", "target": "queue_6", "type": "smoothstep" },
+        { "id": "e6-7", "source": "queue_6", "target": "export_7", "type": "smoothstep" }
+      ],
+      "custom": [
+        { "id": "e1-2", "source": "welcome_1", "target": "email_2", "type": "smoothstep" },
+        { "id": "e2-3", "source": "email_2", "target": "phone_3", "type": "smoothstep" },
+        { "id": "e3-4", "source": "phone_3", "target": "interest_4", "type": "smoothstep" },
+        { "id": "e4-5", "source": "interest_4", "target": "referral_5", "type": "smoothstep" },
+        { "id": "e5-6", "source": "referral_5", "target": "queue_6", "type": "smoothstep" },
+        { "id": "e6-7", "source": "queue_6", "target": "export_7", "type": "smoothstep" },
+        { "id": "e6-8", "source": "queue_6", "target": "vip_8", "type": "smoothstep" },
+        { "id": "e8-9", "source": "vip_8", "target": "deposit_9", "type": "smoothstep" },
+        { "id": "e9-10", "source": "deposit_9", "target": "updates_10", "type": "smoothstep" },
+        { "id": "e10-11", "source": "updates_10", "target": "rewards_11", "type": "smoothstep" }
+      ]
+    },
+    "starterSeq": [
+      { "enabled": true, "subject": "🎉 You're on the waitlist! What happens next…", "body": "Hi {{name}},\n\nYou're officially on the list for **{{product}}** — love having you here! 🙌\n\n**What to expect**\n• Early updates + previews\n• Priority access when spots open\n• Sweet launch perks for early supporters\n\nYou can reply to this email anytime with questions.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "👀 Sneak peek of {{product}}", "body": "Hi {{name}},\n\nHere's a quick look at what we're building:\n• Core idea: [1-line value]\n• Who it's for: [persona]\n• Why it's different: [edge]\n\nGot feedback? Hit reply — we're listening.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "💌 Tell us your top use case", "body": "Hi {{name}},\n\nWhat would make {{product}} a **must-have** for you?\nReply with 1–2 lines. The best insights often come from real workflows.\n\n(We reply to every note.)\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "🤫 Early mockups (rough, but real)", "body": "Hi {{name}},\n\nSharing a few early mockups. Nothing fancy yet — just honest progress.\n[Link or remove]\n\nIf you want to be part of private beta, reply **BETA** and we'll prioritize you.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "🧭 Roadmap: what's shipping soon", "body": "Hi {{name}},\n\nUpcoming milestones for {{product}}:\n• v0.1: Core feature working end-to-end\n• v0.2: Onboarding + basic analytics\n• v0.3: Integrations & polish\n\nWant early access? Reply with **EARLY**.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "📣 We're adding a few early testers", "body": "Hi {{name}},\n\nWe're inviting a *limited* group for early testing this month.\nIf interested, reply with your main goal and we'll slot you in if there's a fit.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "📋 Quick survey (1 minute, promise)", "body": "Hi {{name}},\n\nMind sharing a bit about your workflow? It helps us ship the right thing.\n[Link to a short form] or just hit reply with your top 2 must-haves.\n\nThank you!\n— {{inst_name}}"},
+      { "enabled": true, "subject": "⚡ Mini update: progress + what's next", "body": "Hi {{name}},\n\nProgress this week:\n• Finished [X]\n• Testing [Y]\n• Next: [Z]\n\nWe're getting closer. Thanks for being here!\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "🎁 Early supporter perks (because you're awesome)", "body": "Hi {{name}},\n\nWe're planning perks for early supporters:\n• Founding member pricing\n• Access to private roadmap\n• Vote on upcoming features\n\nInterested? Reply **PERKS**.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "⏱️ Timeline check", "body": "Hi {{name}},\n\nQuick update: we're tracking well and still aiming for early access soon.\nWant me to put you on the first-invite list? Reply **FIRST**.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "👋 Want a personal walkthrough when ready?", "body": "Hi {{name}},\n\nWhen {{product}} is ready, would a 10-minute walkthrough help?\nIf yes, reply **WALKTHROUGH** and we'll set you up on launch week.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "⭐ Feature spotlight: something you'll love", "body": "Hi {{name}},\n\nWe're polishing a feature we think you'll love:\n[Feature summary]\n\nIf this solves a headache for you, reply and tell us how you do it today.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "🧪 Final checks before invites go out", "body": "Hi {{name}},\n\nWe're in the final checks stage.\nWant to be in the first wave of invites? Reply **INVITE ME**.\n\n— {{inst_name}}"},
+      { "enabled": true, "subject": "🎉 You're on our first-invite list", "body": "Hi {{name}},\n\nThanks for sticking with us on this journey.\nYou're on our first-invite list. Keep an eye on your inbox — it's nearly time.\n\nP.S. If you ever need anything, write us at {{contact_email}}.\n\n— {{inst_name}}"}
+    ]
+  },
+  {
+    "key": "receptionist",
+    "name": "Receptionist",
+    "emoji": "☎️",
+    "description": "Greets callers/chats, answers questions, routes, books, and takes messages.",
+    "nodes": {
+      "basic": [
+        {
+          "id": "r_welcome_1",
+          "type": "message",
+          "data": {
+            "title": "Receptionist",
+            "text": "Hello! How may I direct your call or inquiry today?"
+          },
+          "position": { "x": 120, "y": 40 }
+        },
+        {
+          "id": "r_option_2",
+          "type": "choice",
+          "data": {
+            "label": "Choose an option",
+            "options": ["Schedule Appointment", "Leave Message", "General Question"]
+          },
+          "position": { "x": 120, "y": 200 }
+        },
+        {
+          "id": "r_name_3",
+          "type": "input",
+          "data": { "label": "Your name", "placeholder": "John Doe", "required": true },
+          "position": { "x": 440, "y": 200 }
+        },
+        {
+          "id": "r_email_4",
+          "type": "input",
+          "data": { "label": "Your email", "placeholder": "name@example.com", "required": true },
+          "position": { "x": 760, "y": 200 }
+        },
+        {
+          "id": "r_msg_5",
+          "type": "input",
+          "data": {
+            "label": "Your message or request",
+            "placeholder": "Type your message here...",
+            "multiline": true
+          },
+          "position": { "x": 120, "y": 360 }
+        },
+        {
+          "id": "r_tag_main_6",
+          "type": "action",
+          "data": { "label": "Tag", "to": "system:tags", "tags": ["receptionist", "basic"] },
+          "position": { "x": 440, "y": 360 }
+        },
+        {
+          "id": "r_sendTeam_7",
+          "type": "action",
+          "data": {
+            "label": "Send to team",
+            "to": "mailto:{{settings.teamEmail}}",
+            "subject": "Receptionist Message – {{r_option}}",
+            "body":
+              "From: {{r_name}} <{{r_email}}>\nReason: {{r_option}}\n\nMessage:\n{{r_msg}}"
+          },
+          "position": { "x": 440, "y": 460 }
+        },
+        {
+          "id": "r_thanks_8",
+          "type": "message",
+          "data": {
+            "title": "Thank you!",
+            "text": "Your message has been received. We'll get back to you soon."
+          },
+          "position": { "x": 760, "y": 460 }
+        }
+      ],
+      "custom": [
+        {
+          "id": "r_welcome_1",
+          "type": "message",
+          "data": {
+            "title": "Receptionist",
+            "text": "Hello! How may I direct your call or inquiry today?"
+          },
+          "position": { "x": 120, "y": 40 }
+        },
+        {
+          "id": "r_option_2",
+          "type": "choice",
+          "data": {
+            "label": "Choose an option",
+            "options": ["Schedule Appointment", "Leave Message", "General Question"]
+          },
+          "position": { "x": 120, "y": 200 }
+        },
+        {
+          "id": "r_name_3",
+          "type": "input",
+          "data": { "label": "Your name", "placeholder": "John Doe", "required": true },
+          "position": { "x": 440, "y": 200 }
+        },
+        {
+          "id": "r_email_4",
+          "type": "input",
+          "data": { "label": "Your email", "placeholder": "name@example.com", "required": true },
+          "position": { "x": 760, "y": 200 }
+        },
+        {
+          "id": "r_msg_5",
+          "type": "input",
+          "data": {
+            "label": "Your message or request",
+            "placeholder": "Type your message here...",
+            "multiline": true
+          },
+          "position": { "x": 120, "y": 360 }
+        },
+        {
+          "id": "r_book_tag_20",
+          "type": "action",
+          "data": { "label": "Tag (Booking)", "to": "system:tags", "tags": ["receptionist", "booking"] },
+          "position": { "x": 620, "y": 360 }
+        },
+        {
+          "id": "r_calendar_21",
+          "type": "action",
+          "data": {
+            "label": "Calendar Booking",
+            "to": "webhook://calendar/universal",
+            "retryOnFail": true,
+            "onErrorNext": "r_sendTeam_24",
+            "payload": {
+              "type": "calendar.create",
+              "source": "receptionist",
+              "customer": { "name": "{{r_name}}", "email": "{{r_email}}" },
+              "service": "{{r_option}}",
+              "notes": "{{r_msg}}",
+              "instanceId": "{{inst_id}}"
+            }
+          },
+          "position": { "x": 840, "y": 360 }
+        },
+        {
+          "id": "r_crm_tag_22",
+          "type": "action",
+          "data": { "label": "Tag (Lead)", "to": "system:tags", "tags": ["receptionist", "lead"] },
+          "position": { "x": 1060, "y": 360 }
+        },
+        {
+          "id": "r_crm_23",
+          "type": "action",
+          "data": {
+            "label": "Send to CRM",
+            "to": "webhook://crm/universal",
+            "retryOnFail": true,
+            "onErrorNext": "r_sendTeam_24",
+            "payload": {
+              "type": "lead.create",
+              "source": "receptionist",
+              "lead": {
+                "name": "{{r_name}}",
+                "email": "{{r_email}}",
+                "intent": "{{r_option}}",
+                "note": "{{r_msg}}"
+              },
+              "instanceId": "{{inst_id}}"
+            }
+          },
+          "position": { "x": 1280, "y": 360 }
+        },
+        {
+          "id": "r_sendTeam_24",
+          "type": "action",
+          "data": {
+            "label": "Send to team",
+            "to": "mailto:{{settings.teamEmail}}",
+            "subject": "Receptionist Handoff – {{r_option}}",
+            "body":
+              "Could not auto-complete via webhook.\n\nFrom: {{r_name}} <{{r_email}}>\nReason: {{r_option}}\n\nMessage:\n{{r_msg}}"
+          },
+          "position": { "x": 780, "y": 460 }
+        },
+        {
+          "id": "r_ai_25",
+          "type": "action",
+          "data": {
+            "label": "AI Assistant Routing",
+            "to": "system:ai_router",
+            "hints": ["faq", "pricing", "hours", "location"]
+          },
+          "position": { "x": 1100, "y": 460 }
+        },
+        {
+          "id": "r_done_26",
+          "type": "message",
+          "data": { "title": "Thank you!", "text": "We've got it and will follow up shortly." },
+          "position": { "x": 1280, "y": 520 }
+        }
+      ]
+    },
+    "edges": {
+      "basic": [
+        { "id": "re1-2", "source": "r_welcome_1", "target": "r_option_2", "type": "smoothstep" },
+        { "id": "re2-3", "source": "r_option_2", "target": "r_name_3", "type": "smoothstep" },
+        { "id": "re3-4", "source": "r_name_3", "target": "r_email_4", "type": "smoothstep" },
+        { "id": "re2-5", "source": "r_option_2", "target": "r_msg_5", "type": "smoothstep" },
+        { "id": "re5-6", "source": "r_msg_5", "target": "r_tag_main_6", "type": "smoothstep" },
+        { "id": "re6-7", "source": "r_tag_main_6", "target": "r_sendTeam_7", "type": "smoothstep" },
+        { "id": "re7-8", "source": "r_sendTeam_7", "target": "r_thanks_8", "type": "smoothstep" }
+      ],
+      "custom": [
+        { "id": "rc1-2", "source": "r_welcome_1", "target": "r_option_2", "type": "smoothstep" },
+        { "id": "rc2-3", "source": "r_option_2", "target": "r_name_3", "type": "smoothstep" },
+        { "id": "rc3-4", "source": "r_name_3", "target": "r_email_4", "type": "smoothstep" },
+        { "id": "rc2-5", "source": "r_option_2", "target": "r_msg_5", "type": "smoothstep" },
+        { "id": "rc5-20", "source": "r_msg_5", "target": "r_book_tag_20", "type": "smoothstep" },
+        { "id": "rc20-21", "source": "r_book_tag_20", "target": "r_calendar_21", "type": "smoothstep" },
+        { "id": "rc21-22", "source": "r_calendar_21", "target": "r_crm_tag_22", "type": "smoothstep" },
+        { "id": "rc22-23", "source": "r_crm_tag_22", "target": "r_crm_23", "type": "smoothstep" },
+        { "id": "rc21-24", "source": "r_calendar_21", "target": "r_sendTeam_24", "type": "smoothstep" },
+        { "id": "rc23-24", "source": "r_crm_23", "target": "r_sendTeam_24", "type": "smoothstep" },
+        { "id": "rc24-25", "source": "r_sendTeam_24", "target": "r_ai_25", "type": "smoothstep" },
+        { "id": "rc25-26", "source": "r_ai_25", "target": "r_done_26", "type": "smoothstep" }
+      ]
+    }
+  }
+]

@@ -1,6 +1,7 @@
 // src/store/authStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { loginAPI } from '../api';
 
 export type Role = "admin" | "editor" | "viewer";
 
@@ -13,7 +14,7 @@ type User = {
 
 type AuthState = {
   user: User | null;
-  login: (userData: User) => void;
+  login: (userData) => any;
   logout: () => void;
   setRole: (role: Role) => void;
 };
@@ -23,8 +24,11 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null, // ⬅️ important change
 
-      login: (userData) => set({ user: userData }),
-
+      login: async (userData) => {
+        const res = await loginAPI(userData);
+        set({ user: res.data.user });
+        return res.data;
+      },
       logout: () => set({ user: null }),
 
       setRole: (role) => {
