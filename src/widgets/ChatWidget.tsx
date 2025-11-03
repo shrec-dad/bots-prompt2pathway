@@ -790,13 +790,13 @@ export default function ChatWidget({
       )}
 
       {/* Panels */}
-      {open && <Panel />}
-      {mode === "inline" && !open && (
+      {mode === "popup" && open && <Panel />}
+      {mode === "inline" && open && (
         <div style={{ margin: "12px 0" }}>
           <Panel />
         </div>
       )}
-      {mode === "sidebar" && !open && <Panel />}
+      {mode === "sidebar" && open && <Panel />}
     </div>
   );
 }

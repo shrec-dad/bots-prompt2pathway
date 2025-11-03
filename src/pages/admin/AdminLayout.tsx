@@ -74,6 +74,14 @@ export default function AdminLayout() {
                      : "bg-white hover:bg-muted/40"
                  }`
               }
+              style={({ isActive }) =>
+                isActive
+                  ? {
+                      background:
+                        "linear-gradient(90deg, var(--grad-from), var(--grad-via), var(--grad-to))",
+                    }
+                  : {}
+              }
             >
               <Icon className="h-5 w-5" />
               <span className="font-medium">{label}</span>
@@ -83,7 +91,11 @@ export default function AdminLayout() {
 
         <div className="p-4 border-t flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 to-teal-500 flex items-center justify-center text-white font-bold">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold"
+              style={{
+                background: "linear-gradient(90deg, var(--grad-from), var(--grad-via), var(--grad-to))",
+                color: "var(--grad-text)"
+              }}>
               {user?.name?.charAt(0) || "A"}
             </div>
             <div>

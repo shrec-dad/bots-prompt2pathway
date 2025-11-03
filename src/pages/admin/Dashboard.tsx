@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchMetrics } from '@/store/metricsSlice';
@@ -12,7 +12,6 @@ type Metrics = {
   csatPct: number;
 };
 
-const METRICS_KEY = "analytics:metrics";
 const DEFAULT_METRICS: Metrics = {
   conversations: 0,
   leads: 0,
@@ -24,12 +23,9 @@ function classNames(...xs: (string | false | undefined)[]) {
   return xs.filter(Boolean).join(" ");
 }
 
-const Grad =
-  "bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55";
-
-/** Strong card style for all KPI & quick links */
-const strongCard =
-  "rounded-2xl border-[3px] border-black/80 shadow-[0_6px_0_rgba(0,0,0,0.8)] transition hover:shadow-[0_8px_0_rgba(0,0,0,0.9)]";
+const GradStyle = {
+  background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))",
+}
 
 /** KPI card with optional delta pill */
 type KpiProps = {
@@ -48,11 +44,8 @@ function KpiCard({ title, value, deltaPct, onClick }: KpiProps) {
   return (
     <button
       onClick={onClick}
-      className={classNames(
-        "w-full text-left px-5 py-5",
-        strongCard,
-        Grad
-      )}
+      className="cursor-pointer p-5 strong-card text-left"
+      style={GradStyle}
     >
       <div className="text-sm font-extrabold tracking-wide text-foreground/80">
         {title}
@@ -119,7 +112,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 p-4">
       {/* Header Section */}
-      <div className={classNames("p-5", strongCard)}>
+      <div className="p-5 strong-card">
         <div className="h-2 rounded-md bg-black mb-4" />
         <div className="flex items-center justify-between">
           <div>
@@ -130,14 +123,16 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30"
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+              style={GradStyle}
               onClick={resetTopKpis}
               title="Reset Conversations, Leads, Avg. Response, and CSAT"
             >
               Reset
             </button>
             <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+              style={GradStyle}
               onClick={() => nav("/admin/bots?new=1")}
             >
               + Create New Bot
@@ -174,11 +169,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <a
           onClick={() => nav("/admin/bots")}
-          className={classNames(
-            "cursor-pointer p-5",
-            strongCard,
-            Grad
-          )}
+          className="cursor-pointer p-5 strong-card"
+          style={GradStyle}
         >
           <div className="text-xl font-black">🤖 Manage Bots</div>
           <div className="text-foreground/80 font-semibold">
@@ -188,11 +180,8 @@ export default function Dashboard() {
 
         <a
           onClick={() => nav("/admin/builder")}
-          className={classNames(
-            "cursor-pointer p-5",
-            strongCard,
-            Grad
-          )}
+          className="cursor-pointer p-5 strong-card"
+          style={GradStyle}
         >
           <div className="text-xl font-black">🧩 Builder</div>
           <div className="text-foreground/80 font-semibold">
@@ -202,11 +191,8 @@ export default function Dashboard() {
 
         <a
           onClick={() => nav("/admin/knowledge")}
-          className={classNames(
-            "cursor-pointer p-5",
-            strongCard,
-            Grad
-          )}
+          className="cursor-pointer p-5 strong-card"
+          style={GradStyle}
         >
           <div className="text-xl font-black">📚 Knowledge</div>
           <div className="text-foreground/80 font-semibold">

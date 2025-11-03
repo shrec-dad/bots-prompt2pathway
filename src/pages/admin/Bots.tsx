@@ -1,5 +1,5 @@
 // src/pages/admin/Bots.tsx - SOCIAL MEDIA REMOVED
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store';
 import { fetchBots, addBot, updateBot, deleteBot, duplicateBot } from '@/store/botsSlice';
@@ -63,7 +63,6 @@ export default function Bots() {
   const dispatch = useDispatch();
   const instances = useSelector((state: RootState) => state.instances.list);
   const bots = useSelector((state: RootState) => state.bots.list);
-  const [loading, setLoading] = React.useState(false);
 
   useEffect(() => {
     dispatch(fetchBots());
@@ -147,13 +146,15 @@ export default function Bots() {
             Show Hidden Templates
           </label>
           <button
-            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30"
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+            style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
             title="Reset Conversations and Leads"
           >
             Reset
           </button>
           <button
-            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+            className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+            style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
             onClick={() => setShowCreateModal(true)}
           >
             + Create New Bot
@@ -178,7 +179,9 @@ export default function Bots() {
                 >
                   {/* header stripe */}
                   <div className="h-2 rounded-md bg-black mb-4" />
-                  <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br from-purple-500/20 via-fuchsia-400/20 to-pink-500/20`}>
+                  <div
+                    className={`rounded-2xl p-4 ring-1 ring-border`}
+                    style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
                     <div className="flex items-center gap-3">
                       <div className="h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
                         {b.emoji}
@@ -224,7 +227,9 @@ export default function Bots() {
           >
             {/* header stripe */}
             <div className="h-2 rounded-md bg-black mb-4" />
-            <div className={`rounded-2xl p-4 ring-1 ring-border bg-gradient-to-br from-purple-500/20 via-fuchsia-400/20 to-pink-500/20`}>
+            <div
+              className={`rounded-2xl p-4 ring-1 ring-border`}
+              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
               <div className="flex items-center gap-3">
                 <div className="relative h-12 w-12 grid place-items-center rounded-2xl bg-white/70 ring-1 ring-border text-2xl">
                   <span>{b.emoji}</span>
@@ -261,7 +266,8 @@ export default function Bots() {
               </select>
 
               <button
-                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
                 onClick={() => (window.location.href = `/admin/builder?bot=${b._id}`)}
                 aria-label={`Open ${b.name} in Builder`}
               >
@@ -321,7 +327,9 @@ export default function Bots() {
                 <div key={b._id} className="rounded-2xl border-[3px] border-black/80 bg-card overflow-visible flex flex-col shadow-[0_6px_0_rgba(0,0,0,0.8)]">
                   {/* header stripe */}
                   <div className="h-2 rounded-md bg-black mx-4 mt-4 mb-3" />
-                  <div className="mx-4 px-4 pb-1 rounded-md ring-1 ring-border bg-gradient-to-br from-purple-500/20 via-fuchsia-400/20 to-pink-500/20">
+                  <div
+                    className="mx-4 px-4 pb-1 rounded-md ring-1 ring-border"
+                    style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 grid place-items-center rounded-xl bg-white/70 ring-1 ring-border text-xl">
                         {b.botId.emoji}
@@ -423,11 +431,12 @@ export default function Bots() {
                 className="px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 rounded-xl shadow-[0_3px_0_#000] active:translate-y-[1px]"
                 onClick={() => {
                   const name = newBotName.trim() || "New Template";
-                  if (instances.some((b) => b.name === name)) {
+                  const key = name.toLowerCase().replace(/\s+/g, '_');
+                  if (bots.some((b) => b.name === name || b.key === key)) {
                     alert("A template with this name/key already exists. Please choose a different name.");
                     return;
                   }
-                  handleCreateBot({ name, emoji: newBotEmoji });
+                  handleCreateBot({ name, key, emoji: newBotEmoji });
                   setShowCreateModal(false);
                 }}
               >

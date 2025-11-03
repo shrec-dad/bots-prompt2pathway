@@ -60,7 +60,7 @@ const ActionNode = ({ data }: { data: any }) => (
 );
 
 const InputNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-purple-50 border-2 border-purple-400">
+  <div className="px-4 py-2 shadow-md rounded-md bg-purple-50 border-2 border-purple-400 break-words whitespace-normal overflow-hidden">
     <Handle type="target" position={Position.Top} />
     <div className="font-bold">{data?.label || "Input"}</div>
     <div className="text-xs text-gray-600">{data?.placeholder || "…"}</div>
@@ -858,7 +858,8 @@ function BuilderInner() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   onClick={saveChanges}
-                  className="py-2 px-4 bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 text-white rounded-xl hover:shadow-lg transition-all font-semibold text-sm border-2 border-black shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                  className="py-2 px-4 text-white rounded-xl hover:shadow-lg transition-all font-semibold text-sm border-2 border-black shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                  style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
                 >
                   Save Changes
                 </button>

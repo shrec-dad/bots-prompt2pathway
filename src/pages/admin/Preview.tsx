@@ -241,13 +241,14 @@ export default function Preview() {
             </div>
             <div className="flex gap-2">
               <button
-                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+                className="rounded-xl px-3.5 py-2 font-bold text-white shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))", color: "var(--grad-text)"}}
                 onClick={onSave}
               >
                 Save
               </button>
               <button
-                className="rounded-2xl px-3 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-emerald-500/20 hover:from-indigo-500/30 hover:to-emerald-500/30"
+                className="rounded-xl px-3.5 py-2 font-bold ring-1 ring-border bg-white hover:bg-muted/40"
                 onClick={onReset}
               >
                 Reset
@@ -260,7 +261,9 @@ export default function Preview() {
         </div>
 
         {/* Controls Card */}
-        <div className="strong-card bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55">
+        <div
+          className="strong-card"
+          style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
           <div className="h-2 rounded-md bg-black mb-0" />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5">
@@ -492,7 +495,7 @@ export default function Preview() {
             {/* Open modal + embed url (copy) */}
             <div className="md:col-span-2 flex items-center gap-3">
               <button
-                className="rounded-2xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-teal-500/20 hover:from-purple-500/30 hover:to-teal-500/30"
+                className="rounded-lg border px-3 py-2 font-semibold bg-white"
                 onClick={() => { 
                   dispatch(trackEvent({
                     type: "open_widget",

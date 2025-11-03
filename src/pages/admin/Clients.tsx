@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchClients, addClient, updateClient, deleteClient } from '@/store/clientsSlice';
 import { RootState } from '@/store';
-import { BotKey } from "@/lib/botSettings";
+import { fetchBots} from '@/store/botsSlice';
 import { listInstances } from "@/lib/instances";
 
 /* =========================
@@ -19,7 +19,7 @@ type Client = {
   leads: number;
   status: "Active" | "Paused";
   lastActivity: string;
-  defaultBot?: BotKey;
+  botKey?: string;
   notes?: string;
   assignedBots?: string[]; // instance IDs
 };
@@ -55,7 +55,7 @@ const ts = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 const badge =
   "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-border";
 const actionBtn =
-  "rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30";
+  "rounded-xl px-4 py-2 font-bold ring-1 ring-border";
 const input =
   "w-full rounded-lg border border-purple-200 bg-white px-3 py-2 font-semibold";
 
@@ -66,10 +66,12 @@ const input =
 export default function Clients() {
   const dispatch = useDispatch();
   const clients = useSelector((state: RootState) => state.clients.list);
+  const bots = useSelector((state: RootState) => state.bots.list);
   const [loading, setLoading] = React.useState(false);
 
   useEffect(() => {
     dispatch(fetchClients());
+    dispatch(fetchBots());
   }, [dispatch]);
 
   // Add modal
@@ -78,7 +80,7 @@ export default function Clients() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [plan, setPlan] = useState<string>("Starter");
-  const [defaultBot, setDefaultBot] = useState<BotKey>("Waitlist");
+  const [botKey, setBotKey] = useState("");
 
   // Edit modal
   const [openEdit, setOpenEdit] = useState(false);
@@ -87,20 +89,20 @@ export default function Clients() {
   const [eName, setEName] = useState("");
   const [eEmail, setEEmail] = useState("");
   const [ePlan, setEPlan] = useState<string>("Starter");
-  const [eStatus, setEStatus] = useState<Client["status"]>("Active");
+  const [eStatus, setEStatus] = useState<string>("Active");
   const [eBots, setEBots] = useState(0);
   const [eLeads, setELeads] = useState(0);
-  const [eDefaultBot, setEDefaultBot] = useState<BotKey>("Waitlist");
+  const [eBotKey, setEBotKey] = useState("");
   const [eNotes, setENotes] = useState("");
 
   // ---- Totals (note the fixed syntax here) ----
   const totalClients = clients.length;
   const activeClients = clients.filter((c) => c.status === "Active").length;
   const totalBots = clients.reduce(
-    (a, c) => a + (c.assignedBots?.length ?? c.bots ?? 0),
+    (a, c) => a + (c.bots ?? 0),
     0
   );
-  const totalLeads = clients.reduce((a, c) => a + c.leads, 0);
+  const totalLeads = clients.reduce((a, c) => a + (c.leads ?? 0), 0);
 
   /* ---------- Excel (.xlsx) Download ---------- */
   async function downloadXlsx() {
@@ -127,13 +129,13 @@ export default function Clients() {
       "leads",
       "status",
       "lastActivity",
-      "defaultBot",
+      "Bot",
       "assignedBots", // NEW
       "notes",
     ];
 
     const rows = clients.map((c) => [
-      c.id,
+      c._id,
       c.companyName || "",
       c.name || "",
       c.email || "",
@@ -142,7 +144,7 @@ export default function Clients() {
       c.leads ?? 0,
       c.status,
       c.lastActivity || "",
-      c.defaultBot || "",
+      c.botKey || "",
       (c.assignedBots || [])
         .map((id) => nameById.get(id) || "(deleted)")
         .join(", "),
@@ -184,7 +186,7 @@ export default function Clients() {
       leads: 0,
       status: "Active",
       lastActivity: "just now",
-      defaultBot,
+      botKey,
       assignedBots: [], // initialize for a consistent UI/export
     };
 
@@ -199,7 +201,7 @@ export default function Clients() {
       setName("");
       setEmail("");
       setPlan("Starter");
-      setDefaultBot("Waitlist");
+      setBotKey("");
       setOpenAdd(false);
     } catch (err: any) {
      
@@ -218,7 +220,7 @@ export default function Clients() {
     setEStatus(c.status);
     setEBots(c.bots);
     setELeads(c.leads);
-    setEDefaultBot(c.defaultBot || "Waitlist");
+    setEBotKey(c.botKey);
     setENotes(c.notes || "");
     setOpenEdit(true);
   }
@@ -239,7 +241,7 @@ export default function Clients() {
             status: eStatus,
             bots: eBots,
             leads: eLeads,
-            defaultBot: eDefaultBot,
+            botKey: eBotKey,
             notes: eNotes,
             lastActivity: "updated now",
           }
@@ -293,13 +295,17 @@ export default function Clients() {
           <div className="flex items-center gap-2">
             <button
               className={actionBtn}
+              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
               onClick={downloadXlsx}
               aria-label="Download clients Excel"
               title="Download Excel (.xlsx)"
             >
               ⬇︎ Export XLSX
             </button>
-            <button className={actionBtn} onClick={() => setOpenAdd(true)}>
+            <button
+              className={actionBtn} 
+              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+              onClick={() => setOpenAdd(true)}>
               + Add Client
             </button>
           </div>
@@ -369,11 +375,11 @@ export default function Clients() {
           <div className="flex flex-col gap-4">
             {clients.map((c) => {
               const assignedNames = resolveAssignedBotNames(c.assignedBots);
-              const botCount = c.assignedBots?.length ?? c.bots ?? 0;
+              const eBotCount = c.assignedBots?.length ?? c.bots ?? 0;
 
               return (
                 <div
-                  key={c.id}
+                  key={c._id}
                   className="rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] bg-white p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                 >
                   <div className="flex items-center gap-4">
@@ -391,9 +397,9 @@ export default function Clients() {
                         Plan: <span className="font-semibold">{c.plan || "—"}</span>
                       </div>
                       <div className="text-xs font-bold text-foreground/70 mt-1">
-                        Default Bot:{" "}
+                        Bot:{" "}
                         <span className="font-semibold">
-                          {c.defaultBot || "Waitlist"}
+                          {bots.find(b => b.key == c.botKey)?.name || "Waitlist"}
                         </span>
                       </div>
 
@@ -417,7 +423,7 @@ export default function Clients() {
 
                   <div className="flex items-center gap-6">
                     <div className="text-center">
-                      <div className="text-xl font-extrabold">{botCount}</div>
+                      <div className="text-xl font-extrabold">{eBotCount}</div>
                       <div className="text-xs font-semibold uppercase text-foreground/70">
                         Bots
                       </div>
@@ -536,14 +542,16 @@ export default function Clients() {
                   </div>
                   <select
                     className={input}
-                    value={defaultBot}
-                    onChange={(e) => setDefaultBot(e.target.value as BotKey)}
+                    value={botKey}
+                    onChange={(e) => setBotKey(e.target.value)}
                   >
-                    <option value="LeadQualifier">Lead Qualifier</option>
-                    <option value="AppointmentBooking">Appointment Booking</option>
-                    <option value="CustomerSupport">Customer Support</option>
-                    <option value="Waitlist">Waitlist</option>
-                    <option value="SocialMedia">Social Media</option>
+                  {
+                    bots.map((b) => (
+                      <option key={b.key} value={b.key}>
+                        {b.name}
+                      </option>
+                    ))
+                  }
                   </select>
                 </div>
               </div>
@@ -635,7 +643,7 @@ export default function Clients() {
                     className={input}
                     value={eStatus}
                     onChange={(e) =>
-                      setEStatus(e.target.value as Client["status"])
+                      setEStatus(e.target.value)
                     }
                   >
                     <option value="Active">Active</option>
@@ -644,20 +652,22 @@ export default function Clients() {
                 </div>
                 <div>
                   <div className="text-sm font-bold uppercase text-purple-700">
-                    Default Bot
+                    Bot
                   </div>
                   <select
                     className={input}
-                    value={eDefaultBot}
+                    value={eBotKey}
                     onChange={(e) =>
-                      setEDefaultBot(e.target.value as BotKey)
+                      setEBotKey(e.target.value)
                     }
                   >
-                    <option value="LeadQualifier">Lead Qualifier</option>
-                    <option value="AppointmentBooking">Appointment Booking</option>
-                    <option value="CustomerSupport">Customer Support</option>
-                    <option value="Waitlist">Waitlist</option>
-                    <option value="SocialMedia">Social Media</option>
+                    {
+                      bots.map((b) => (
+                        <option key={b.key} value={b.key}>
+                          {b.name}
+                        </option>
+                      ))
+                    }
                   </select>
                 </div>
               </div>

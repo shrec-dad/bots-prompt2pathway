@@ -735,16 +735,28 @@ export default function Nurture() {
               </select>
             </div>
 
-            <button className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-fuchsia-500/20 to-sky-500/20 hover:from-fuchsia-500/30 hover:to-sky-500/30" onClick={loadStarter}>
+            <button
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+              onClick={loadStarter}>
               Load Starter Sequence
             </button>
-            <button className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30" onClick={duplicateToNewInstance}>
+            <button
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+              onClick={duplicateToNewInstance}>
               Duplicate to New Instance
             </button>
-            <button className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-indigo-500/20 to-blue-500/20 hover:from-indigo-500/30 hover:to-blue-500/30" onClick={sendTestEmail}>
+            <button
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+              onClick={sendTestEmail}>
               Send Test Email
             </button>
-            <button className="rounded-xl px-4 py-2 font-bold ring-1 ring-border bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30" onClick={saveSchedule}>
+            <button
+              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+              onClick={saveSchedule}>
               Save Schedule
             </button>
             <button

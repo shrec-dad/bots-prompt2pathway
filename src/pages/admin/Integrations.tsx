@@ -117,7 +117,7 @@ export default function Integrations() {
       </div>
 
       {/* Applies-to selector */}
-      <div className={classNames(strongCard, Grad)}>
+      <div className="strong-card" style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
         <div className="h-2 rounded-md bg-black mb-4" />
         <div className="p-5 space-y-4">
           <div className="text-lg font-extrabold">Applies to</div>
@@ -141,7 +141,8 @@ export default function Integrations() {
             <div className="flex items-end gap-3">
               <button
                 onClick={save}
-                className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px] border-2 border-black hover:shadow-[0_4px_0_#000]"
+                className="rounded-xl px-4 py-2 font-bold text-white shadow-[0_3px_0_#000] active:translate-y-[1px] border-2 border-black hover:shadow-[0_4px_0_#000]"
+                style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
               >
                 Save
               </button>
@@ -160,8 +161,7 @@ export default function Integrations() {
       {/* Integration cards */}
       <div className="grid grid-cols-1 gap-6">
         {/* Email Integration */}
-        <div className={classNames(strongCard, Grad)}>
-          <div className="h-2 rounded-md bg-black mb-4" />
+        <div className="strong-card" style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
           <div className="p-5 space-y-4">
             <div>
               <div className="text-lg font-extrabold">Email Integration (optional)</div>
@@ -194,8 +194,7 @@ export default function Integrations() {
         </div>
 
         {/* Calendar Integration */}
-        <div className={classNames(strongCard, Grad)}>
-          <div className="h-2 rounded-md bg-black mb-4" />
+        <div className="strong-card" style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
           <div className="p-5 space-y-4">
             <div>
               <div className="text-lg font-extrabold">Calendar Integration (universal)</div>
@@ -228,7 +227,7 @@ export default function Integrations() {
         </div>
 
         {/* CRM Integration */}
-        <div className={classNames(strongCard, Grad)}>
+        <div className="strong-card" style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
           <div className="h-2 rounded-md bg-black mb-4" />
           <div className="p-5 space-y-4">
             <div>

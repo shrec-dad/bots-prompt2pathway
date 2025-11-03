@@ -6,18 +6,16 @@ import App from "./App";
 import { store } from './store';
 import "./index.css";
 
-/*  ✅ NEW: load theme css + apply saved (or default) palette  */
 import "@/styles/theme.css";
-import { applyTheme } from "@/lib/theme";
-applyTheme();
+import ThemeManager from "./ThemeManager";
 
-// ✅ Keep your migrations at the top, too
 import { ensureMigrations } from "@/lib/storageVersion";
 ensureMigrations();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Provider store={store}>
+      <ThemeManager />
       <App />
     </Provider>
   </React.StrictMode>

@@ -5,7 +5,10 @@ const clientSchema = new mongoose.Schema({
   name:  { type: String, required: true },
   email:     { type: String, required: true },
   plan:     { type: String },
-  defaultBot:  { type: String },
+  botKey: { type: String },
+  bots: { type: Number, default: 0 },
+  leads: { type: Number, default: 0 },
+  notes: { type: String },
   status: { type: String, enum: ['Active', 'Paused'], required: true, default: 'Active' },
 });
 

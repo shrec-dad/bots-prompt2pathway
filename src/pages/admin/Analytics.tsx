@@ -65,7 +65,7 @@ const defaultMetrics: Metrics = {
  * Small UI helpers - UPDATED WITH BOLD STYLING
  * ------------------------------------------------------------ */
 const sectionCls =
-  "rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] bg-gradient-to-r from-violet-100 via-sky-100 to-emerald-100 p-4 md:p-5";
+  "rounded-2xl border-[3px] border-black/80 shadow-[0_4px_0_rgba(0,0,0,0.8)] p-4 md:p-5";
 
 const Card = ({
   title,
@@ -240,7 +240,8 @@ export default function Analytics() {
           </button>
           <button
             onClick={save}
-            className="rounded-xl px-3.5 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+            className="rounded-xl px-3.5 py-2 font-bold text-white shadow-[0_3px_0_#000] active:translate-y-[1px]"
+            style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
             title="Save metrics to this scope"
           >
             Save
@@ -260,7 +261,7 @@ export default function Analytics() {
       </div>
 
       {/* Metric Cards (display-only) */}
-      <div className={sectionCls}>
+      <div className={sectionCls} style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
         <div className="text-xl md:text-2xl font-extrabold mb-3">Metrics</div>
 
         {/* Core six */}
