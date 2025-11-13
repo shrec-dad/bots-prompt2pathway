@@ -25,6 +25,7 @@ function classNames(...xs: (string | false | undefined)[]) {
 
 const GradStyle = {
   background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))",
+  color: "var(--grad-text)"
 }
 
 /** KPI card with optional delta pill */
@@ -66,7 +67,7 @@ function KpiCard({ title, value, deltaPct, onClick }: KpiProps) {
         </div>
       )}
 
-      <div className="mt-4 h-10 w-20 rounded-md bg-white/65 ring-1 ring-border flex items-center justify-center">
+      <div className="mt-4 h-10 w-20 rounded-md ring-1 ring-border flex items-center justify-center" style={GradStyle}>
         <div className="h-[2px] w-14 bg-foreground/60 rounded" />
       </div>
     </button>

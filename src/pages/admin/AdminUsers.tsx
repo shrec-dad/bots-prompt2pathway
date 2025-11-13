@@ -130,7 +130,8 @@ export default function AdminUsers() {
           </select>
           <button
             type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-2 font-bold text-white"
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-bold text-white"
+            style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))", color: "var(--grad-text)"}}
           >
             <UserPlus className="h-4 w-4" /> Add user
           </button>

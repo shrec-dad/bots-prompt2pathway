@@ -786,15 +786,15 @@ function BuilderInner() {
       </div>
 
       {/* ===== Canvas ===== */}
-      <div className="strong-card bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55">
+      <div 
+        className="strong-card" 
+        style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))", color: "var(--grad-text)"}}>
         <div
           className="rounded-xl overflow-hidden"
           style={{
             width: "100%",
             minHeight: 480,
-            height: "60vh",
-            background:
-              "linear-gradient(135deg, #ffeef8 0%, #f3e7fc 25%, #e7f0ff 50%, #e7fcf7 75%, #fff9e7 100%)",
+            height: "60vh"
           }}
         >
           <ReactFlow
@@ -846,7 +846,8 @@ function BuilderInner() {
       {/* ===== Editor ===== */}
       <div
         ref={editorRef}
-        className="strong-card bg-gradient-to-br from-indigo-200/60 via-blue-200/55 to-emerald-200/55"
+        className="strong-card" 
+        style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))", color: "var(--grad-text)"}}
       >
         <div className="p-5 space-y-4">
           <div className="text-sm font-extrabold text-foreground">
@@ -859,7 +860,7 @@ function BuilderInner() {
                 <button
                   onClick={saveChanges}
                   className="py-2 px-4 text-white rounded-xl hover:shadow-lg transition-all font-semibold text-sm border-2 border-black shadow-[0_3px_0_#000] active:translate-y-[1px]"
-                  style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+                  style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))", color: "var(--grad-text)"}}
                 >
                   Save Changes
                 </button>

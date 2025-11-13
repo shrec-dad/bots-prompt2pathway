@@ -125,7 +125,7 @@ export default function Knowledge() {
       <div className="rounded-2xl border-[3px] border-black/80 bg-white shadow-[0_6px_0_rgba(0,0,0,0.8)]">
         {/* header stripe */}
         <div className="h-2 rounded-md bg-black mx-5 mt-5 mb-4" />
-        <div className="gap-4 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl border-b">
+        <div className="gap-4 p-5 border-b" style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
           <div className="mb-3">
             <h1 className="text-2xl font-extrabold tracking-tight">Knowledge</h1>
             <p className="text-sm text-foreground/70">
@@ -269,7 +269,7 @@ export default function Knowledge() {
       <div className="rounded-2xl border-[3px] border-black/80 bg-white shadow-[0_6px_0_rgba(0,0,0,0.8)]">
         {/* header stripe */}
         <div className="h-2 rounded-md bg-black mx-5 mt-5 mb-4" />
-        <div className="p-5 border-b bg-gradient-to-r from-purple-50 via-indigo-50 to-teal-50 rounded-t-2xl">
+        <div className="p-5 border-b rounded-t-2xl" style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
           <div className="text-xl font-extrabold">Uploaded Documents</div>
           <div className="text-sm text-foreground/70">
             Stored for <span className="font-semibold">{scopeLabel}</span>.

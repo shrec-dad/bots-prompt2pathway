@@ -474,8 +474,8 @@ export default function Clients() {
       {/* Add Client Modal */}
       {openAdd && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
-          <div className="w-[640px] max-w-[94vw] rounded-2xl border-2 border-black bg-white shadow-2xl">
-            <div className="rounded-t-2xl p-4 bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 text-white flex items-center justify-between">
+          <div className="w-[640px] max-w-[94vw] rounded-2xl border-2 bg-white shadow-2xl" style={{borderColor: "var(--grad-from)"}}>
+            <div className="rounded-t-2xl p-4 text-white flex items-center justify-between" style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
               <div className="text-lg font-extrabold">Add Client</div>
               <button
                 className="px-2 py-1 font-bold bg-white/90 text-black rounded-lg"
@@ -564,7 +564,8 @@ export default function Clients() {
                   Cancel
                 </button>
                 <button
-                  className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                  className="rounded-xl px-4 py-2 font-bold text-white shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                  style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
                   onClick={handleAddClient}
                 >
                   Save Client
@@ -578,8 +579,8 @@ export default function Clients() {
       {/* Edit Client Modal */}
       {openEdit && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
-          <div className="w-[700px] max-w-[96vw] rounded-2xl border-2 border-black bg-white shadow-2xl">
-            <div className="rounded-t-2xl p-4 bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 text-white flex items-center justify-between">
+          <div className="w-[700px] max-w-[96vw] rounded-2xl border-2 bg-white shadow-2xl" style={{borderColor: "var(--grad-from)"}}>
+            <div className="rounded-t-2xl p-4 text-white flex items-center justify-between" style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}>
               <div className="text-lg font-extrabold">Edit Client</div>
               <button
                 className="px-2 py-1 font-bold bg-white/90 text-black rounded-lg"
@@ -730,7 +731,8 @@ export default function Clients() {
                     Cancel
                   </button>
                   <button
-                    className="rounded-xl px-4 py-2 font-bold text-white bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                    className="rounded-xl px-4 py-2 font-bold text-white shadow-[0_3px_0_#000] active:translate-y-[1px]"
+                    style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
                     onClick={saveEdit}
                   >
                     Save Changes

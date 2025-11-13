@@ -72,6 +72,9 @@ app.use("/api/settings", settingsRoute);
 app.use("/api/metrics", metricsRoute);
 app.use("/api/recipients", recipientsRoute);
 
+const telephonyRouter = require("./telephony/router");
+app.use("/api/telephony", telephonyRouter);
+
 const server = http.createServer(app);
 
 // Error handling for server startup

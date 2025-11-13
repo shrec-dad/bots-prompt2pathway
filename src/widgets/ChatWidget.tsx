@@ -137,8 +137,8 @@ export default function ChatWidget({
     async function fetchBotData() {
       const apiUrl = `${import.meta.env.VITE_API_BASE_URL}/${kind == "inst" ? "bot_instances" : "bots"}/${botId}`
       const res = await fetch(apiUrl);
-      const { name, plan, nodes, edges } = await res.json();
-      setName(name);
+      const { name, plan, nodes, edges, botId: bot } = await res.json();
+      setName(kind == "inst" ? bot.name : name);
       setFlowNodes(getOrderedNodes(nodes?.[plan] ?? [], edges?.[plan] ?? []));
       setMessages(getChatMessages(nodes?.[plan] ?? [], edges?.[plan] ?? []));
     }
@@ -252,7 +252,7 @@ export default function ChatWidget({
       height: opts.fullHeightRight ? "100vh" : 520,
       maxHeight: "min(700px, 90vh)",
       background: "#fff",
-      border: "2px solid #000",
+      border: `2px solid ${borderColor}`,
       borderRadius: opts.fullHeightRight ? 0 : 18,
       display: "flex",
       flexDirection: "column",
@@ -300,9 +300,9 @@ export default function ChatWidget({
             {/* Header */}
             <div
               style={{
-                background: "linear-gradient(90deg, #c4b5fd 0%, #a5b4fc 50%, #86efac 100%)",
+                background: color,
                 padding: "12px 14px",
-                borderBottom: "2px solid #000",
+                borderBottom: `2px solid ${borderColor}`,
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
@@ -324,7 +324,8 @@ export default function ChatWidget({
                   marginLeft: "auto",
                   padding: "4px 10px",
                   fontWeight: 800,
-                  border: "2px solid #000",
+                  border: `2px ${borderColor} #000`,
+                  color: borderColor,
                   background: "#fff",
                   borderRadius: 8,
                   lineHeight: 1,
@@ -379,7 +380,7 @@ export default function ChatWidget({
             <div
               style={{
                 display: "flex",
-                borderTop: "2px solid #000",
+                borderTop: `2px solid ${borderColor}`,
                 padding: "8px 12px",
                 background: "#fff",
                 gap: 8,

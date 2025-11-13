@@ -2,7 +2,8 @@ const BotInstance = require('../models/botInstanceModel');
 
 const getInstanceById = async (req, res) => {
   try {
-    const inst = await BotInstance.findById(req.params.id);
+    const inst = await BotInstance.findById(req.params.id).populate('botId', 'name emoji');
+    if (!inst) return res.status(404).json({ error: 'Bot Instance not found' });
     res.json(inst);
   } catch (err) {
     res.status(500).json({ error: err.message });
