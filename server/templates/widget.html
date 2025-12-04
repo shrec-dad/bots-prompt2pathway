@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Widget</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    #widget-root {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="widget-root"></div>
+
+  <script>
+    (function() {
+      // API Base URL injected by server
+      const API_BASE_URL = '{{API_BASE_URL}}';
+
+      // Widget parameters injected by server
+      const CONFIG = {
+        botId: '{{BOT_ID}}',
+        kind: '{{KIND}}',
+        mode: '{{MODE}}',
+        position: '{{POSITION}}',
+        size: parseInt('{{SIZE}}', 10) || 64,
+        shape: '{{SHAPE}}',
+        imageFit: '{{IMAGE_FIT}}',
+        panelStyle: '{{PANEL_STYLE}}',
+        label: '{{LABEL}}',
+        labelColor: '{{LABEL_COLOR}}',
+        bgColor: '{{BG_COLOR}}',
+        borderColor: '{{BORDER_COLOR}}',
+        img: '{{IMG}}' || undefined,
+        botAvatar: '{{BOT_AVATAR}}' || undefined,
+      };
+
+      // State management
+      const state = {
+        open: CONFIG.mode !== "popup",
+        name: "",
+        flowNodes: [],
+        messages: [],
+        answers: {},
+        input: "",
+        step: 0
+      };
+
+      // Helper functions
+      function getOrderedNodes(nodes, edges) {
+        const sourceToTarget = Object.fromEntries(edges.map(e => [e.source, e.target]));
+        const startNode = nodes.find(n => !edges.some(e => e.target === n.id));
+        const ordered = [];
+        let current = startNode;
+        while (current) {
+          ordered.push(current);
+          const nextId = sourceToTarget[current.id];
+          current = nodes.find(n => n.id === nextId);
+        }
+        return ordered;
+      }
+
+      function getChatMessages(nodes, edges) {
+        const sourceToTarget = Object.fromEntries(edges.map(e => [e.source, e.target]));
+        const startNode = nodes.find(n => !edges.some(e => e.target === n.id));
+        const messages = [];
+        let current = startNode;
+        while (current) {
+          if (current.type === "message") {
+            messages.push(current.data.text);
+          } else if (current.type === "input") {
+            messages.push(current.data.label);
+          } else if (current.type === "choice") {
+            messages.push(current.data.label + " Options: " + current.data.options.join(", "));
+          }
+          const nextId = sourceToTarget[current.id];
+          current = nodes.find(n => n.id === nextId);
+        }
+        return messages;
+      }
+
+      async function trackEvent(data) {
+        try {
+          await fetch(`${API_BASE_URL}/metrics`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+        } catch (err) {
+          console.error("Failed to track event:", err);
+        }
+      }
+
+      // Calculate bubble dimensions
+      function getBubbleDims(shape, size) {
+        if (shape === "oval" || shape === "speech-rounded") {
+          return {
+            width: Math.round(size * 1.55),
+            height: Math.round(size * 0.9),
+            radius: Math.round(size * 0.9),
+          };
+        }
+        const squareish = { width: size, height: size };
+        if (shape === "rounded") return { ...squareish, radius: 14 };
+        if (shape === "square") return { ...squareish, radius: 6 };
+        return { ...squareish, radius: size / 2 };
+      }
+
+      const bubbleDims = getBubbleDims(CONFIG.shape, CONFIG.size);
+
+      // DOM helper functions
+      function setStyles(el, styles) {
+        Object.assign(el.style, styles);
+      }
+
+      function createElement(tag, props = {}) {
+        const el = document.createElement(tag);
+        if (props.className) el.className = props.className;
+        if (props.id) el.id = props.id;
+        if (props.textContent) el.textContent = props.textContent;
+        if (props.innerHTML) el.innerHTML = props.innerHTML;
+        if (props.style) setStyles(el, props.style);
+        if (props.attrs) {
+          Object.entries(props.attrs).forEach(([key, value]) => {
+            el.setAttribute(key, value);
+          });
+        }
+        if (props.children) {
+          props.children.forEach(child => {
+            if (typeof child === 'string') {
+              el.appendChild(document.createTextNode(child));
+            } else {
+              el.appendChild(child);
+            }
+          });
+        }
+        return el;
+      }
+
+      // Create bot avatar
+      function createBotAvatar() {
+        const avatar = createElement('div', {
+          style: {
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            border: '2px solid #000',
+            overflow: 'hidden',
+            background: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }
+        });
+
+        if (CONFIG.botAvatar) {
+          const img = createElement('img', {
+            attrs: {
+              src: CONFIG.botAvatar,
+              alt: 'bot avatar'
+            },
+            style: {
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }
+          });
+          avatar.appendChild(img);
+        } else {
+          avatar.textContent = '🤖';
+          setStyles(avatar, { fontWeight: '800' });
+        }
+
+        return avatar;
+      }
+
+      // Render conversation panel
+      function renderConversationPanel() {
+        const panel = createElement('div', {
+          style: {
+            width: CONFIG.mode === "sidebar" ? '400px' : '380px',
+            height: CONFIG.mode === "sidebar" ? '100vh' : '520px',
+            maxHeight: 'min(700px, 90vh)',
+            background: '#fff',
+            border: `2px solid ${CONFIG.borderColor}`,
+            borderRadius: CONFIG.mode === "sidebar" ? '0' : '18px',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            position: CONFIG.mode === "popup" ? 'fixed' : 'relative',
+            bottom: CONFIG.mode === "popup" ? (bubbleDims.height + 32) + 'px' : 'auto',
+            [CONFIG.position === "bottom-left" ? "left" : "right"]: CONFIG.mode === "popup" ? '20px' : 'auto',
+            zIndex: '2147483000'
+          }
+        });
+
+        // Header
+        const header = createElement('div', {
+          style: {
+            background: CONFIG.bgColor,
+            padding: '12px 14px',
+            borderBottom: `2px solid ${CONFIG.borderColor}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }
+        });
+
+        const nameEl = createElement('div', {
+          textContent: state.name,
+          style: { fontWeight: '900' }
+        });
+        header.appendChild(nameEl);
+
+        const closeBtn = createElement('button', {
+          textContent: '×',
+          attrs: { 'aria-label': 'Close' },
+          style: {
+            marginLeft: 'auto',
+            padding: '4px 10px',
+            fontWeight: '800',
+            border: `2px solid ${CONFIG.borderColor}`,
+            color: CONFIG.borderColor,
+            background: '#fff',
+            borderRadius: '8px',
+            lineHeight: '1',
+            cursor: 'pointer'
+          }
+        });
+        closeBtn.onclick = () => closeWidget();
+        header.appendChild(closeBtn);
+        panel.appendChild(header);
+
+        // Messages area
+        const messagesArea = createElement('div', {
+          attrs: { 'data-messages-area': 'true' },
+          style: {
+            flex: '1',
+            overflowY: 'auto',
+            padding: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px'
+          }
+        });
+
+        state.messages.slice(0, state.step + 1).forEach((m, i) => {
+          const msgContainer = createElement('div', {
+            style: {
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '8px',
+              justifyContent: 'flex-start'
+            }
+          });
+          msgContainer.appendChild(createBotAvatar());
+          
+          const msgEl = createElement('div', {
+            textContent: m,
+            style: {
+              maxWidth: '80%',
+              padding: '10px 12px',
+              background: '#fff',
+              color: '#000',
+              border: '2px solid #000',
+              borderRadius: '12px'
+            }
+          });
+          msgContainer.appendChild(msgEl);
+          messagesArea.appendChild(msgContainer);
+
+          if (state.answers[i]) {
+            const userMsg = createElement('div', {
+              style: {
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '8px',
+                justifyContent: 'flex-end'
+              }
+            });
+            const userMsgEl = createElement('div', {
+              textContent: state.answers[i],
+              style: {
+                maxWidth: '80%',
+                padding: '10px 12px',
+                background: '#E9F5FF',
+                color: '#000',
+                border: '2px solid #000',
+                borderRadius: '12px'
+              }
+            });
+            userMsg.appendChild(userMsgEl);
+            messagesArea.appendChild(userMsg);
+          }
+        });
+
+        panel.appendChild(messagesArea);
+
+        // Input area
+        const inputArea = createElement('div', {
+          style: {
+            display: 'flex',
+            borderTop: `2px solid ${CONFIG.borderColor}`,
+            padding: '8px 12px',
+            background: '#fff',
+            gap: '8px'
+          }
+        });
+
+        const input = createElement('input', {
+          attrs: {
+            type: 'text',
+            placeholder: 'Type a message…'
+          },
+          style: {
+            flex: '1',
+            padding: '12px',
+            fontWeight: '600',
+            outline: 'none',
+            borderRadius: '6px',
+            border: '1px solid #ccc'
+          }
+        });
+        input.value = state.input;
+        input.oninput = (e) => { state.input = e.target.value; };
+        input.onkeydown = (e) => {
+          if (e.key === 'Enter') {
+            const txt = state.input.trim();
+            if (txt) {
+              state.answers[state.step] = txt;
+              state.input = '';
+              state.step++;
+              input.value = '';
+              render();
+            }
+          }
+        };
+        inputArea.appendChild(input);
+
+        const sendBtn = createElement('button', {
+          textContent: 'Send',
+          style: {
+            padding: '12px 16px',
+            fontWeight: '800',
+            borderLeft: '2px solid #000',
+            background: CONFIG.bgColor,
+            color: '#fff',
+            borderRadius: '6px',
+            cursor: 'pointer'
+          }
+        });
+        sendBtn.onclick = () => {
+          const txt = state.input.trim();
+          if (txt) {
+            state.answers[state.step] = txt;
+            state.input = '';
+            state.step++;
+            input.value = '';
+            render();
+          }
+        };
+        inputArea.appendChild(sendBtn);
+        panel.appendChild(inputArea);
+
+        return panel;
+      }
+
+      // Render step-by-step panel
+      function renderStepByStepPanel() {
+        const panel = createElement('div', {
+          style: {
+            width: CONFIG.mode === "sidebar" ? '400px' : '380px',
+            height: CONFIG.mode === "sidebar" ? '100vh' : '520px',
+            maxHeight: 'min(700px, 90vh)',
+            background: '#fff',
+            border: `2px solid ${CONFIG.borderColor}`,
+            borderRadius: CONFIG.mode === "sidebar" ? '0' : '18px',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            position: CONFIG.mode === "popup" ? 'fixed' : 'relative',
+            bottom: CONFIG.mode === "popup" ? (bubbleDims.height + 32) + 'px' : 'auto',
+            [CONFIG.position === "bottom-left" ? "left" : "right"]: CONFIG.mode === "popup" ? '20px' : 'auto',
+            zIndex: '2147483000'
+          }
+        });
+
+        const topBar = createElement('div', {
+          style: {
+            borderTopLeftRadius: '1rem',
+            borderTopRightRadius: '1rem',
+            padding: '1rem',
+            height: '0.5rem',
+            backgroundColor: 'black'
+          },
+          attrs: { 'aria-hidden': 'true' }
+        });
+        panel.appendChild(topBar);
+
+        const content = createElement('div', {
+          style: {
+            padding: '1rem',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: '80vh',
+            overflowY: 'auto'
+          }
+        });
+
+        const closeBtn = createElement('button', {
+          textContent: 'Close',
+          attrs: { 'aria-label': 'Close preview' },
+          style: {
+            marginLeft: 'auto',
+            borderRadius: '1rem',
+            padding: '0.375rem 0.75rem',
+            fontWeight: 'bold',
+            border: '1px solid #ccc',
+            backgroundColor: 'white',
+            cursor: 'pointer'
+          }
+        });
+        closeBtn.onclick = () => closeWidget();
+        const closeContainer = createElement('div', {
+          style: { display: 'flex' },
+          children: [closeBtn]
+        });
+        content.appendChild(closeContainer);
+
+        const emoji = createElement('div', {
+          textContent: '👋',
+          style: {
+            display: 'grid',
+            placeItems: 'center',
+            fontSize: '3.75rem'
+          }
+        });
+        content.appendChild(emoji);
+
+        const title = createElement('h2', {
+          textContent: `Welcome to ${state.name}!`,
+          style: {
+            textAlign: 'center',
+            fontSize: '1.5rem',
+            fontWeight: '800',
+            marginTop: '0.5rem'
+          }
+        });
+        content.appendChild(title);
+
+        const stepContent = createElement('div', {
+          style: {
+            marginTop: '1rem',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.25rem'
+          }
+        });
+
+        if (state.flowNodes[state.step]) {
+          const node = state.flowNodes[state.step];
+          
+          if (node.type === "message") {
+            const msgEl = createElement('div', {
+              textContent: node.data.text,
+              style: { fontWeight: 'bold' }
+            });
+            stepContent.appendChild(msgEl);
+          } else if (node.type === "input") {
+            const label = createElement('label', {
+              textContent: node.data.label,
+              style: {
+                display: 'block',
+                fontWeight: 'bold',
+                marginBottom: '0.25rem'
+              }
+            });
+            stepContent.appendChild(label);
+            
+            const input = createElement('input', {
+              attrs: {
+                type: 'text',
+                placeholder: node.data.placeholder || ''
+              },
+              style: {
+                width: '100%',
+                border: '1px solid #ccc',
+                borderRadius: '0.5rem',
+                padding: '0.5rem 0.75rem'
+              }
+            });
+            input.value = state.answers[node.id] || '';
+            input.oninput = (e) => {
+              state.answers[node.id] = e.target.value;
+            };
+            stepContent.appendChild(input);
+          } else if (node.type === "choice") {
+            const optionsContainer = createElement('div', {
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem'
+              }
+            });
+            
+            node.data.options.forEach(opt => {
+              const btn = createElement('button', {
+                textContent: opt,
+                style: {
+                  borderRadius: '1rem',
+                  padding: '0.5rem 1rem',
+                  fontWeight: 'bold',
+                  border: '1px solid black',
+                  cursor: 'pointer',
+                  backgroundColor: 'white'
+                }
+              });
+              btn.onmouseover = () => { btn.style.backgroundColor = '#f3f3f3'; };
+              btn.onmouseout = () => { btn.style.backgroundColor = 'white'; };
+              btn.onclick = () => {
+                state.answers[node.id] = opt;
+                state.step++;
+                render();
+              };
+              optionsContainer.appendChild(btn);
+            });
+            stepContent.appendChild(optionsContainer);
+          } else if (node.type === "action") {
+            if (node.data.label && node.data.label.includes("lead")) {
+              trackEvent({ type: "widget.lead_captured", key: `${CONFIG.kind}:${CONFIG.botId}`, meta: { step: state.step }, ts: Date.now() });
+            }
+            // Action nodes don't need UI, just track and move to next
+            // The continue button will handle advancing
+          }
+        }
+
+        content.appendChild(stepContent);
+
+        if (state.step < state.flowNodes.length - 1) {
+          const continueBtn = createElement('button', {
+            textContent: 'Continue',
+            style: {
+              borderRadius: '1rem',
+              padding: '0.5rem 1.25rem',
+              fontWeight: 'bold',
+              color: 'white',
+              marginTop: '2rem',
+              background: 'linear-gradient(to right, #8b5cf6, #6366f1, #14b8a6)',
+              boxShadow: '0 3px 0 #000',
+              cursor: 'pointer'
+            }
+          });
+          continueBtn.onclick = () => {
+            trackEvent({ type: "step_next", key: `${CONFIG.kind}:${CONFIG.botId}`, meta: { step: state.step }, ts: Date.now() });
+            state.step++;
+            render();
+          };
+          content.appendChild(continueBtn);
+        }
+
+        if (state.step === state.flowNodes.length - 1) {
+          const completeMsg = createElement('div', {
+            textContent: '🎉 All steps completed!',
+            style: {
+              marginTop: '2rem',
+              textAlign: 'center',
+              fontWeight: 'bold'
+            }
+          });
+          content.appendChild(completeMsg);
+        }
+
+        panel.appendChild(content);
+        return panel;
+      }
+
+      // Create bubble button
+      function createBubble() {
+        const bubble = createElement('button', {
+          attrs: { 'aria-label': 'Open chat' },
+          style: {
+            position: 'fixed',
+            bottom: '20px',
+            [CONFIG.position === "bottom-left" ? "left" : "right"]: '20px',
+            width: bubbleDims.width + 'px',
+            height: bubbleDims.height + 'px',
+            borderRadius: CONFIG.shape.startsWith("speech") ? '0' : bubbleDims.radius + 'px',
+            border: (CONFIG.shape !== "speech" && CONFIG.shape !== "speech-rounded") ? `2px solid ${CONFIG.borderColor}` : '0',
+            background: 'transparent',
+            overflow: 'hidden',
+            zIndex: '2147483000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer'
+          }
+        });
+
+        // Bubble background
+        if (CONFIG.img) {
+          const img = createElement('img', {
+            attrs: {
+              src: CONFIG.img,
+              alt: 'bubble'
+            },
+            style: {
+              width: '100%',
+              height: '100%',
+              objectFit: CONFIG.imageFit,
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              borderRadius: bubbleDims.radius + 'px'
+            }
+          });
+          bubble.appendChild(img);
+        } else {
+          const bg = createElement('div', {
+            style: {
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              width: '100%',
+              height: '100%',
+              borderRadius: bubbleDims.radius + 'px',
+              background: CONFIG.bgColor
+            }
+          });
+          bubble.appendChild(bg);
+        }
+
+        // Label
+        if (CONFIG.label && !(CONFIG.img && CONFIG.label)) {
+          const label = createElement('span', {
+            textContent: CONFIG.label,
+            style: {
+              position: 'relative',
+              zIndex: '1',
+              color: CONFIG.labelColor,
+              fontWeight: '900',
+              padding: '0 8px',
+              userSelect: 'none'
+            }
+          });
+          bubble.appendChild(label);
+        }
+
+        bubble.onclick = () => {
+          if (state.open) {
+            closeWidget();
+          } else {
+            trackEvent({ type: "open_widget", key: `${CONFIG.kind}:${CONFIG.botId}`, ts: Date.now() });
+            state.open = true;
+            render();
+          }
+        };
+
+        return bubble;
+      }
+
+      // Close widget handler - resets step and answers
+      function closeWidget(stepForTracking) {
+        trackEvent({ 
+          type: "close_widget", 
+          key: `${CONFIG.kind}:${CONFIG.botId}`, 
+          meta: { step: stepForTracking !== undefined ? stepForTracking : state.step }, 
+          ts: Date.now() 
+        });
+        state.open = false;
+        // Reset step-by-step state when closing
+        state.step = 0;
+        state.answers = {};
+        state.input = '';
+        render();
+      }
+
+      // Scroll conversation messages to bottom
+      function scrollConversationToBottom() {
+        setTimeout(() => {
+          const messagesArea = document.querySelector('[data-messages-area]');
+          if (messagesArea) {
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+          }
+        }, 10);
+      }
+
+      // Main render function
+      function render() {
+        const root = document.getElementById('widget-root');
+        root.innerHTML = '';
+
+        if (CONFIG.mode === "popup" && !state.open) {
+          root.appendChild(createBubble());
+        } else if (state.open) {
+          if (CONFIG.mode === "popup") {
+            root.appendChild(createBubble());
+          }
+          
+          const panel = CONFIG.panelStyle === "conversation" 
+            ? renderConversationPanel() 
+            : renderStepByStepPanel();
+          
+          if (CONFIG.mode === "inline") {
+            const wrapper = createElement('div', {
+              style: { margin: '12px 0' },
+              children: [panel]
+            });
+            root.appendChild(wrapper);
+          } else {
+            root.appendChild(panel);
+          }
+
+          // Scroll to bottom if in conversation mode
+          if (CONFIG.panelStyle === "conversation") {
+            scrollConversationToBottom();
+          }
+        }
+      }
+
+      // Fetch bot data
+      async function fetchBotData() {
+        try {
+          const apiUrl = `${API_BASE_URL}/${CONFIG.kind === "inst" ? "bot_instances" : "bots"}/${CONFIG.botId}`;
+          const res = await fetch(apiUrl);
+          const data = await res.json();
+          const { name, plan, nodes, edges, botId: bot } = data;
+          state.name = CONFIG.kind === "inst" ? bot.name : name;
+          state.flowNodes = getOrderedNodes(nodes?.[plan] ?? [], edges?.[plan] ?? []);
+          state.messages = getChatMessages(nodes?.[plan] ?? [], edges?.[plan] ?? []);
+          render();
+        } catch (err) {
+          console.error("Failed to fetch bot data:", err);
+        }
+      }
+
+      // Initialize
+      if (CONFIG.botId) {
+        fetchBotData();
+      }
+      render();
+    })();
+  </script>
+</body>
+</html>
