@@ -135,6 +135,7 @@ export default function Preview() {
   }, [
     instId,
     botId,
+    mode,
     pos,
     size,
     shape,
