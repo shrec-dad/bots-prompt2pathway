@@ -5,7 +5,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 // Public pages
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
-import Widget from "@/pages/Widget";
 
 // Admin shell + pages
 import AdminLayout from "@/pages/admin/AdminLayout";
@@ -27,7 +26,6 @@ export default function AppRoutes() {
     <Routes>
       {/* Public */}
       <Route path="/" element={<Index />} />
-      <Route path="/widget" element={<Widget />} />
 
       {/* Admin */}
       <Route path="/admin" element={<AdminLayout />}>

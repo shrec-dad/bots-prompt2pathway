@@ -6,7 +6,6 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 // Public
 const Index = lazy(() => import("@/pages/Index"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
-const Widget = lazy(() => import("@/pages/Widget"));
 
 // Auth
 const Login = lazy(() => import("@/pages/admin/Login"));
@@ -35,7 +34,6 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/" element={<Index />} />
-          <Route path="/widget" element={<Widget />} />
 
           {/* Admin login */}
           <Route path="/admin/login" element={<Login />} />
