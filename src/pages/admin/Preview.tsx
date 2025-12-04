@@ -149,8 +149,9 @@ export default function Preview() {
     panelStyle
   ]);
 
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "";
   const embedIframe = `<iframe
-      src="${widgetSrc}"
+      src="${apiBase}${widgetSrc}"
       style="border:0;width:100%;height:560px"
       loading="lazy"
       referrerpolicy="no-referrer-when-downgrade"
