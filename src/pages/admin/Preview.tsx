@@ -131,7 +131,8 @@ export default function Preview() {
     if (borderColor.trim()) qp.set("borderColor", borderColor.trim());
     if (botAvatar.trim()) qp.set("botAvatar", botAvatar.trim());
 
-    return `/widget?${qp.toString()}`;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}/widget?${qp.toString()}`;
   }, [
     instId,
     botId,
@@ -149,9 +150,8 @@ export default function Preview() {
     panelStyle
   ]);
 
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "";
   const embedIframe = `<iframe
-      src="${apiBase}${widgetSrc}"
+      src="${widgetSrc}"
       style="border:0;width:100%;height:560px"
       loading="lazy"
       referrerpolicy="no-referrer-when-downgrade"

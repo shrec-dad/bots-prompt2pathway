@@ -254,8 +254,7 @@ export default function Embed() {
     return `/widget?${qp.toString()}`;
   }, [instId, botId, mode, active]);
 
-  const apiBase = import.meta.env.VITE_API_BASE_URL || origin;
-  const embedUrl = `${apiBase}${widgetPath}`;
+  const embedUrl = `${origin}${widgetPath}`;
 
   /* Snippets */
   const iframeSnippet = useMemo(
