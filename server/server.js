@@ -60,7 +60,6 @@ const settingsRoute = require('./routes/settingsRoutes.js');
 const metricsRoute = require('./routes/metricsRoutes.js');
 const recipientsRoute = require('./routes/recipientRoutes.js');
 
-
 const { authenticate, authorize } = require("./middleware/auth.js");
 
 app.use("/api/users", usersRoute);
@@ -77,6 +76,15 @@ app.use("/api/telephony", telephonyRouter);
 
 const widgetRoute = require("./routes/widgetRoutes");
 app.use("/", widgetRoute);
+
+const emailWebhookRoute = require("./routes/emailWebhookRoutes");
+app.use("/api/webhooks/email", emailWebhookRoute);
+
+const smsWebhookRoute = require("./routes/smsWebhookRoutes");
+app.use("/api/webhooks/sms", smsWebhookRoute);
+
+const crmWebhookRoute = require("./routes/crmWebhookRoutes");
+app.use("/api/webhooks/crm", crmWebhookRoute);
 
 const server = http.createServer(app);
 
