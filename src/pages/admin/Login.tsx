@@ -43,17 +43,23 @@ export default function Login() {
   }, [user, navigate]);
 
   async function doLogin(email: string, password: string) {
-    const res = await login({
-      email: email.trim(),
-      password
-    });
+    try {
+      const res = await login({
+        email: email.trim(),
+        password
+      });
 
-    console.log(res);
+      console.log(res);
 
-    if (res?.user) {
-      navigate("/admin", { replace: true });
-    } else {
-      alert("Login failed. Please check your credentials.");
+      if (res?.user) {
+        navigate("/admin", { replace: true });
+      } else {
+        alert("Login failed. Please check your credentials.");
+      }
+    } catch (error: any) {
+      // Handle API errors (e.g., 400 status for invalid credentials)
+      const errorMessage = error?.response?.data?.message || "Login failed. Please check your email and password.";
+      alert(errorMessage);
     }
   }
 
