@@ -74,10 +74,10 @@ export default function Preview() {
 
   useEffect(() => {
     let b = null;
-    if (instId) {
+    if (instId && instances.length > 0) {
       b = instances.find((m) => m._id == instId)?.branding
     }
-    if (botId) {
+    if (!b && botId && bots.length > 0) {
       b = bots.find((b) => b._id == botId)?.branding 
     }
 
@@ -95,7 +95,7 @@ export default function Preview() {
     setBorderColor(b?.borderColor || "#000000");
     setBotAvatar(b?.botAvatar || "");
     setContinueButtonBackground(b?.continueButtonBackground || "#3b82f6");
-  }, [instId, botId])
+  }, [instId, botId, instances, bots])
 
   const [mode, setMode] = useState<Mode>("popup");
   const [pos, setPos] = useState<Pos>("bottom-left");
@@ -554,26 +554,28 @@ export default function Preview() {
         </div>
         
         <div className="relative">
-          <ChatWidget
-            mode={mode}
-            openPanel={openPanel}
-            onOpenChange={setOpenPanel}
-            botId={instId || botId}
-            kind={instId ? "inst" : "bot"}
-            position={pos}
-            size={size}
-            color={bgColor || undefined}
-            image={img || undefined}
-            shape={shape as any}
-            imageFit={imageFit as any}
-            label={label}
-            labelColor={labelColor}
-            hideLabelWhenImage={hideLabelWhenImage}
-            panelStyle={panelStyle}
-            botAvatarUrl={botAvatar}
-            borderColor={borderColor}
-            continueButtonBackground={continueButtonBackground}
-          />
+          {(instId || botId) && (
+            <ChatWidget
+              mode={mode}
+              openPanel={openPanel}
+              onOpenChange={setOpenPanel}
+              botId={instId || botId}
+              kind={instId ? "inst" : "bot"}
+              position={pos}
+              size={size}
+              color={bgColor || undefined}
+              image={img || undefined}
+              shape={shape as any}
+              imageFit={imageFit as any}
+              label={label}
+              labelColor={labelColor}
+              hideLabelWhenImage={hideLabelWhenImage}
+              panelStyle={panelStyle}
+              botAvatarUrl={botAvatar}
+              borderColor={borderColor}
+              continueButtonBackground={continueButtonBackground}
+            />
+          )}
         </div>
       </div>
     </ErrorBoundary>
