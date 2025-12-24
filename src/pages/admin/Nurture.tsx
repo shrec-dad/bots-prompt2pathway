@@ -720,7 +720,7 @@ export default function Nurture() {
           </div>
 
           {/* Instance picker + actions */}
-          <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold uppercase text-foreground/70">Client Bot</label>
               <select
@@ -734,41 +734,43 @@ export default function Nurture() {
                 ))}
               </select>
             </div>
-
-            <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
-              onClick={loadStarter}>
-              Load Starter Sequence
-            </button>
-            <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
-              onClick={duplicateToNewInstance}>
-              Duplicate to New Instance
-            </button>
-            <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
-              onClick={sendTestEmail}>
-              Send Test Email
-            </button>
-            <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
-              style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
-              onClick={saveSchedule}>
-              Save Schedule
-            </button>
-            <button
-              className="rounded-xl px-4 py-2 font-bold ring-1 ring-black bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100"
-              onClick={() => {
-                if (!instId) return alert("Pick a Client Bot (instance) first.");
-                setShowDelivery(true);
-              }}
-              title="Per-instance sender & provider (UI-only). Providers are managed on Integrations."
-            >
-              Delivery Settings
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+                onClick={loadStarter}>
+                Load Starter Sequence
+              </button>
+              <button
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+                onClick={duplicateToNewInstance}>
+                Duplicate to New Instance
+              </button>
+              <button
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+                onClick={sendTestEmail}>
+                Send Test Email
+              </button>
+              <button
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+                onClick={saveSchedule}>
+                Save Schedule
+              </button>
+              <button
+                className="rounded-xl px-4 py-2 font-bold ring-1 ring-border"
+                style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))"}}
+                onClick={() => {
+                  if (!instId) return alert("Pick a Client Bot (instance) first.");
+                  setShowDelivery(true);
+                }}
+                title="Per-instance sender & provider (UI-only). Providers are managed on Integrations."
+              >
+                Delivery Settings
+              </button>
+            </div>
           </div>
         </div>
 
