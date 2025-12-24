@@ -303,7 +303,7 @@ export default function ChatWidget({
             {/* Header */}
             <div
               style={{
-                background: color,
+                background: borderColor,
                 padding: "12px 14px",
                 borderBottom: `2px solid ${borderColor}`,
                 display: "flex",
@@ -415,7 +415,7 @@ export default function ChatWidget({
         {panelStyle == "step-by-step" && flowNodes.length > 0 && (
           <div>
             <div
-              style={{borderTopLeftRadius: "1rem", borderTopRightRadius: "1rem", padding: "1rem", height: "0.5rem", backgroundColor: color}}
+              style={{borderTopLeftRadius: "1rem", borderTopRightRadius: "1rem", padding: "1rem", height: "0.5rem", backgroundColor: borderColor}}
               aria-hidden="true"
             />
             <div 
