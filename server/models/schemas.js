@@ -32,6 +32,7 @@ const brandingSchema = new mongoose.Schema({
   borderColor: { type: String, default: '#000000' },
   botAvatar: { type: String, default: '' },
   panelStyle: { type: String, enum: ['step-by-step', 'conversation'], default: 'step-by-step' },
+  continueButtonBackground: { type: String, default: '#3b82f6' },
 }, { _id: false });
 
 const integrationSchema = new mongoose.Schema({

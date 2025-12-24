@@ -40,7 +40,9 @@ export type ChatWidgetProps = {
   botAvatarUrl?: string;
   // z-index control for embedding on busy pages
   zIndex?: number;
-  borderColor?: string;  
+  borderColor?: string;
+  // Continue button background color (for step-by-step mode)
+  continueButtonBackground?: string;
 };
 
 export default function ChatWidget({
@@ -62,7 +64,8 @@ export default function ChatWidget({
   messageStyle = "outlined-black",
   botAvatarUrl,
   zIndex = 2147483000,
-  borderColor = "#000000"
+  borderColor = "#000000",
+  continueButtonBackground = "#3b82f6"
 }: ChatWidgetProps) {
   const [open, setOpen] = useState(openPanel ?? false);
   
@@ -412,7 +415,7 @@ export default function ChatWidget({
         {panelStyle == "step-by-step" && flowNodes.length > 0 && (
           <div>
             <div
-              style={{borderTopLeftRadius: "1rem", borderTopRightRadius: "1rem", padding: "1rem", height: "0.5rem", backgroundColor: "black"}}
+              style={{borderTopLeftRadius: "1rem", borderTopRightRadius: "1rem", padding: "1rem", height: "0.5rem", backgroundColor: color}}
               aria-hidden="true"
             />
             <div 
@@ -554,7 +557,7 @@ export default function ChatWidget({
                     fontWeight: "bold",
                     color: "white",
                     marginTop: "2rem",
-                    background: "linear-gradient(to right, #8b5cf6, #6366f1, #14b8a6)",
+                    background: continueButtonBackground,
                     boxShadow: "0 3px 0 #000",
                     cursor: "pointer",
                   }}

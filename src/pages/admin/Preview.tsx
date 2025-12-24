@@ -94,6 +94,7 @@ export default function Preview() {
     setPanelStyle(b?.panelStyle || "step-by-step");
     setBorderColor(b?.borderColor || "#000000");
     setBotAvatar(b?.botAvatar || "");
+    setContinueButtonBackground(b?.continueButtonBackground || "#3b82f6");
   }, [instId, botId])
 
   const [mode, setMode] = useState<Mode>("popup");
@@ -109,6 +110,7 @@ export default function Preview() {
   const [panelStyle, setPanelStyle] = useState<PanelStyle>("step-by-step");
   const [borderColor, setBorderColor] = useState<string>("#000000");
   const [botAvatar, setBotAvatar] = useState<string>("");
+  const [continueButtonBackground, setContinueButtonBackground] = useState<string>("#3b82f6");
 
   const [openPanel, setOpenPanel] = useState(false);
 
@@ -130,6 +132,7 @@ export default function Preview() {
     if (img.trim()) qp.set("img", img.trim());
     if (borderColor.trim()) qp.set("borderColor", borderColor.trim());
     if (botAvatar.trim()) qp.set("botAvatar", botAvatar.trim());
+    if (continueButtonBackground.trim()) qp.set("continueButtonBackground", continueButtonBackground.trim());
 
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     return `${origin}/widget?${qp.toString()}`;
@@ -147,7 +150,8 @@ export default function Preview() {
     img,
     borderColor,
     botAvatar,
-    panelStyle
+    panelStyle,
+    continueButtonBackground
   ]);
 
   const embedIframe = `<iframe
@@ -174,7 +178,8 @@ export default function Preview() {
       hideLabelWhenImage,
       panelStyle,
       borderColor,
-      botAvatar
+      botAvatar,
+      continueButtonBackground
     }
 
     try {
@@ -207,6 +212,7 @@ export default function Preview() {
     setPanelStyle("step-by-step");
     setBorderColor("#000000");
     setBotAvatar("");
+    setContinueButtonBackground("#3b82f6");
   };
 
   async function onPickBubbleImage(e: React.ChangeEvent<HTMLInputElement>) {
@@ -494,6 +500,16 @@ export default function Preview() {
               </select>
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-semibold">Continue Button Background</label>
+              <input
+                type="color"
+                className="h-10 w-full rounded-lg border"
+                value={continueButtonBackground.startsWith('#') ? continueButtonBackground : '#3b82f6'}
+                onChange={(e) => setContinueButtonBackground(e.target.value)}
+              />
+            </div>
+
             {/* Open modal + embed url (copy) */}
             <div className="md:col-span-2 flex items-center gap-3">
               <button
@@ -556,6 +572,7 @@ export default function Preview() {
             panelStyle={panelStyle}
             botAvatarUrl={botAvatar}
             borderColor={borderColor}
+            continueButtonBackground={continueButtonBackground}
           />
         </div>
       </div>

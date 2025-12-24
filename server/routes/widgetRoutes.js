@@ -20,6 +20,7 @@ const fs = require("fs");
  * - borderColor: hex color
  * - img: image URL or data URI (bubble image)
  * - botAvatar: image URL or data URI (bot avatar)
+ * - continueButtonBackground: CSS color or gradient (continue button background)
  */
 router.get("/widget", (req, res) => {
   const apiBaseUrl = req.protocol + "://" + req.get("host") + "/api";
@@ -40,6 +41,7 @@ router.get("/widget", (req, res) => {
     borderColor: req.query.borderColor || "#000000",
     img: req.query.img || "",
     botAvatar: req.query.botAvatar || "",
+    continueButtonBackground: req.query.continueButtonBackground || "#3b82f6",
   };
 
   // Read the HTML template
@@ -79,7 +81,8 @@ router.get("/widget", (req, res) => {
       .replace(/\{\{BG_COLOR\}\}/g, escapeJs(params.bgColor))
       .replace(/\{\{BORDER_COLOR\}\}/g, escapeJs(params.borderColor))
       .replace(/\{\{IMG\}\}/g, escapeJs(params.img))
-      .replace(/\{\{BOT_AVATAR\}\}/g, escapeJs(params.botAvatar));
+      .replace(/\{\{BOT_AVATAR\}\}/g, escapeJs(params.botAvatar))
+      .replace(/\{\{CONTINUE_BUTTON_BACKGROUND\}\}/g, escapeJs(params.continueButtonBackground));
 
     // Set headers for iframe embedding
     res.setHeader("Content-Type", "text/html; charset=utf-8");
