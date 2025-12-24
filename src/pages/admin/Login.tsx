@@ -33,6 +33,8 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const [theme, toggleTheme] = useTheme();
   
@@ -43,6 +45,9 @@ export default function Login() {
   }, [user, navigate]);
 
   async function doLogin(email: string, password: string) {
+    setError("");
+    setIsLoading(true);
+    
     try {
       const res = await login({
         email: email.trim(),
@@ -54,12 +59,14 @@ export default function Login() {
       if (res?.user) {
         navigate("/admin", { replace: true });
       } else {
-        alert("Login failed. Please check your credentials.");
+        setError("Login failed. Please check your credentials.");
       }
     } catch (error: any) {
       // Handle API errors (e.g., 400 status for invalid credentials)
       const errorMessage = error?.response?.data?.message || "Login failed. Please check your email and password.";
-      alert(errorMessage);
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -101,6 +108,12 @@ export default function Login() {
           Admin Login
         </h1>
 
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500 dark:bg-red-900/20 dark:text-red-400">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="email"
@@ -109,7 +122,10 @@ export default function Login() {
                        focus:outline-none focus:ring-2 focus:ring-sky-500
                        dark:border-white/10 dark:bg-white/10 dark:text-white dark:placeholder-gray-400"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (error) setError("");
+            }}
             required
           />
           <input
@@ -119,15 +135,19 @@ export default function Login() {
                        focus:outline-none focus:ring-2 focus:ring-sky-500
                        dark:border-white/10 dark:bg-white/10 dark:text-white dark:placeholder-gray-400"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (error) setError("");
+            }}
           />
 
           <button
             type="submit"
-            className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-emerald-500 py-2 font-bold text-white hover:opacity-90 transition
+            disabled={isLoading}
+            className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-emerald-500 py-2 font-bold text-white hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed
                        dark:from-sky-600 dark:to-emerald-600"
           >
-            Log In
+            {isLoading ? "Logging in..." : "Log In"}
           </button>
         </form>
 
