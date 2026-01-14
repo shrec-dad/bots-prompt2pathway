@@ -20,6 +20,8 @@ API.interceptors.request.use(
 // ------- Auth -------
 export const loginAPI = (data) => API.post('/users/login', data);
 export const signupAPI = (data) => API.post('/users/signup', data);
+export const forgotPasswordAPI = (data) => API.post('/users/forgot-password', data);
+export const resetPasswordAPI = (data) => API.post('/users/reset-password', data);
 
 // ------- Users -------
 export const getUsersAPI = () => API.get('/users');
