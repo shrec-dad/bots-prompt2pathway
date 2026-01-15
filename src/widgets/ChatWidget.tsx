@@ -457,7 +457,15 @@ export default function ChatWidget({
               {/* emoji + text */}
               <div style={{ display: "grid", placeItems: "center", fontSize: "3.75rem" }}>👋</div>
               <h2 style={{ textAlign: "center", fontSize: "1.5rem", fontWeight: 800, marginTop: "0.5rem" }}>
-                Welcome to { name }!
+                {flowNodes[step] ? (() => {
+                  const node = flowNodes[step];
+                  if (node.type === "message") {
+                    return node.data?.title || node.data?.text;
+                  } else if (node.type === "input" || node.type === "choice" || node.type === "action") {
+                    return node.data?.label;
+                  }
+                  return `Welcome to ${name}!`;
+                })() : `Welcome to ${name}!`}
               </h2>
 
               <div
