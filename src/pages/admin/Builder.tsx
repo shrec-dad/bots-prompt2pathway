@@ -22,6 +22,9 @@ import {
   Position,
   useReactFlow,
   ReactFlowProvider,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -39,16 +42,44 @@ const MessageNode = ({ data }: { data: any }) => (
   </div>
 );
 
-const ChoiceNode = ({ data }: { data: any }) => (
-  <div className="px-4 py-2 shadow-md rounded-md bg-blue-50 border-2 border-blue-400">
-    <Handle type="target" position={Position.Top} />
-    <div className="font-bold">{data?.label || "Choice"}</div>
-    <div className="text-xs text-gray-600 mt-1">
-      {(data?.options || []).join(" | ") || "No options"}
+const ChoiceNode = ({ data }: { data: any }) => {
+  const options: string[] = data?.options || [];
+  
+  return (
+    <div className="px-4 py-2 shadow-md rounded-md bg-blue-50 border-2 border-blue-400 relative">
+      <Handle type="target" position={Position.Top} />
+      <div className="font-bold">{data?.label || "Choice"}</div>
+      <div className="text-xs text-gray-600 mt-1">
+        {options.length > 0 ? options.join(" | ") : "No options"}
+      </div>
+      {/* Multiple source handles - one for each option */}
+      {options.length > 0 ? (
+        <div className="relative mt-2" style={{ height: `${Math.max(options.length * 20, 20)}px` }}>
+          {options.map((opt, index) => (
+            <Handle
+              key={`option-${opt}`}
+              type="source"
+              position={Position.Bottom}
+              id={`option-${opt}`}
+              style={{
+                left: `${(index + 1) * (100 / (options.length + 1))}%`,
+                bottom: `${index * 20}px`,
+                background: '#3b82f6',
+                width: '10px',
+                height: '10px',
+                border: '2px solid white',
+                borderRadius: '50%',
+              }}
+              title={opt}
+            />
+          ))}
+        </div>
+      ) : (
+        <Handle type="source" position={Position.Bottom} id="default" />
+      )}
     </div>
-    <Handle type="source" position={Position.Bottom} />
-  </div>
-);
+  );
+};
 
 const ActionNode = ({ data }: { data: any }) => (
   <div className="px-4 py-2 shadow-md rounded-md bg-green-50 border-2 border-green-400">
@@ -100,6 +131,59 @@ const CalendarNode = ({ data }: { data: any }) => (
   </div>
 );
 
+// Custom edge component with label
+const ChoiceEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  markerEnd,
+}: any) => {
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{ stroke: '#3b82f6', strokeWidth: 2 }}
+      />
+      {data?.optionLabel && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: '2px 6px',
+              background: '#3b82f6',
+              color: 'white',
+              borderRadius: '4px',
+              pointerEvents: 'all',
+            }}
+            className="nodrag nopan"
+          >
+            {data.optionLabel}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+};
+
 const nodeTypes = {
   message: MessageNode,
   choice: ChoiceNode,
@@ -107,6 +191,10 @@ const nodeTypes = {
   input: InputNode,
   phone: PhoneNode,
   calendar: CalendarNode,
+};
+
+const edgeTypes = {
+  choice: ChoiceEdge,
 };
 
 type RFNode = Node & {
@@ -383,12 +471,15 @@ function BuilderInner() {
 
   const handleSaveEdges = async (nextEdges: any) => {
     // Ensure all edges have a type and convert to the format expected by the database
+    // Preserve edge data (like optionLabel for choice edges)
     const edgesWithType = nextEdges.map((e) => ({
       id: e.id,
       source: e.source,
       target: e.target,
       type: e.type || "smoothstep",
-    })) as { id: string; source: string; target: string; type: string }[];
+      sourceHandle: e.sourceHandle,
+      data: e.data || {},
+    })) as { id: string; source: string; target: string; type: string; sourceHandle?: string; data?: any }[];
 
     if (source?.kind == "bot") {
       const bot = bots.find(b => b._id === source?.id);
@@ -533,17 +624,33 @@ function BuilderInner() {
   const onConnect = useCallback(
     (c: Connection) => {
       if (!c.source || !c.target) return;
+      
+      // Check if this is a connection from a choice node option handle
+      const sourceNode = nodes.find(n => n.id === c.source);
+      let edgeType = "smoothstep";
+      let edgeData: any = {};
+      
+      if (c.sourceHandle && c.sourceHandle.startsWith('option-')) {
+        const optionName = c.sourceHandle.replace('option-', '');
+        edgeType = "choice";
+        edgeData = {
+          optionLabel: optionName,
+        };
+      }
+      
       setEdges((eds) => {
         const newEdge: Edge = {
-          id: `e_${c.source}_${c.target}`,
+          id: `e_${c.source}_${c.target}_${c.sourceHandle || ''}`,
           source: c.source,
           target: c.target,
-          type: "smoothstep",
+          sourceHandle: c.sourceHandle,
+          type: edgeType,
+          data: edgeData,
         };
         return addEdge(newEdge, eds);
       });
     },
-    [setEdges]
+    [setEdges, nodes]
   );
 
   // const updateEditorValue = (k: string, v: any) =>
@@ -707,12 +814,14 @@ function BuilderInner() {
   // Save all changes (nodes and edges) to database
   const saveAllChanges = useCallback(async () => {
     handleSaveNodes(nodes);
-    // Ensure all edges have type property before saving
+    // Ensure all edges have type property and preserve sourceHandle and data
     const edgesWithType = edges.map((e) => ({
       id: e.id,
       source: e.source,
       target: e.target,
       type: e.type || "smoothstep",
+      sourceHandle: e.sourceHandle,
+      data: e.data || {},
     }));
     handleSaveEdges(edgesWithType as any);
   }, [nodes, edges, handleSaveNodes, handleSaveEdges]);
@@ -933,6 +1042,7 @@ function BuilderInner() {
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
             deleteKeyCode="Delete"

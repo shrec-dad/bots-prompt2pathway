@@ -68,10 +68,20 @@ export default function ChatWidget({
   continueButtonBackground = "#3b82f6"
 }: ChatWidgetProps) {
   const [open, setOpen] = useState(openPanel ?? false);
+  const [wasOpen, setWasOpen] = useState(openPanel ?? false);
   
   useEffect(() => {
     if (openPanel !== undefined) setOpen(openPanel);
   }, [openPanel]);
+
+  // Reset step when widget is reopened
+  useEffect(() => {
+    if (open && !wasOpen) {
+      // Widget was just opened (was closed, now open)
+      setStep(0);
+    }
+    setWasOpen(open);
+  }, [open, wasOpen]);
 
   const handleSetOpen = (value: boolean) => {
     setOpen(value);
@@ -83,20 +93,65 @@ export default function ChatWidget({
 
   const [name, setName] = useState("");
   const [flowNodes, setFlowNodes] = useState([]);
+  const [allNodes, setAllNodes] = useState([]);
+  const [allEdges, setAllEdges] = useState([]);
   const [messages, setMessages] = useState<string[]>([]);
+  const [step, setStep] = useState(0);
 
   const getOrderedNodes = (nodes, edges) => {
-    const sourceToTarget = Object.fromEntries(edges.map(e => [e.source, e.target]));
-    const startNode = nodes.find(n => !edges.some(e => e.target === n.id)); // find node with no incoming edge
+    // Build a linear flow excluding choice node option edges
+    // Choice nodes will navigate dynamically based on selected option
+    const linearEdges = edges.filter(e => !e.sourceHandle || !e.sourceHandle.startsWith('option-'));
+    const sourceToTarget = Object.fromEntries(linearEdges.map(e => [e.source, e.target]));
+    const startNode = nodes.find(n => !linearEdges.some(e => e.target === n.id)); // find node with no incoming edge
 
     const ordered = [];
+    const visited = new Set();
     let current = startNode;
-    while (current) {
+    
+    // Build linear flow until we hit a choice node or end
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
       ordered.push(current);
+      
+      // For choice nodes, stop following linear edges (user will select option)
+      if (current.type === 'choice') {
+        break;
+      }
+      
       const nextId = sourceToTarget[current.id];
+      if (!nextId) break;
       current = nodes.find(n => n.id === nextId);
     }
+    
+    // Don't add remaining nodes automatically - they'll be added dynamically when choice options are selected
     return ordered;
+  }
+
+  // Helper function to get the flow path starting from a given node
+  const getFlowPathFromNode = (startNodeId, nodes, edges) => {
+    const linearEdges = edges.filter(e => !e.sourceHandle || !e.sourceHandle.startsWith('option-'));
+    const sourceToTarget = Object.fromEntries(linearEdges.map(e => [e.source, e.target]));
+    
+    const path = [];
+    const visited = new Set();
+    let current = nodes.find(n => n.id === startNodeId);
+    
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+      path.push(current);
+      
+      // Stop at choice nodes
+      if (current.type === 'choice') {
+        break;
+      }
+      
+      const nextId = sourceToTarget[current.id];
+      if (!nextId) break;
+      current = nodes.find(n => n.id === nextId);
+    }
+    
+    return path;
   }
 
   function getChatMessages(nodes, edges) {
@@ -141,9 +196,15 @@ export default function ChatWidget({
       const apiUrl = `${import.meta.env.VITE_API_BASE_URL}/${kind == "inst" ? "bot_instances" : "bots"}/${botId}`
       const res = await fetch(apiUrl);
       const { name, plan, nodes, edges, botId: bot } = await res.json();
+      const planNodes = nodes?.[plan] ?? [];
+      const planEdges = edges?.[plan] ?? [];
       setName(kind == "inst" ? bot.name : name);
-      setFlowNodes(getOrderedNodes(nodes?.[plan] ?? [], edges?.[plan] ?? []));
-      setMessages(getChatMessages(nodes?.[plan] ?? [], edges?.[plan] ?? []));
+      setAllNodes(planNodes);
+      setAllEdges(planEdges);
+      setFlowNodes(getOrderedNodes(planNodes, planEdges));
+      setMessages(getChatMessages(planNodes, planEdges));
+      // Reset step to 0 when loading new bot data
+      setStep(0);
     }
     fetchBotData();
   }, [botId, kind]);
@@ -277,6 +338,14 @@ export default function ChatWidget({
 
     const [answers, setAnswers] = useState({});
     const [input, setInput] = useState("");
+    
+    // Reset answers when widget is reopened
+    useEffect(() => {
+      if (open && !wasOpen) {
+        setAnswers({});
+        setInput("");
+      }
+    }, [open, wasOpen]);
 
     const send = () => {
       const txt = input.trim();
@@ -289,7 +358,6 @@ export default function ChatWidget({
       // Move to the next step
       setStep((s) => s + 1);
     };
-    const [step, setStep] = useState(0);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -487,7 +555,6 @@ export default function ChatWidget({
                   if (node.type === "input") {
                     return (
                       <div>
-                        <label style={{ display: "block", fontWeight: "bold", marginBottom: "0.25rem" }}>{node.data.label}</label>
                         <input
                           style={{
                             width: "100%",
@@ -513,7 +580,53 @@ export default function ChatWidget({
                             key={opt}
                             onClick={() => {
                               setAnswers({ ...answers, [node.id]: opt });
-                              setStep((s) => s + 1);
+                              
+                              // Find edge with sourceHandle matching this option
+                              const optionEdge = allEdges.find(
+                                (e) => e.source === node.id && e.sourceHandle === `option-${opt}`
+                              );
+                              
+                              if (optionEdge && optionEdge.target) {
+                                // Get the flow path starting from the target node
+                                const pathFromTarget = getFlowPathFromNode(optionEdge.target, allNodes, allEdges);
+                                
+                                if (pathFromTarget.length > 0) {
+                                  // Check if target node is already in flowNodes
+                                  const currentTargetIndex = flowNodes.findIndex((n) => n.id === optionEdge.target);
+                                  
+                                  if (currentTargetIndex === -1) {
+                                    // Target node not in flowNodes yet, add the path starting from target
+                                    const updated = [...flowNodes];
+                                    // Add nodes from the path that aren't already in flowNodes
+                                    pathFromTarget.forEach((pathNode) => {
+                                      if (!updated.some(n => n.id === pathNode.id)) {
+                                        updated.push(pathNode);
+                                      }
+                                    });
+                                    // Find the index of target node in the updated array
+                                    const newTargetIndex = updated.findIndex((n) => n.id === optionEdge.target);
+                                    
+                                    if (newTargetIndex !== -1) {
+                                      // Update both flowNodes and step together
+                                      setFlowNodes(updated);
+                                      // Use the index from the updated array
+                                      setStep(newTargetIndex);
+                                    } else {
+                                      // Fallback if target not found in updated array
+                                      setStep((s) => s + 1);
+                                    }
+                                  } else {
+                                    // Target node already in flowNodes, navigate to it
+                                    setStep(currentTargetIndex);
+                                  }
+                                } else {
+                                  // No path found, fall back to next step
+                                  setStep((s) => s + 1);
+                                }
+                              } else {
+                                // No edge found for this option, use default behavior (next step)
+                                setStep((s) => s + 1);
+                              }
                             }}
                             style={{
                               borderRadius: "1rem",
@@ -548,35 +661,54 @@ export default function ChatWidget({
                 })()}
               </div>
 
-              {step < flowNodes.length - 1 && (
-                <button
-                  onClick={() => {
-                    trackEvent({
-                      type: "step_next",
-                      key: `${kind}:${botId}`,
-                      meta: { step },
-                      ts: Date.now()
-                    })
-                    setStep((s) => s + 1)
-                  }}
-                  style={{
-                    borderRadius: "1rem",
-                    padding: "0.5rem 1.25rem",
-                    fontWeight: "bold",
-                    color: "white",
-                    marginTop: "2rem",
-                    background: continueButtonBackground,
-                    boxShadow: "0 3px 0 #000",
-                    cursor: "pointer",
-                  }}
-                >
-                  Continue
-                </button>
-              )}
+              {(() => {
+                if (!flowNodes[step] || flowNodes.length === 0) return null;
+                
+                const currentNode = flowNodes[step];
+                const currentStep = step;
+                const totalNodes = flowNodes.length;
+                const isLastNode = currentStep === totalNodes - 1;
+                const isSecondToLast = totalNodes >= 2 && currentStep === totalNodes - 2;
+                const lastNode = flowNodes[totalNodes - 1];
+                const isLastNodeAction = lastNode?.type === "action";
+                
+                // Hide Continue button if:
+                // 1. Current node is a choice (has option buttons)
+                // 2. Current node is the last node
+                // 3. Current node is second-to-last AND last node is an action (action auto-advances)
+                const shouldShowContinue = 
+                  currentNode?.type !== "choice" && 
+                  !isLastNode &&
+                  !(isSecondToLast && isLastNodeAction);
+                
+                return shouldShowContinue && (
+                  <button
+                    onClick={() => {
+                      trackEvent({
+                        type: "step_next",
+                        key: `${kind}:${botId}`,
+                        meta: { step },
+                        ts: Date.now()
+                      })
+                      setStep((s) => s + 1)
+                    }}
+                    style={{
+                      borderRadius: "1rem",
+                      padding: "0.5rem 1.25rem",
+                      fontWeight: "bold",
+                      color: "white",
+                      marginTop: "2rem",
+                      background: continueButtonBackground,
+                      boxShadow: "0 3px 0 #000",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Continue
+                  </button>
+                );
+              })()}
 
-              {step === flowNodes.length - 1 && (
-                <div style={{ marginTop: "2rem", textAlign: "center", fontWeight: "bold" }}>🎉 All steps completed!</div>
-              )}
+
             </div>
           </div>
         )}

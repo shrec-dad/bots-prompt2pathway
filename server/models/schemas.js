@@ -15,6 +15,8 @@ const edgeSchema = new mongoose.Schema({
   source: { type: String, required: true },
   target: { type: String, required: true },
   type: { type: String, default: 'smoothstep' },
+  sourceHandle: { type: String, default: undefined },
+  data: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, { _id: false });
 
 const brandingSchema = new mongoose.Schema({
