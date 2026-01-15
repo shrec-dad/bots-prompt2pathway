@@ -381,14 +381,22 @@ function BuilderInner() {
     }
   }
 
-  const handleSaveEdges = async (nextEdges) => {
+  const handleSaveEdges = async (nextEdges: any) => {
+    // Ensure all edges have a type and convert to the format expected by the database
+    const edgesWithType = nextEdges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: e.type || "smoothstep",
+    })) as { id: string; source: string; target: string; type: string }[];
+
     if (source?.kind == "bot") {
       const bot = bots.find(b => b._id === source?.id);
       if (!bot) return;
 
       const updatedEdges = {
         ...bot.edges,
-        [source?.mode]: nextEdges,
+        [source?.mode]: edgesWithType,
       };
 
       handleUpdateBot(source?.id, { edges: updatedEdges });
@@ -398,7 +406,7 @@ function BuilderInner() {
 
       const updatedEdges = {
         ...inst.edges,
-        [source?.mode]: nextEdges,
+        [source?.mode]: edgesWithType,
       };
 
       handleUpdateInstance(source?.id, { edges: updatedEdges });
@@ -426,8 +434,8 @@ function BuilderInner() {
 
   const [source, setSource] = useState<Source | null>(null);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState<RFNode>([]);
+  const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
 
   useEffect(() => {
     if (!source) return;
@@ -461,13 +469,80 @@ function BuilderInner() {
     setEditorValues(n?.data || {});
   }, [selectedId]);
 
+  // Wrap onNodesChangeBase to handle node deletions (without saving)
+  const onNodesChange = useCallback(
+    (changes: any[]) => {
+      // Apply changes first
+      onNodesChangeBase(changes);
+      
+      // Check if any nodes were deleted
+      const deletedNodeIds = changes
+        .filter((change) => change.type === 'remove')
+        .map((change) => change.id);
+      
+      if (deletedNodeIds.length > 0) {
+        // Update nodes state (without saving)
+        setNodes((prevNodes) => {
+          return prevNodes.filter((n) => !deletedNodeIds.includes(n.id));
+        });
+        
+        // Also remove edges connected to deleted nodes (without saving)
+        setEdges((prevEdges) => {
+          return prevEdges.filter(
+            (e) => !deletedNodeIds.includes(e.source) && !deletedNodeIds.includes(e.target)
+          );
+        });
+        
+        // Clear selection if deleted node was selected
+        if (selectedId && deletedNodeIds.includes(selectedId)) {
+          setSelectedId(null);
+        }
+      }
+    },
+    [onNodesChangeBase, setNodes, setEdges, selectedId]
+  );
+
+  // Wrap onEdgesChangeBase to handle edge deletions (without saving)
+  const onEdgesChange = useCallback(
+    (changes: any[]) => {
+      // Apply changes first
+      onEdgesChangeBase(changes);
+      
+      // Check if any edges were deleted
+      const deletedEdgeIds = changes
+        .filter((change) => change.type === 'remove')
+        .map((change) => change.id);
+      
+      if (deletedEdgeIds.length > 0) {
+        // Update edges state (without saving)
+        setEdges((prevEdges) => {
+          return prevEdges.filter((e) => !deletedEdgeIds.includes(e.id));
+        });
+      }
+    },
+    [onEdgesChangeBase, setEdges]
+  );
+
   const onNodeClick = useCallback(
-    (_: any, n: Node) => setSelectedId(n?.id || null),
+    (_: any, n: Node) => {
+      setSelectedId(n?.id || null);
+    },
     []
   );
 
   const onConnect = useCallback(
-    (c: Connection) => setEdges((eds) => addEdge(c, eds)),
+    (c: Connection) => {
+      if (!c.source || !c.target) return;
+      setEdges((eds) => {
+        const newEdge: Edge = {
+          id: `e_${c.source}_${c.target}`,
+          source: c.source,
+          target: c.target,
+          type: "smoothstep",
+        };
+        return addEdge(newEdge, eds);
+      });
+    },
     [setEdges]
   );
 
@@ -481,14 +556,13 @@ function BuilderInner() {
 
   const saveChanges = useCallback(() => {
     if (!selectedId) return;
+    // Only update local state, don't save to DB
     setNodes((prev) => {
-      const nextNodes = prev.map((n) =>
+      return prev.map((n) =>
         n.id === selectedId ? { ...n, data: { ...editorValues } } : n
-      )
-      handleSaveNodes(nextNodes);
-      return nextNodes;
+      );
     });
-  }, [selectedId, editorValues]);
+  }, [selectedId, editorValues, setNodes]);
 
   const rf = useReactFlow<RFNode, Edge>();
   const [pendingType, setPendingType] = useState<
@@ -529,6 +603,44 @@ function BuilderInner() {
     }
   };
 
+  const addMenuItem = useCallback(
+    (type: typeof pendingType) => {
+      if (!type) return;
+
+      // Calculate position - use center of viewport or offset from existing nodes
+      const viewport = rf.getViewport();
+      let x = -viewport.x + 400;
+      let y = -viewport.y + 300;
+
+      // If there are existing nodes, place new node offset from the last one
+      if (nodes.length > 0) {
+        const lastNode = nodes[nodes.length - 1];
+        x = lastNode.position.x + 250;
+        y = lastNode.position.y;
+      }
+
+      const id = nextId();
+      const data = defaultDataFor(type);
+
+      const newNode: RFNode = {
+        id,
+        type,
+        position: { x, y },
+        data,
+      };
+
+      setNodes((prev) => {
+        return [...prev, newNode];
+      });
+
+      // Don't create an edge - just add the node
+      setSelectedId(id);
+      setAddMenuOpen(false);
+      setPendingType(null);
+    },
+    [rf, nodes, setNodes]
+  );
+
   const onPaneClick = useCallback(
     (e: React.MouseEvent) => {
       if (!pendingType) return;
@@ -548,14 +660,12 @@ function BuilderInner() {
       };
 
       setNodes((prev) => {
-        const nextNodes = [...prev, newNode];
-        handleSaveNodes(nextNodes);
-        return nextNodes;
+        return [...prev, newNode];
       });
 
       if (selectedId) {
         setEdges((prev) => {
-          const nextEdges = [
+          return [
             ...prev,
             {
               id: `e_${selectedId}_${id}`,
@@ -564,8 +674,6 @@ function BuilderInner() {
               type: "smoothstep",
             },
           ];
-          handleSaveEdges(nextEdges);
-          return nextEdges;
         });
       }
 
@@ -586,19 +694,28 @@ function BuilderInner() {
     if (!selectedId) return;
 
     setNodes((prev) => {
-      const nextNodes = prev.filter((n) => n.id !== selectedId);
-      handleSaveNodes(nextNodes);
-      return nextNodes;
+      return prev.filter((n) => n.id !== selectedId);
     });
 
     setEdges((prev) => {
-      const nextEdges = prev.filter((e) => e.source !== selectedId && e.target !== selectedId);
-      handleSaveEdges(nextEdges);
-      return nextEdges;
+      return prev.filter((e) => e.source !== selectedId && e.target !== selectedId);
     });
 
     setSelectedId(null);
   };
+
+  // Save all changes (nodes and edges) to database
+  const saveAllChanges = useCallback(async () => {
+    handleSaveNodes(nodes);
+    // Ensure all edges have type property before saving
+    const edgesWithType = edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: e.type || "smoothstep",
+    }));
+    handleSaveEdges(edgesWithType as any);
+  }, [nodes, edges, handleSaveNodes, handleSaveEdges]);
 
   const editorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -765,8 +882,7 @@ function BuilderInner() {
                         key={t}
                         role="menuitem"
                         onClick={() => {
-                          setPendingType(t);
-                          setAddMenuOpen(false);
+                          addMenuItem(t);
                         }}
                         className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-gray-100"
                       >
@@ -779,6 +895,17 @@ function BuilderInner() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Save Changes */}
+              <div className="relative">
+                <button
+                  onClick={saveAllChanges}
+                  className="rounded-md px-3 py-2 text-xs font-extrabold ring-1 ring-border bg-white hover:bg-gray-50 border-2 border-black"
+                  title="Save all changes to database"
+                >
+                  Save Changes
+                </button>
               </div>
             </div>
           </div>
@@ -862,7 +989,7 @@ function BuilderInner() {
                   className="py-2 px-4 text-white rounded-xl hover:shadow-lg transition-all font-semibold text-sm border-2 border-black shadow-[0_3px_0_#000] active:translate-y-[1px]"
                   style={{background: "linear-gradient(to bottom right, var(--grad-from), var(--grad-via), var(--grad-to))", color: "var(--grad-text)"}}
                 >
-                  Save Changes
+                  Save Node
                 </button>
                 <button
                   onClick={deleteSelected}
