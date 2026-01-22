@@ -71,4 +71,11 @@ export const deleteDocAPI = (id) => API.delete(`/docs/${id}`);
 export const getSettingsAPI = (key) => API.get(`/settings/${key}`);
 export const updateSettingsAPI = (key, data) => API.post(`/settings/${key}`, data);
 
+// ------- Leads -------
+export const createLeadAPI = (data) => API.post('/leads', data);
+export const getLeadsAPI = (params) => API.get('/leads', { params });
+export const getLeadByIdAPI = (id) => API.get(`/leads/${id}`);
+export const updateLeadAPI = (id, data) => API.put(`/leads/${id}`, data);
+export const deleteLeadAPI = (id) => API.delete(`/leads/${id}`);
+
 export default API;

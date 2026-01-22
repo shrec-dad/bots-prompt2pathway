@@ -555,26 +555,26 @@ export default function Preview() {
         
         <div className="relative">
           {(instId || botId) && (
-            <ChatWidget
-              mode={mode}
-              openPanel={openPanel}
-              onOpenChange={setOpenPanel}
-              botId={instId || botId}
-              kind={instId ? "inst" : "bot"}
-              position={pos}
-              size={size}
-              color={bgColor || undefined}
-              image={img || undefined}
-              shape={shape as any}
-              imageFit={imageFit as any}
-              label={label}
-              labelColor={labelColor}
-              hideLabelWhenImage={hideLabelWhenImage}
-              panelStyle={panelStyle}
-              botAvatarUrl={botAvatar}
-              borderColor={borderColor}
-              continueButtonBackground={continueButtonBackground}
-            />
+          <ChatWidget
+            mode={mode}
+            openPanel={openPanel}
+            onOpenChange={setOpenPanel}
+            botId={instId || botId}
+            kind={instId ? "inst" : "bot"}
+            position={pos}
+            size={size}
+            color={bgColor || undefined}
+            image={img || undefined}
+            shape={shape as any}
+            imageFit={imageFit as any}
+            label={label}
+            labelColor={labelColor}
+            hideLabelWhenImage={hideLabelWhenImage}
+            panelStyle={panelStyle}
+            botAvatarUrl={botAvatar}
+            borderColor={borderColor}
+            continueButtonBackground={continueButtonBackground}
+          />
           )}
         </div>
       </div>

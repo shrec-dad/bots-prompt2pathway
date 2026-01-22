@@ -63,7 +63,7 @@ export default function ChatWidget({
   panelStyle = "conversation",
   messageStyle = "outlined-black",
   botAvatarUrl,
-  zIndex = 2147483000,
+  zIndex = 1000000,
   borderColor = "#000000",
   continueButtonBackground = "#3b82f6"
 }: ChatWidgetProps) {
@@ -74,14 +74,10 @@ export default function ChatWidget({
     if (openPanel !== undefined) setOpen(openPanel);
   }, [openPanel]);
 
-  // Reset step when widget is reopened
+  // Reset wasOpen tracking
   useEffect(() => {
-    if (open && !wasOpen) {
-      // Widget was just opened (was closed, now open)
-      setStep(0);
-    }
     setWasOpen(open);
-  }, [open, wasOpen]);
+  }, [open]);
 
   const handleSetOpen = (value: boolean) => {
     setOpen(value);
@@ -92,88 +88,31 @@ export default function ChatWidget({
   const uniqId = useRef(`cw_${Math.random().toString(36).slice(2)}`).current;
 
   const [name, setName] = useState("");
-  const [flowNodes, setFlowNodes] = useState([]);
   const [allNodes, setAllNodes] = useState([]);
   const [allEdges, setAllEdges] = useState([]);
-  const [messages, setMessages] = useState<string[]>([]);
-  const [step, setStep] = useState(0);
+  const [messages, setMessages] = useState<Record<string, string>>({});
+  const [botInstanceId, setBotInstanceId] = useState<string>('');
+  const [botKey, setBotKey] = useState<string>('');
 
-  const getOrderedNodes = (nodes, edges) => {
-    // Build a linear flow excluding choice node option edges
-    // Choice nodes will navigate dynamically based on selected option
-    const linearEdges = edges.filter(e => !e.sourceHandle || !e.sourceHandle.startsWith('option-'));
-    const sourceToTarget = Object.fromEntries(linearEdges.map(e => [e.source, e.target]));
-    const startNode = nodes.find(n => !linearEdges.some(e => e.target === n.id)); // find node with no incoming edge
+  function getChatMessages(nodes) {
+    const messages: Record<string, string> = {};
 
-    const ordered = [];
-    const visited = new Set();
-    let current = startNode;
-    
-    // Build linear flow until we hit a choice node or end
-    while (current && !visited.has(current.id)) {
-      visited.add(current.id);
-      ordered.push(current);
+    // Loop through all nodes
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      let text = '';
       
-      // For choice nodes, stop following linear edges (user will select option)
-      if (current.type === 'choice') {
-        break;
+      if (node.type === "message") {
+        text = node.data.text;
+      } else if (node.type === "input") {
+        text = node.data.label;
+      } else if (node.type === "choice") {
+        text = node.data.label + " Options: " + node.data.options.join(", ");
       }
       
-      const nextId = sourceToTarget[current.id];
-      if (!nextId) break;
-      current = nodes.find(n => n.id === nextId);
-    }
-    
-    // Don't add remaining nodes automatically - they'll be added dynamically when choice options are selected
-    return ordered;
-  }
-
-  // Helper function to get the flow path starting from a given node
-  const getFlowPathFromNode = (startNodeId, nodes, edges) => {
-    const linearEdges = edges.filter(e => !e.sourceHandle || !e.sourceHandle.startsWith('option-'));
-    const sourceToTarget = Object.fromEntries(linearEdges.map(e => [e.source, e.target]));
-    
-    const path = [];
-    const visited = new Set();
-    let current = nodes.find(n => n.id === startNodeId);
-    
-    while (current && !visited.has(current.id)) {
-      visited.add(current.id);
-      path.push(current);
-      
-      // Stop at choice nodes
-      if (current.type === 'choice') {
-        break;
+      if (text) {
+        messages[node.id] = text;
       }
-      
-      const nextId = sourceToTarget[current.id];
-      if (!nextId) break;
-      current = nodes.find(n => n.id === nextId);
-    }
-    
-    return path;
-  }
-
-  function getChatMessages(nodes, edges) {
-    // Build mapping of source → target
-    const sourceToTarget = Object.fromEntries(edges.map(e => [e.source, e.target]));
-    
-    // Find the first node (no incoming edge)
-    const startNode = nodes.find(n => !edges.some(e => e.target === n.id));
-
-    const messages = [];
-    let current = startNode;
-
-    while (current) {
-      if (current.type === "message") {
-        messages.push(current.data.text);
-      } else if (current.type === "input") {
-        messages.push(current.data.label);
-      } else if (current.type === "choice") {
-        messages.push(current.data.label + " Options: " + current.data.options.join(", "));
-      }
-      const nextId = sourceToTarget[current.id];
-      current = nodes.find(n => n.id === nextId);
     }
 
     return messages;
@@ -190,22 +129,78 @@ export default function ChatWidget({
     });
   }
 
+  // Helper function to check if a node is the last node (no outgoing edges)
+  const isLastNode = (nodeId: string): boolean => {
+    // Check if there are any edges where source === nodeId
+    const hasOutgoingEdges = allEdges.some(
+      (edge) => edge.source === nodeId
+    );
+    return !hasOutgoingEdges;
+  };
+
+  // Helper function to find the start node (node that is not the target of any edge)
+  const getStartNode = (): any => {
+    if (!allNodes.length || !allEdges.length) {
+      return null;
+    }
+
+    // Get all target node IDs from edges
+    const targetNodeIds = new Set(allEdges.map(edge => edge.target));
+
+    // Find the node whose id is not in the target set
+    const startNode = allNodes.find(node => !targetNodeIds.has(node.id));
+
+    // Return the start node, or fallback to first node if not found
+    return startNode || allNodes[0] || null;
+  };
+
+  // Helper function to find the next node from the current node
+  const getNextNode = (currentNode: any): any => {
+    if (!currentNode || !allNodes.length || !allEdges.length) {
+      return null;
+    }
+
+    // Filter out choice option edges (edges with sourceHandle starting with 'option-')
+    // Find the next edge from the current node
+    const nextEdge = allEdges.find(
+      (edge) => edge.source === currentNode.id && 
+                (!edge.sourceHandle || !edge.sourceHandle.startsWith('option-'))
+    );
+
+    if (!nextEdge || !nextEdge.target) {
+      return null;
+    }
+
+    // Find the target node
+    const nextNode = allNodes.find((node) => node.id === nextEdge.target);
+    return nextNode || null;
+  };
 
   useEffect(() => {
     async function fetchBotData() {
       const apiUrl = `${import.meta.env.VITE_API_BASE_URL}/${kind == "inst" ? "bot_instances" : "bots"}/${botId}`
       const res = await fetch(apiUrl);
-      const { name, plan, nodes, edges, botId: bot } = await res.json();
+      const data = await res.json();
+      const { name, plan, nodes, edges, botId: bot } = data;
+      
       const planNodes = nodes?.[plan] ?? [];
       const planEdges = edges?.[plan] ?? [];
+      
       setName(kind == "inst" ? bot.name : name);
       setAllNodes(planNodes);
       setAllEdges(planEdges);
-      setFlowNodes(getOrderedNodes(planNodes, planEdges));
-      setMessages(getChatMessages(planNodes, planEdges));
-      // Reset step to 0 when loading new bot data
-      setStep(0);
+      setMessages(getChatMessages(planNodes));
+      
+      // Store botInstanceId and botKey for lead capture (only for instances)
+      if (kind === "inst") {
+        setBotInstanceId(data._id);
+        setBotKey('');
+      } else {
+        setBotInstanceId('');
+        setBotKey(data.key);
+      }
     }
+
     fetchBotData();
   }, [botId, kind]);
 
@@ -227,13 +222,8 @@ export default function ChatWidget({
     return { ...squareish, radius: size / 2 };
   }, [shape, size]);
 
-  const bubbleSideStyle =
-    position === "bottom-left"
-      ? { left: 20, right: "auto" as const }
-      : { right: 20, left: "auto" as const };
+  const bubbleSideStyle = position === "bottom-left" ? { left: 20, right: "auto" as const } : { right: 20, left: "auto" as const };
 
-
-  // Keep reserved; nothing heavy here
   useEffect(() => {
     const onResize = () => {};
     window.addEventListener("resize", onResize);
@@ -323,27 +313,69 @@ export default function ChatWidget({
       overflow: "hidden",
     };
 
-    const anchoredStyle: React.CSSProperties = opts.anchored
-      ? {
-          position: "fixed",
-          bottom: bubbleDims.height + 32,
-          ...(position === "bottom-left" ? { left: 20 } : { right: 20 }),
-          zIndex,
-        }
-      : {};
+    const anchoredStyle: React.CSSProperties = opts.anchored ? {
+      position: "fixed",
+      bottom: bubbleDims.height + 32,
+      ...(position === "bottom-left" ? { left: 20 } : { right: 20 }),
+      zIndex,
+    } : {};
 
-    const sidebarStyle: React.CSSProperties = opts.fullHeightRight
-      ? { position: "fixed", top: 0, bottom: 0, right: 0, zIndex }
-      : {};
+    const sidebarStyle: React.CSSProperties = opts.fullHeightRight ? { position: "fixed", top: 0, bottom: 0, right: 0, zIndex } : {};
 
+    const [curNode, setCurNode] = useState(null);
     const [answers, setAnswers] = useState({});
     const [input, setInput] = useState("");
+    const [answeredNodeIds, setAnsweredNodeIds] = useState<string[]>([]);
+    const capturedLeadNodeIdRef = useRef<string | null>(null);
+
+    // Initialize curNode with the start node
+    useEffect(() => {
+      const startNode = getStartNode();
+      setCurNode(startNode);
+      // Add start node to answeredNodeIds initially
+      if (startNode && startNode.id) {
+        setAnsweredNodeIds([startNode.id]);
+      }
+    }, [allNodes, allEdges]);
     
-    // Reset answers when widget is reopened
+    // Check if curNode is the last node and capture lead
+    useEffect(() => {
+      if (!curNode || !allNodes.length || !allEdges.length) return;
+      
+      // If curNode is action type, move to next node
+      if (curNode.type === "action") {
+        const nextNode = getNextNode(curNode);
+        if (nextNode) {
+          setCurNode(nextNode);
+          // Add next node to answeredNodeIds so its message is displayed
+          setAnsweredNodeIds(prev => prev.includes(nextNode.id) ? prev : [...prev, nextNode.id]);
+        }
+        return; // Don't check for last node if it's an action node
+      }
+      
+      if (isLastNode(curNode.id)) {
+        // Only capture lead once per last node
+        if (capturedLeadNodeIdRef.current !== curNode.id) {
+          capturedLeadNodeIdRef.current = curNode.id;
+          captureLead(answers);
+        }
+      }
+    }, [curNode, allNodes, allEdges, answers]);
+    
+    // Reset to start node and answers when widget is reopened
     useEffect(() => {
       if (open && !wasOpen) {
+        const startNode = getStartNode();
+        setCurNode(startNode);
         setAnswers({});
         setInput("");
+        capturedLeadNodeIdRef.current = null; // Reset captured lead tracking
+        // Add start node to answeredNodeIds when widget is reopened
+        if (startNode && startNode.id) {
+          setAnsweredNodeIds([startNode.id]);
+        } else {
+          setAnsweredNodeIds([]);
+        }
       }
     }, [open, wasOpen]);
 
@@ -351,18 +383,113 @@ export default function ChatWidget({
       const txt = input.trim();
       if (!txt) return;
 
-      setAnswers({ ...answers, [step]: txt })
-
+      setAnswers({ ...answers, [curNode.id]: txt });
+      // Add nodeId to answered nodes list if not already present
+      setAnsweredNodeIds(prev => prev.includes(curNode.id) ? prev : [...prev, curNode.id]);
       setInput("");
       
-      // Move to the next step
-      setStep((s) => s + 1);
+      let nextNode = null;
+      
+      // If current node is a choice node, find next node by matching answer with options
+      if (curNode.type === "choice" && curNode.data?.options) {
+        // Find the option that matches the answer (case-insensitive)
+        const matchedOption = curNode.data.options.find(
+          (opt: string) => opt.toLowerCase().trim() === txt.toLowerCase().trim()
+        );
+        
+        if (matchedOption) {
+          // Find edge with sourceHandle matching this option
+          const optionEdge = allEdges.find(
+            (e) => e.source === curNode.id && e.sourceHandle === `option-${matchedOption}`
+          );
+          
+          if (optionEdge && optionEdge.target) {
+            // Find the next node from the selected option
+            nextNode = allNodes.find((node) => node.id === optionEdge.target);
+          }
+        }
+      }
+      
+      // If not a choice node or no match found, use getNextNode
+      if (!nextNode) {
+        nextNode = getNextNode(curNode);
+      }
+      
+      if (nextNode) {
+        setCurNode(nextNode);
+        // Add next node to answeredNodeIds so its message is displayed
+        setAnsweredNodeIds(prev => prev.includes(nextNode.id) ? prev : [...prev, nextNode.id]);
+      }
     };
-    const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
+    const messagesEndRef = useRef<HTMLDivElement | null>(null);
     useEffect(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, answers]);
+
+    // Function to capture lead when chat is finished
+    const captureLead = async (currentAnswers: any) => {
+      // Only capture if we have botInstanceId or botKey
+      if (!botInstanceId && !botKey) return;
+
+      // Extract email and phone from answers
+      let email = '';
+      let phone = '';
+      let name = '';
+      let company = '';
+      let message = '';
+
+      // Check all answers to find email, phone, name, company, and message
+      Object.keys(currentAnswers).forEach((key) => {
+        const value = currentAnswers[key];
+        if (!value) return;
+
+        const node = allNodes.find(n => n.id === key);
+        const nodeLabel = (node?.data?.label || node?.data?.title || '').toLowerCase();
+
+        // Check node label to determine field type
+        if (nodeLabel.includes('email')) {
+          email = value.trim();
+        } else if (nodeLabel.includes('phone') || nodeLabel.includes('tel')) {
+          phone = value.trim();
+        } else if (nodeLabel.includes('name')) {
+          name = value.trim();
+        } else if (nodeLabel.includes('company') || nodeLabel.includes('business')) {
+          company = value.trim();
+        } else if (nodeLabel.includes('message')) {
+          message = value.trim();
+        }
+      });
+
+      // Only capture if we have at least one of email, phone, name, or company
+      if (!email && !phone && !name && !company) return;
+
+      try {
+        const leadData = {
+          botInstanceId: botInstanceId,
+          botKey: botKey,
+          email,
+          phone,
+          name,
+          company,
+          message,
+          answers: currentAnswers,
+          source: 'chatwidget',
+          status: 'new',
+        };
+
+        const apiUrl = `${import.meta.env.VITE_API_BASE_URL}/leads`;
+        await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(leadData),
+        });
+      } catch (error) {
+        console.error('Error capturing lead on finish:', error);
+      }
+    };
 
     return (
       <div style={{ ...baseCard, ...anchoredStyle, ...sidebarStyle }}>
@@ -385,7 +512,7 @@ export default function ChatWidget({
                   trackEvent({
                     type: "close_widget",
                     key: `${kind}:${botId}`,
-                    meta: { step },
+                    meta: { nodeId: curNode.id },
                     ts: Date.now()
                   });
                   handleSetOpen(false);
@@ -417,33 +544,40 @@ export default function ChatWidget({
                 gap: 10,
               }}
             >
-              {messages.slice(0, step + 1).map((m, i) => (
-                <React.Fragment key={i}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 8,
-                    justifyContent: "flex-start",
-                  }}
-                >
-                  <BotAvatar />
-                  <div style={msgStyles.bot}>{m}</div>
-                </div>
-                {answers[i] && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 8,
-                      justifyContent: "flex-end",
-                    }}
-                  >
-                    <div style={msgStyles.user}>{answers[i]}</div>
-                  </div>
-                )}
-                </React.Fragment>
-              ))}
+              {answeredNodeIds.map((nodeId, i) => {
+                const message = messages[nodeId];
+                const answer = answers[nodeId];
+                
+                if (!message) return null;
+                
+                return (
+                  <React.Fragment key={nodeId}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        justifyContent: "flex-start",
+                      }}
+                    >
+                      <BotAvatar />
+                      <div style={msgStyles.bot}>{message}</div>
+                    </div>
+                    {answer && (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 8,
+                          justifyContent: "flex-end",
+                        }}
+                      >
+                        <div style={msgStyles.user}>{answer}</div>
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
 
@@ -480,7 +614,7 @@ export default function ChatWidget({
             </div>
           </div>
         )}
-        {panelStyle == "step-by-step" && flowNodes.length > 0 && (
+        {panelStyle == "step-by-step" && (
           <div>
             <div
               style={{borderTopLeftRadius: "1rem", borderTopRightRadius: "1rem", padding: "1rem", height: "0.5rem", backgroundColor: borderColor}}
@@ -507,12 +641,6 @@ export default function ChatWidget({
                     cursor: "pointer",
                   }}
                   onClick={() => {
-                    trackEvent({
-                      type: "close_widget",
-                      key: `${kind}:${botId}`,
-                      meta: { step },
-                      ts: Date.now()
-                    })
                     handleSetOpen(false);
                   }}
                   autoFocus
@@ -525,15 +653,7 @@ export default function ChatWidget({
               {/* emoji + text */}
               <div style={{ display: "grid", placeItems: "center", fontSize: "3.75rem" }}>👋</div>
               <h2 style={{ textAlign: "center", fontSize: "1.5rem", fontWeight: 800, marginTop: "0.5rem" }}>
-                {flowNodes[step] ? (() => {
-                  const node = flowNodes[step];
-                  if (node.type === "message") {
-                    return node.data?.title || node.data?.text;
-                  } else if (node.type === "input" || node.type === "choice" || node.type === "action") {
-                    return node.data?.label;
-                  }
-                  return `Welcome to ${name}!`;
-                })() : `Welcome to ${name}!`}
+                {curNode?.data?.title || curNode?.data?.label || ''}
               </h2>
 
               <div
@@ -545,14 +665,12 @@ export default function ChatWidget({
                   gap: "0.25rem",
                 }}
               >
-                {flowNodes[step] && (() => {
-                  const node = flowNodes[step];
-
-                  if (node.type === "message") {
-                    return <div style={{ fontWeight: "bold" }}>{node.data.text}</div>;
+                {curNode && (() => {
+                  if (curNode.type === "message") {
+                    return <div style={{ fontWeight: "bold" }}>{curNode.data.text}</div>;
                   }
 
-                  if (node.type === "input") {
+                  if (curNode.type === "input") {
                     return (
                       <div>
                         <input
@@ -562,70 +680,42 @@ export default function ChatWidget({
                             borderRadius: "0.5rem",
                             padding: "0.5rem 0.75rem",
                           }}
-                          placeholder={node.data.placeholder}
-                          value={answers[node.id] || ""}
+                          placeholder={curNode.data.placeholder}
+                          value={answers[curNode.id] || ""}
                           onChange={(e) =>
-                            setAnswers({ ...answers, [node.id]: e.target.value })
+                            setAnswers({ ...answers, [curNode.id]: e.target.value })
                           }
                         />
                       </div>
                     );
                   }
 
-                  if (node.type === "choice") {
+                  if (curNode.type === "choice") {
                     return (
                       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                        {node.data.options.map((opt) => (
+                        {curNode.data.options.map((opt) => (
                           <button
                             key={opt}
                             onClick={() => {
-                              setAnswers({ ...answers, [node.id]: opt });
+                              setAnswers({ ...answers, [curNode.id]: opt });
+                              // Add nodeId to answered nodes list if not already present
+                              setAnsweredNodeIds(prev => prev.includes(curNode.id) ? prev : [...prev, curNode.id]);
                               
                               // Find edge with sourceHandle matching this option
                               const optionEdge = allEdges.find(
-                                (e) => e.source === node.id && e.sourceHandle === `option-${opt}`
+                                (e) => e.source === curNode.id && e.sourceHandle === `option-${opt}`
                               );
                               
                               if (optionEdge && optionEdge.target) {
-                                // Get the flow path starting from the target node
-                                const pathFromTarget = getFlowPathFromNode(optionEdge.target, allNodes, allEdges);
+                                // Find the next node from the selected option
+                                const nextNode = allNodes.find((node) => node.id === optionEdge.target);
                                 
-                                if (pathFromTarget.length > 0) {
-                                  // Check if target node is already in flowNodes
-                                  const currentTargetIndex = flowNodes.findIndex((n) => n.id === optionEdge.target);
-                                  
-                                  if (currentTargetIndex === -1) {
-                                    // Target node not in flowNodes yet, add the path starting from target
-                                    const updated = [...flowNodes];
-                                    // Add nodes from the path that aren't already in flowNodes
-                                    pathFromTarget.forEach((pathNode) => {
-                                      if (!updated.some(n => n.id === pathNode.id)) {
-                                        updated.push(pathNode);
-                                      }
-                                    });
-                                    // Find the index of target node in the updated array
-                                    const newTargetIndex = updated.findIndex((n) => n.id === optionEdge.target);
-                                    
-                                    if (newTargetIndex !== -1) {
-                                      // Update both flowNodes and step together
-                                      setFlowNodes(updated);
-                                      // Use the index from the updated array
-                                      setStep(newTargetIndex);
-                                    } else {
-                                      // Fallback if target not found in updated array
-                                      setStep((s) => s + 1);
-                                    }
-                                  } else {
-                                    // Target node already in flowNodes, navigate to it
-                                    setStep(currentTargetIndex);
-                                  }
-                                } else {
-                                  // No path found, fall back to next step
-                                  setStep((s) => s + 1);
+                                if (nextNode) {
+                                  // Update curNode to the next node
+                                  setCurNode(nextNode);
+                                  // Add next node to answeredNodeIds so its message is displayed
+                                  setAnsweredNodeIds(prev => prev.includes(nextNode.id) ? prev : [...prev, nextNode.id]);
                                 }
-                              } else {
-                                // No edge found for this option, use default behavior (next step)
-                                setStep((s) => s + 1);
                               }
                             }}
                             style={{
@@ -646,51 +736,27 @@ export default function ChatWidget({
                     );
                   }
 
-                  if (node.type === "action") {
-                    if (node.data.label.includes("lead")) {
-                      trackEvent({
-                        type: "widget.lead_captured",
-                        key: `${kind}:${botId}`,
-                        meta: { step },
-                        ts: Date.now()
-                      })
-                    }
-                  }
-
-                  setStep((s) => s + 1);
+                  return null;
                 })()}
               </div>
 
               {(() => {
-                if (!flowNodes[step] || flowNodes.length === 0) return null;
-                
-                const currentNode = flowNodes[step];
-                const currentStep = step;
-                const totalNodes = flowNodes.length;
-                const isLastNode = currentStep === totalNodes - 1;
-                const isSecondToLast = totalNodes >= 2 && currentStep === totalNodes - 2;
-                const lastNode = flowNodes[totalNodes - 1];
-                const isLastNodeAction = lastNode?.type === "action";
-                
-                // Hide Continue button if:
-                // 1. Current node is a choice (has option buttons)
-                // 2. Current node is the last node
-                // 3. Current node is second-to-last AND last node is an action (action auto-advances)
-                const shouldShowContinue = 
-                  currentNode?.type !== "choice" && 
-                  !isLastNode &&
-                  !(isSecondToLast && isLastNodeAction);
-                
-                return shouldShowContinue && (
+                if (!curNode) return null;
+
+                if (isLastNode(curNode.id)) {
+                  return null;
+                }
+
+                return (
                   <button
-                    onClick={() => {
-                      trackEvent({
-                        type: "step_next",
-                        key: `${kind}:${botId}`,
-                        meta: { step },
-                        ts: Date.now()
-                      })
-                      setStep((s) => s + 1)
+                    onClick={() => {                      
+                      // Find next node from curNode
+                      const nextNode = getNextNode(curNode);
+                      if (nextNode) {
+                        setCurNode(nextNode);
+                        // Add next node to answeredNodeIds so its message is displayed
+                        setAnsweredNodeIds(prev => prev.includes(nextNode.id) ? prev : [...prev, nextNode.id]);
+                      }
                     }}
                     style={{
                       borderRadius: "1rem",
@@ -707,8 +773,6 @@ export default function ChatWidget({
                   </button>
                 );
               })()}
-
-
             </div>
           </div>
         )}
@@ -750,14 +814,7 @@ export default function ChatWidget({
           strokeWidth="2"
           transform={tailOnLeft ? "" : "scale(-1,1) translate(-50,0)"}/>
       ) : (
-        // <rect
-        //   x={3}
-        //   y={3}
-        //   width={w - 6}
-        //   height={h - 6}
-        //   rx={roundR}
-        //   ry={roundR}
-        // />
+
         <path 
           d="M5 5 
             h40 

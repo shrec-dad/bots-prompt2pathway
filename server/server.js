@@ -59,6 +59,7 @@ const docsRoute = require('./routes/docRoutes.js');
 const settingsRoute = require('./routes/settingsRoutes.js');
 const metricsRoute = require('./routes/metricsRoutes.js');
 const recipientsRoute = require('./routes/recipientRoutes.js');
+const leadsRoute = require('./routes/leadRoutes.js');
 
 const { authenticate, authorize } = require("./middleware/auth.js");
 
@@ -70,6 +71,7 @@ app.use("/api/docs", docsRoute);
 app.use("/api/settings", settingsRoute);
 app.use("/api/metrics", metricsRoute);
 app.use("/api/recipients", recipientsRoute);
+app.use("/api/leads", leadsRoute);
 
 const telephonyRouter = require("./telephony/router");
 app.use("/api/telephony", telephonyRouter);
