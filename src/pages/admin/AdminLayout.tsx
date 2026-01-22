@@ -15,6 +15,7 @@ import {
   Code2,
   LogOut,
   ShieldCheck,
+  UserPlus,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
@@ -22,6 +23,7 @@ const links = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/clients", label: "Clients", icon: Users },
   { to: "/admin/bots", label: "Bots", icon: Bot },
+  { to: "/admin/leads", label: "Leads", icon: UserPlus },
   { to: "/admin/builder", label: "Builder", icon: Puzzle },
   { to: "/admin/knowledge", label: "Knowledge", icon: Book },
   { to: "/admin/nurture", label: "Nurture", icon: Workflow },

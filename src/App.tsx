@@ -24,6 +24,7 @@ const Nurture = lazy(() => import("@/pages/admin/Nurture"));
 const Settings = lazy(() => import("@/pages/admin/Settings"));
 const Preview = lazy(() => import("@/pages/admin/Preview"));
 const Embed = lazy(() => import("@/pages/admin/Embed"));
+const Leads = lazy(() => import("@/pages/admin/Leads"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers")); // if you added it
 const ReceptionistSettings = lazy(() => import("@/pages/admin/ReceptionistSettings"));
 
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="preview" element={<Preview />} />
             <Route path="embed" element={<Embed />} />
+            <Route path="leads" element={<Leads />} />
             <Route path="admins" element={<AdminUsers />} />
             <Route path="receptionist" element={<ReceptionistSettings />} />
           </Route>
